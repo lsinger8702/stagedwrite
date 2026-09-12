@@ -28,3 +28,5 @@ StagedWrite 的主体是可嵌入业务程序的 TypeScript 库。开发者提�
 当前图操作契约：[003：图操作与原子编辑](design/003-graph-operations.md)。
 
 图预检契约：[004：图预检与检查失效](design/004-graph-preflight.md)。
+
+Stripe 实验：[005：测试 Customer 与恢复验证](design/005-stripe-adapter-experiment.md)，代码/离线契约完成，真实账号联调待验证。

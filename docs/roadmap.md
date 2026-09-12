@@ -25,12 +25,12 @@
 
 在 M1 完成后、M4 存储工作开始前，安排一个范围受限的 Stripe test-mode adapter 实验，验证真实远端接缝；不扩大核心 MVP 承诺。完整 Stripe 接入与 MCP 外壳仍是后续能力。
 
-## 当前下一步：真实 adapter 最小验证，然后 M4
+## 当前下一步：补真实联调记录，并进入 M4 设计
 
-M1/M2/M3 已完成，共 51 项测试。运行 `npm run demo:registry`、`npm run demo:graph`、`npm run demo:preflight`。
+M1/M2/M3 已完成，共 59 项测试（新增 8 项 Stripe 离线契约测试）。运行 `npm run demo:registry`、`npm run demo:graph`、`npm run demo:preflight`。
 M3 的通过结论仅用于草稿检查，不代表图发布已实现；执行器装配、固定图计划、持久化与恢复仍待后续。
 
-按 review 后调整的顺序，在 SQLite 前先做范围受限的 Stripe test-mode adapter 实验，检验真实远端接缝；需要测试账号配置，不能用 mock 冒充真实验证。之后进入 M4：草稿/定义身份/检查记录的 SQLite 存储与恢复约束设计。
+Stripe test Customer 实验已实现，[005](design/005-stripe-adapter-experiment.md) 记录契约和运行方法。离线测试通过，当前未配置测试密钥，真实账号验证仍未完成。可先进入 M4 设计，不能把该实验标成已经通过真实联调。
 
 ## 每个任务怎么推进
 

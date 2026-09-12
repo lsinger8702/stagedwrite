@@ -22,7 +22,8 @@
     "demo": "npm run build && node dist/examples/lifecycle.js",
     "demo:registry": "npm run build && node dist/examples/registry.js",
     "demo:graph": "npm run build && node dist/examples/graph.js",
-    "demo:preflight": "npm run build && node dist/examples/preflight.js"
+    "demo:preflight": "npm run build && node dist/examples/preflight.js",
+    "demo:stripe": "npm run build && node dist/examples/stripe-test.js"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

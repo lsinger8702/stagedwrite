@@ -8,3 +8,5 @@ export type * from "./registry/types.js";
 export { GraphEditError } from "./graph/types.js";
 export type { GraphDraft, GraphNode, GraphEdge, GraphOp, GraphChange, GraphIssue, EditEvaluation } from "./graph/types.js";
 export type { GraphRule, GraphDiagnostic, SourcedGraphDiagnostic, GraphCheck } from "./preflight/types.js";
+export { StripeTestCustomerAdapter } from "./adapters/stripe-test.js";
+export type { StripeTransport } from "./adapters/stripe-test.js";

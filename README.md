@@ -154,6 +154,25 @@ if (check.certificate) {
 
 See [the complete example](examples/lifecycle.ts) for imports and a runnable lifecycle.
 
+## Stripe test-mode experiment (real-account verification pending)
+
+A narrow `StripeTestCustomerAdapter` is implemented for the **existing execution
+prototype**, creating a test Customer with a synthetic description. It is separate
+from the graph engine and is not a billing or graph-publication adapter.
+
+The default transport calls Stripe HTTPS with a pinned API version and per-step
+idempotency key. Lost responses are reconciled by reading a unique metadata marker;
+empty, ambiguous or incomplete search evidence stays `unknown`. This experiment
+never repeats an unresolved POST, never returns `no_effect`, and conservatively
+leaves all HTTP errors unknown. It has no crash recovery.
+
+**Only offline transport-contract tests have passed so far. No real Stripe account
+run has been verified.** See [setup and acceptance criteria](docs/design/005-stripe-adapter-experiment.md).
+After configuring `STRIPE_SECRET_KEY` locally with a test key, run
+`npm run demo:stripe` or `npm run demo:stripe -- --lose-response`.
+Each run creates a new test Customer; records are retained for dashboard inspection.
+The opt-in live-network script is excluded from ordinary tests and CI.
+
 ## Implemented
 
 - M1 definition assembly, local schema references, immutable version bindings and empty graph creation via `createStagedWrite`.
@@ -183,7 +202,7 @@ All diagnostics block publication in this prototype. A repair suggestion is neve
 - Adapter results are trusted. `apply` returns `not_applied` only for a proven refusal with no possible later effect. `reconcile` returns `no_effect` only when the earlier request is proven to have no effect and cannot still complete; an empty search result is insufficient. HTTP status alone is not proof.
 - A refusal with `retryable: true` pauses the run as `blocked`; explicit `resume` retries that step under its original key. An omitted or false `retryable` makes the refusal terminal (`failed`). Earlier applied steps remain visible and are not rolled back. Neither label means there were no effects.
 - Callers own retry limits, backoff and scheduling, including redispatch after `no_effect` reconciliation. Each `resume` may dispatch each remaining step once; there is no internal retry loop or durable retry budget.
-- No compensation, durable storage, Stripe adapter or MCP server yet.
+- No compensation, durable storage, production Stripe integration or MCP server yet. The narrow test Customer experiment is described above.
 - Idempotency keys are supplied to adapters; the library cannot make a remote system honor them. No exactly-once claim.
 
 ## Adapter recovery contract
@@ -227,7 +246,7 @@ Chinese implementation and first-release guides:
 - [x] Versioned draft-type registry and empty graph creation (M1).
 - [x] Graph operations, atomic edit batches and structural validation (M2).
 - [x] Graph-aware preflight diagnostics and repairs (M3; draft checks only).
-- [ ] Narrow Stripe test-mode adapter experiment to validate the adapter boundary before storage work.
+- [ ] Narrow Stripe test-mode adapter experiment: code and offline contracts complete; real-account validation pending.
 - [ ] SQLite draft and execution storage with atomic transitions and restart tests.
 - [ ] Core MVP example, external trial and release (see [MVP scope](docs/mvp.md)).
 
