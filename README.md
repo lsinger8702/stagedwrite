@@ -57,10 +57,47 @@ external references and unsupported schema features fail before compilation.
 `getDefinition(selector)` returns a copy and its digest. Digests use the versioned
 `sha256:stagedwrite-json-v1` format described in [the M1 design](docs/design/001-registry-and-draft.md).
 
-This **draft-only** engine creates and reads empty graphs. `validateValues` checks
-filled scalar values without modifying input; it does not interpret clear/reset
-intent or enforce `requiredAtPublish`. Graph edits, graph preflight, persistence and
-execution integration are future milestones. There is no `publish` method here.
+This **draft-only** engine creates, reads, previews and edits graphs.
+`validateValues` checks filled scalar values without modifying input; it does not
+interpret clear/reset intent or enforce `requiredAtPublish`. Graph preflight,
+persistence and execution integration remain future milestones.
+
+## M2: fill and preview a graph
+
+Using the engine and draft above:
+
+```ts
+const ops = [
+  { op: "node.add", id: "campaign-1", nodeType: "campaign" },
+  { op: "set", nodeId: "campaign-1", path: "/budget", value: 100 }
+] as const;
+const { candidate, changes } = engine.preview(draft.id, draft.version, ops);
+const saved = engine.edit(draft.id, draft.version, ops);
+```
+
+`preview` and `evaluateEdit` use the same pure candidate calculation as `edit`.
+They do not save state or consume IDs; edit recomputes against the expected version.
+A valid nonempty batch increments the version once, even if its net effect is empty.
+Any rejected batch leaves the graph, version and ID history unchanged.
+
+- `node.add` / `node.remove`: create an empty node or explicitly remove it.
+- `edge.add` / `edge.remove`: create or remove a named directed relation between node IDs.
+- `set` / `remove` / `reset`: set a scalar value, explicitly clear, or return a field to undeclared.
+
+Field paths are single-segment JSON Pointers such as `/budget` (`~0` and `~1`
+escapes supported). Operations run in input order. Final value constraints and
+edge endpoints are checked after the batch; a set before its node is added still
+fails. Deleting a referenced node requires explicit edge removal in the same batch.
+No cascade deletion, implicit reordering or topology constraints are added.
+Multiple edges may share a target node.
+
+`GraphDraft` includes nodes, edges and node/edge tombstones. Deleted IDs cannot be
+reused in the same draft and identity namespace. `GraphEditError` carries a code,
+operation index/path when available, and final graph issues. Missing publish fields
+remain acceptable; invalid filled values do not. There is still no graph `publish`.
+
+Run `npm run demo:graph` for a [shared-asset graph example](examples/graph.ts).
+See [the M2 contract](docs/design/003-graph-operations.md) for operation shapes and errors.
 
 ## Existing execution prototype API
 
@@ -81,6 +118,7 @@ See [the complete example](examples/lifecycle.ts) for imports and a runnable lif
 ## Implemented
 
 - M1 definition assembly, local schema references, immutable version bindings and empty graph creation via `createStagedWrite`.
+- M2 graph operations, pure preview, atomic edits, structural validation and deleted-ID tombstones.
 
 The separate `new StagedWrite(adapter, rules)` execution prototype provides:
 
@@ -147,7 +185,7 @@ Chinese implementation and first-release guides:
 ## Next milestones
 
 - [x] Versioned draft-type registry and empty graph creation (M1).
-- [ ] Graph operations, atomic edit batches and structural validation.
+- [x] Graph operations, atomic edit batches and structural validation (M2).
 - [ ] Graph-aware preflight diagnostics and repairs.
 - [ ] Narrow Stripe test-mode adapter experiment to validate the adapter boundary before storage work.
 - [ ] SQLite draft and execution storage with atomic transitions and restart tests.

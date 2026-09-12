@@ -5,3 +5,5 @@ export type { DraftEngine } from "./graph-engine.js";
 export { defineDraftType } from "./registry/types.js";
 export { DefinitionAssemblyError } from "./registry/registry.js";
 export type * from "./registry/types.js";
+export { GraphEditError } from "./graph/types.js";
+export type { GraphDraft, GraphNode, GraphEdge, GraphOp, GraphChange, GraphIssue, EditEvaluation } from "./graph/types.js";

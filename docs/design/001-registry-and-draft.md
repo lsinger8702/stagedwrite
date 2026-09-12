@@ -1,6 +1,6 @@
 # 001：定义、装配与空图创建
 
-状态：M1 已实现并通过验收。2026-09-12 更新。本文标为后续的编辑、发布和恢复能力尚未实现。
+状态：M1 已实现并通过验收。2026-09-12 更新。本文保留 M1 验收时的接口范围；编辑现已在 [M2/003](003-graph-operations.md) 实现，发布和恢复仍待后续。
 
 ## 目的与范围
 
@@ -148,7 +148,7 @@ M1 创建空图不代表取消图引用；多个对象共享一个素材属于 M
 - 摘要格式：`sha256:stagedwrite-json-v1:<小写十六进制>`。对完整定义按 UTF-16 码元顺序递归排序对象键（包括数字形式键），数组保留顺序，原始值按 ECMAScript JSON 编码，再对 UTF-8 字节做 SHA-256。只允许有限 IEEE-754 数字，-0 规范为 0；不做 Unicode 归一化。不是 RFC 8785 的兼容声明。缺省字段与显式空值/空数组的摘要不要求相同。
 - 新入口在 `src/graph-engine.ts`；定义模块在 `src/registry/`。旧 `StagedWrite` 仍是独立的顶层字段执行原型，两者尚未连接，不能把新空图交给旧发布引擎。
 - `getDefinition({type,typeVersion})` 返回 `{definition,digest}` 的独立快照；`validateValues(selector,nodeType,values)` 是纯字段值校验，返回 `{valid,issues}`，供集成方验证约束。它不填图、不校验意图信封、不检查发布完整性。未知节点类型报 NODE_TYPE_NOT_FOUND。
-- 草稿为 `EmptyGraphDraft`，M1 的 nodes/edges 类型刻意限定为空。getDraft 未命中报 DRAFT_NOT_FOUND；没有导入、恢复或 register 热修改方法。DEFINITION_MISMATCH 保留给后续持久化恢复，不是当前可触发接口。
+- M1 最初草稿为 `EmptyGraphDraft`，当前已由 M2 扩展为 `GraphDraft`（含墓碑），旧类型只保留为 deprecated 导出。getDraft 未命中报 DRAFT_NOT_FOUND；没有导入、恢复或 register 热修改方法。DEFINITION_MISMATCH 保留给后续持久化恢复，不是当前可触发接口。
 
 M2 前必须补对象图和路径设计；复杂字段、基线恢复、命名空间参见 002，不能由 adapter 私自改核心 OP 含义。
 

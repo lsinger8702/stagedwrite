@@ -31,7 +31,7 @@ export interface DraftTypeDefinition {
   relationTypes: Readonly<Record<string, { from: readonly string[]; to: readonly string[] }>>;
 }
 export interface DefinitionSelector { type: string; typeVersion: string }
-/** M1 has no node/edge mutation API; populated graph types belong to M2. */
+/** @deprecated M1 snapshot shape. Current engine snapshots use GraphDraft (with tombstones). */
 export interface EmptyGraphDraft extends DefinitionSelector {
   id: string;
   version: 0;

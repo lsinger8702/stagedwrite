@@ -31,4 +31,4 @@ const selector = { type: "example.campaign", typeVersion: "1" };
 console.log("1. Create an incomplete empty graph:", engine.create(selector));
 console.log("2. Missing publish fields are allowed here:", engine.validateValues(selector, "campaign", {}));
 console.log("3. Shared money constraint rejects a negative budget:", engine.validateValues(selector, "campaign", { budget: -1 }));
-console.log("M1 only: no graph editing, preflight, publication or persistence in this engine yet.");
+console.log("M1 example: see demo:graph for M2 editing. Graph preflight, publication and persistence remain future work.");
