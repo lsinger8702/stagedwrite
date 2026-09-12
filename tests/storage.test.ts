@@ -72,8 +72,8 @@ test("process exit inside preflight leaves the old check invalidated and the gra
   assert.throws(() => restored.getCheck(d.id, check.checkId), /CHECK_NOT_CURRENT/);
   assert.equal(restored.preflight(d.id).status, "blocked");
 });
-test("draft SQLite mode has no publishing capability and executable storage is rejected", t => {
+test("draft SQLite mode has no publishing capability and invalid storage is rejected", t => {
   const path = file(t); const engine = create(path); assert.equal("publish" in engine, false); engine.close();
   assert.throws(() => engine.listDraftIds(), /STORE_CLOSED/);
-  assert.throws(() => createStagedWrite({ definitions: [], mode: "executable", executors: [], storage: { kind: "sqlite", path } } as unknown as DraftOptions), /DRAFT_STORAGE_ONLY/);
+  assert.throws(() => createStagedWrite({ definitions: [], storage: { kind: "invalid", path } } as unknown as DraftOptions), /INVALID_STORAGE/);
 });

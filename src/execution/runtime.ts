@@ -5,11 +5,14 @@ import { validatePlan } from "./plan.js";
 import { randomUUID } from "node:crypto";
 import type { Adapter, ApplyOutcome, ReconcileOutcome, Event, Run, Step, Adjudication, ReusedReceipt, StopRetry, Clock } from "../types.js";
 
-/** Shared in-memory execution state machine for legacy and graph entry points. */
+/** Shared execution state machine with optional durable checkpoints. */
 export class ExecutionRuntime {
   private runs = new Map<string, Run>();
   private busy = new Set<string>();
-  constructor(private readonly adapter: Pick<Adapter, "apply" | "reconcile">, private readonly clock: Clock = Date.now) {
+  private restored = new Set<string>();
+  private poisoned = new Set<string>();
+  private committed = new Map<string, Run>();
+  constructor(private readonly adapter: Pick<Adapter, "apply" | "reconcile">, private readonly clock: Clock = Date.now, private readonly persist?: (run: Run) => void) {
     if (typeof clock !== "function") throw new Error("INVALID_CLOCK");
   }
   create(draftId: string, version: number, plan: Step[], binding?: Run["binding"], receipts: Record<string, ReusedReceipt> = {}): Run {
@@ -26,7 +29,19 @@ export class ExecutionRuntime {
       this.record(run, step.id, "reused", { reusedFrom: structuredClone(receipt) });
     }
     this.runs.set(id, run);
+    this.committed.set(id, structuredClone(run));
     return structuredClone(run);
+  }
+  restore(run: Run): void { if (!this.runs.has(run.id)) { this.runs.set(run.id, structuredClone(run)); this.restored.add(run.id); } }
+  isBusy(): boolean { return this.busy.size > 0; }
+  private writable(id: string): void {
+    if (this.restored.has(id)) throw new Error("RESTART_RECOVERY_NOT_ENABLED");
+    if (this.poisoned.has(id)) throw new Error("RUN_STORAGE_FAILED");
+  }
+  private checkpoint(run: Run): void {
+    if (!this.persist) return;
+    try { this.persist(structuredClone(run)); this.committed.set(run.id, structuredClone(run)); }
+    catch (error) { this.poisoned.add(run.id); this.runs.set(run.id, structuredClone(this.committed.get(run.id)!)); throw error; }
   }
   getRun(id: string): Run { return structuredClone(this.requireRun(id)); }
   resume(id: string): Promise<Run> { return this.advance(this.requireRun(id)); }
@@ -34,6 +49,7 @@ export class ExecutionRuntime {
   adjudicate(id: string, stepId: string, input: Adjudication): Run {
     const run = this.requireRun(id);
     if (this.busy.has(id)) throw new Error("RUN_BUSY");
+    this.writable(id);
     this.busy.add(id);
     try {
       const command = validateAdjudication(input);
@@ -65,12 +81,14 @@ export class ExecutionRuntime {
         run.state = "closed";
         this.stopRemaining(run, step.id, false);
       }
+      this.checkpoint(run);
       return structuredClone(run);
     } finally { this.busy.delete(id); }
   }
   stopRetry(id: string, input: StopRetry): Run {
     const run = this.requireRun(id);
     if (this.busy.has(id)) throw new Error("RUN_BUSY");
+    this.writable(id);
     this.busy.add(id);
     try {
       const command = validateStopRetry(input);
@@ -89,12 +107,14 @@ export class ExecutionRuntime {
       pending.failureEventSequence = run.events.length;
       run.state = "failed";
       this.stopRemaining(run, pending.id, false);
+      this.checkpoint(run);
       return structuredClone(run);
     } finally { this.busy.delete(id); }
   }
   private async advance(run: Run): Promise<Run> {
     if (this.busy.has(run.id)) throw new Error("RUN_BUSY");
     if (run.state === "published" || run.state === "failed" || run.state === "closed") return structuredClone(run);
+    this.writable(run.id);
     this.busy.add(run.id);
     run.state = "running";
     try {
@@ -114,16 +134,19 @@ export class ExecutionRuntime {
         }
         if (step.status === "unknown") {
           this.record(run, step.id, "reconciling");
+          this.checkpoint(run);
           const result = await this.observe("reconcile", () => this.adapter.reconcile({ ...structuredClone(step), payload: structuredClone(step.resolvedPayload!) }, step.key));
           if (result.kind === "applied") {
             step.status = "applied";
             step.remoteRef = result.remoteRef;
             this.record(run, step.id, "applied");
+            this.checkpoint(run);
             continue;
           }
           if (result.kind === "unknown") {
             run.state = "unknown";
             this.record(run, step.id, "unknown", { reason: result.reason });
+            this.checkpoint(run);
             return structuredClone(run);
           }
           this.record(run, step.id, "no_effect", { reason: result.reason });
@@ -131,11 +154,13 @@ export class ExecutionRuntime {
         }
         step.status = "dispatching";
         this.record(run, step.id, "dispatching");
+        this.checkpoint(run);
         const result = await this.observe("apply", () => this.adapter.apply({ ...structuredClone(step), payload: structuredClone(step.resolvedPayload!) }, step.key));
         if (result.kind === "applied") {
           step.status = "applied";
           step.remoteRef = result.remoteRef;
           this.record(run, step.id, "applied");
+          this.checkpoint(run);
         } else {
           if (result.kind === "unknown") {
             step.status = "unknown";
@@ -152,10 +177,12 @@ export class ExecutionRuntime {
               this.stopRemaining(run, step.id);
             }
           }
+          this.checkpoint(run);
           return structuredClone(run);
         }
       }
       run.state = "published";
+      this.checkpoint(run);
       return structuredClone(run);
     } finally { this.busy.delete(run.id); }
   }

@@ -1,12 +1,14 @@
+import type { Step, ExecutionBinding } from "../types.js";
 import type { GraphDraft } from "../graph/types.js";
 import type { GraphCheck } from "../preflight/types.js";
+export interface StoredPlan { certificate: string; plan: Step[]; binding: ExecutionBinding }
 export interface DraftStore {
   create(draft: GraphDraft): void;
   get(id: string): GraphDraft;
   ids(): string[];
   edit(candidate: GraphDraft, expectedVersion: number): void;
   beginCheck(id: string, expectedVersion: number): number;
-  saveCheck(check: GraphCheck, epoch: number): void;
+  saveCheck(check: GraphCheck, epoch: number, plan?: StoredPlan): void;
   getCheck(id: string): GraphCheck | undefined;
   close(): void;
 }
@@ -28,7 +30,7 @@ export class MemoryDraftStore implements DraftStore {
     const epoch = this.epochs.get(id)! + 1;
     this.epochs.set(id, epoch); this.checks.delete(id); return epoch;
   }
-  saveCheck(check: GraphCheck, epoch: number): void {
+  saveCheck(check: GraphCheck, epoch: number, plan?: StoredPlan): void {
     if (this.get(check.draftId).version !== check.version || this.epochs.get(check.draftId) !== epoch) throw new Error("STALE_CHECK");
     this.checks.set(check.draftId, structuredClone(check));
   }

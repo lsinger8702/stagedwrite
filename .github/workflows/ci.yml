@@ -23,3 +23,4 @@ jobs:
       - run: npm run demo:continuation
       - run: npm run demo:stop
       - run: npm run demo:storage
+      - run: npm run demo:durable

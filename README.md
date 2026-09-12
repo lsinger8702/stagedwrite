@@ -2,7 +2,7 @@
 
 An experimental TypeScript library for staged writes from agent tools to external systems.
 
-**Status: early prototype, v0.0.1.** Graph registration, editing, preflight and in-memory execution are connected. SQLite draft/check persistence is available in draft-only mode. Execution records remain in memory; there is no execution restart recovery or published npm package yet. The opt-in Stripe test Customer adapter has offline contract coverage; real-account verification is still pending.
+**Status: early prototype, v0.0.1.** Graph registration, editing, preflight and execution are connected. SQLite persists drafts, fixed plans, run snapshots and receipts. Advancing an existing unfinished run after restart remains disabled pending M6; there is no published npm package yet. The opt-in Stripe test Customer adapter has offline contract coverage; real-account verification is still pending.
 
 StagedWrite separates author intent, preflight diagnostics, a fixed execution plan and remote effects. An ambiguous remote outcome stops execution until the adapter can reconcile it.
 
@@ -45,10 +45,28 @@ its result only if both the draft version and check generation still match. Comp
 newer edits or checks. Old definition versions must still be registered; changing a stored definition under the same
 ID/version is rejected. A changed rule digest makes a restored check non-current.
 
-This storage option is **draft-only** and cannot be combined with executable mode. It does not save fixed plans,
-runs, remote receipts or publication seals. The default memory execution mode is unchanged. `close()` closes a
-draft engine's storage; executable-engine shutdown is not yet supported. Run `npm run demo:storage` for reopening
-a SQLite draft and check. Automated tests also verify recovery in a separate process.
+Run `npm run demo:storage` for reopening a SQLite draft and check. Automated tests also verify reads in a separate process.
+
+## Persist execution facts (M5)
+
+Executable mode now also accepts `storage: { kind: "sqlite", path }`. A passing preflight stores its exact plan
+and certificate with the check. First publication atomically validates that check, inserts the run and permanently
+seals the draft. Repeated publication returns the same run; a second engine cannot dispatch it or edit the sealed draft.
+
+Before every adapter call, the engine commits the original key, resolved payload and dispatch/reconciliation intent.
+It commits each observed result before moving to the next step. Manual decisions, stop requests and their resulting
+states are saved together. `revise` and `continueFrom` save their draft and source relationship atomically, so repeated
+derivation after reopening returns the same draft. Use `listRunIds()` and `getRun()` to inspect saved records.
+
+**Restart boundary:** an unexecuted stored plan can be published after reopening. Existing runs can be read, and terminal
+failed runs can produce a new revision/continuation under their usual evidence checks. Advancing or adjudicating an
+existing unfinished run from a new engine returns `RESTART_RECOVERY_NOT_ENABLED`. Persisted `running/dispatching` means
+an interrupted observation, never proof of no effects. M6 will implement explicit ownership transfer and recovery.
+
+A checkpoint failure stops the current engine from advancing that run (`RUN_STORAGE_FAILED`); it does not reinterpret
+a remote success as a refusal. `close()` refuses while a check or adapter call is active. SQLite schema version 1 upgrades
+to version 2 transactionally; old binaries reject the newer schema. The database is trusted internal state.
+Run `npm run demo:durable` for a stored plan, partial failure, reopened continuation and reused receipt.
 
 ## Define and edit a graph
 
@@ -247,14 +265,14 @@ Proven Customer request refusals stop as failed. A documented limiter response c
 
 ## Limits and next work
 
-- Execution remains in memory: process loss loses plans, run records, receipts and keys. SQLite mode persists drafts/checks only; no execution crash recovery guarantee.
+- Default mode is in memory. SQLite persists execution facts, but restart advancement is disabled pending M6; no end-to-end crash recovery guarantee.
 - Trusted in-process code, one engine instance. No multi-worker fencing, tenant isolation or approval enforcement.
 - Scalar graph fields; no nested JSON, arrays, inheritance, restore/import or automatic topology constraints.
 - Rules and plans are pure/synchronous by contract; their code is not hashed. Implementers must version changed behavior.
 - No durable retry limit, compensation, production billing integration or MCP server.
 - Stripe recovery now requires version-2 context metadata; old attempt-only objects are not automatically claimed.
 
-M1 definition assembly, M2 graph edits, M3 preflight and the in-memory graph execution bridge are implemented. M4 SQLite draft/check storage is implemented. Next: durable plans/runs (M5), restart recovery (M6), and external trial/release (M7). This remains an experimental 0.0.1, not a completed 0.1.0 MVP.
+M1 definition assembly, M2 graph edits, M3 preflight and the in-memory graph execution bridge are implemented. M4 SQLite draft/check storage is implemented. M5 plan/run persistence is implemented. Next: restart recovery (M6) and external trial/release (M7). This remains an experimental 0.0.1, not a completed 0.1.0 MVP.
 
 ## Read and contribute
 

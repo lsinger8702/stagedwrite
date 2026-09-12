@@ -15,7 +15,7 @@ import type { Run, Step, ExecutionBinding, Adjudication, StopRetry, Clock } from
 
 interface CommonOptions { definitions: readonly unknown[]; rules?: readonly GraphRule[] }
 export interface DraftOptions extends CommonOptions { mode?: "draft"; executors?: never; storage?: { kind: "sqlite"; path: string } }
-export interface ExecutableOptions extends CommonOptions { mode: "executable"; storage?: never; executors: readonly GraphExecutor[]; clock?: Clock }
+export interface ExecutableOptions extends CommonOptions { mode: "executable"; storage?: { kind: "sqlite"; path: string }; executors: readonly GraphExecutor[]; clock?: Clock }
 export type DraftEngine = ReturnType<typeof assembleGraphEngine>["base"];
 export type ExecutableGraphEngine = DraftEngine & ReturnType<typeof assembleGraphEngine>["execution"];
 export function createStagedWrite(options: DraftOptions): DraftEngine;
@@ -30,13 +30,34 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
   const registry = new DefinitionRegistry(options?.definitions);
   if (options.mode !== undefined && options.mode !== "draft" && options.mode !== "executable") throw new Error("INVALID_MODE");
   if (options.mode !== "executable" && options.executors !== undefined) throw new Error("EXECUTABLE_MODE_REQUIRED");
-  const executors = options.mode === "executable" ? assembleExecutors(registry, options.executors, options.clock) : undefined;
   const plans = new Map<string, { certificate: string; plan: Step[]; binding: ExecutionBinding; executor: BoundExecutor }>();
   const runByDraft = new Map<string, string>();
   const runExecutors = new Map<string, BoundExecutor>();
   const preflight = new GraphPreflight(registry, options.rules === undefined ? [] : options.rules);
-  if (options.storage !== undefined && ((options as { mode?: string }).mode === "executable" || options.storage?.kind !== "sqlite")) throw new Error("DRAFT_STORAGE_ONLY");
+  if (options.storage !== undefined && options.storage?.kind !== "sqlite") throw new Error("INVALID_STORAGE");
   const store = options.storage ? new SqliteDraftStore(options.storage.path, registry) : new MemoryDraftStore();
+  let executors: Map<string, BoundExecutor> | undefined;
+  try { executors = options.mode === "executable" ? assembleExecutors(registry, options.executors, options.clock,
+    store instanceof SqliteDraftStore ? run => store.saveRun(run) : undefined) : undefined; }
+  catch (error) { store.close(); throw error; }
+  let closed = false;
+  const assertOpen = () => { if (closed) throw new Error("STORE_CLOSED"); };
+  const runIdForDraft = (id: string) => store instanceof SqliteDraftStore ? store.runForDraft(id) : runByDraft.get(id);
+  const snapshotRun = (id: string): Run => {
+    assertOpen();
+    if (store instanceof SqliteDraftStore) return store.getRun(id);
+    const executor = runExecutors.get(id); if (!executor) throw new Error("RUN_NOT_FOUND");
+    return executor.runtime.getRun(id);
+  };
+  const boundTo = (executor: BoundExecutor, binding: ExecutionBinding | undefined) => {
+    if (!executor || !binding || binding.executorId !== executor.id || binding.executorVersion !== executor.version || binding.target !== executor.target) throw new Error("EXECUTOR_BINDING_MISMATCH");
+  };
+  const runtimeForRun = (id: string): BoundExecutor => {
+    assertOpen(); const known = runExecutors.get(id); if (known) return known;
+    const run = snapshotRun(id);
+    const executor = executorFor(executors!, store.get(run.draftId)); boundTo(executor, run.binding);
+    executor.runtime.restore(run); runExecutors.set(id, executor); return executor;
+  };
   const checking = new Set<string>();
   const requireDraft = (id: string): GraphDraft => {
     const draft = store.get(id);
@@ -56,12 +77,12 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
       return structuredClone(draft);
     },
     listDraftIds(): string[] { return store.ids(); },
-    close(): void { if (checking.size) throw new Error("CHECK_BUSY"); if (executors) throw new Error("EXECUTABLE_CLOSE_UNSUPPORTED"); store.close(); },
+    close(): void { if (checking.size) throw new Error("CHECK_BUSY"); if ([...(executors?.values() ?? [])].some(e => e.runtime.isBusy())) throw new Error("RUN_BUSY"); store.close(); closed = true; },
     getDraft(id: string): GraphDraft { return structuredClone(requireDraft(id)); },
     evaluateEdit,
     preview: evaluateEdit,
     edit(id: string, expectedVersion: number, ops: readonly GraphOp[]): GraphDraft {
-      if (runByDraft.has(id)) throw new Error("DRAFT_SEALED");
+      if (runIdForDraft(id) !== undefined) throw new Error("DRAFT_SEALED");
       if (checking.has(id)) throw new Error("CHECK_BUSY");
       const { candidate } = evaluateEdit(id, expectedVersion, ops);
       // Conditional storage update: candidate and check invalidation commit together.
@@ -70,7 +91,7 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
       return structuredClone(candidate);
     },
     preflight(id: string): GraphCheck {
-      if (runByDraft.has(id)) throw new Error("DRAFT_SEALED");
+      if (runIdForDraft(id) !== undefined) throw new Error("DRAFT_SEALED");
       if (checking.has(id)) throw new Error("CHECK_BUSY");
       const draft = requireDraft(id);
       const epoch = store.beginCheck(id, draft.version);
@@ -85,7 +106,7 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
             try {
               const plan = fixedPlan(executor, draft);
               if (draft.continuation) {
-                const source = runExecutors.get(draft.continuation.sourceRunId)!.runtime.getRun(draft.continuation.sourceRunId);
+                const source = snapshotRun(draft.continuation.sourceRunId);
                 if (source.binding?.executorId !== executor.id || source.binding.executorVersion !== executor.version ||
                     source.binding.target !== executor.target || source.binding.definitionDigest !== draft.definitionDigest) throw new Error("CONTINUATION_BINDING_MISMATCH");
                 validateContinuation(plan, draft, source, requireDraft(source.draftId));
@@ -104,7 +125,9 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
             }
           }
         }
-        store.saveCheck(result, epoch);
+        const fixed = plans.get(id);
+        try { store.saveCheck(result, epoch, fixed ? { certificate: fixed.certificate, plan: fixed.plan, binding: fixed.binding } : undefined); }
+        catch (error) { plans.delete(id); throw error; }
         return structuredClone(result);
       } finally { checking.delete(id); }
     },
@@ -122,41 +145,38 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
   const revisions = new Map<string, string>();
   const continuations = new Map<string, string>();
   const execution = {
+    listRunIds(): string[] { assertOpen(); return store instanceof SqliteDraftStore ? store.runIds() : [...runExecutors.keys()].sort(); },
     stopRetry(runId: string, command: StopRetry): Run {
-      const executor = runExecutors.get(runId);
-      if (!executor) throw new Error("RUN_NOT_FOUND");
+      const executor = runtimeForRun(runId);
       return executor.runtime.stopRetry(runId, command);
     },
     /** Continue a terminal partial failure with mapped, immutable successful creates. */
     continueFrom(runId: string): GraphDraft {
-      const executor = runExecutors.get(runId);
-      if (!executor) throw new Error("RUN_NOT_FOUND");
-      const run = executor.runtime.getRun(runId);
+      const run = snapshotRun(runId);
       const original = requireDraft(run.draftId);
       const receipts = continuationReceipts(run, original);
       const existing = continuations.get(runId);
       if (existing) return base.getDraft(existing);
       const draft: GraphDraft = { ...structuredClone(original), id: randomUUID(), version: 0,
         sourceRunId: runId, continuation: { sourceRunId: runId, receipts } };
+      if (store instanceof SqliteDraftStore) return structuredClone(store.derive(draft, runId, "continue"));
       store.create(draft);
       continuations.set(runId, draft.id);
       return structuredClone(draft);
     },
     adjudicate(runId: string, stepId: string, command: Adjudication): Run {
-      const executor = runExecutors.get(runId);
-      if (!executor) throw new Error("RUN_NOT_FOUND");
+      const executor = runtimeForRun(runId);
       return executor.runtime.adjudicate(runId, stepId, command);
     },
     /** Copy intent after a terminal, proven zero-effect failure; retain the sealed source. */
     revise(runId: string): GraphDraft {
-      const executor = runExecutors.get(runId);
-      if (!executor) throw new Error("RUN_NOT_FOUND");
-      const run = executor.runtime.getRun(runId);
+      const run = snapshotRun(runId);
       if (run.state !== "failed" || !run.steps.some(s => s.status === "failed") ||
           run.steps.some(s => !["failed", "skipped"].includes(s.status))) throw new Error("ZERO_EFFECT_FAILURE_REQUIRED");
       const existing = revisions.get(runId);
       if (existing) return base.getDraft(existing);
       const draft = { ...structuredClone(requireDraft(run.draftId)), id: randomUUID(), version: 0, sourceRunId: runId };
+      if (store instanceof SqliteDraftStore) return structuredClone(store.derive(draft, runId, "revise"));
       store.create(draft);
       revisions.set(runId, draft.id);
       return structuredClone(draft);
@@ -164,27 +184,33 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
     async publish(id: string, certificate: string): Promise<Run> {
       if (checking.has(id)) throw new Error("CHECK_BUSY");
       const draft = requireDraft(id);
-      const checked = plans.get(id);
+      const saved = store instanceof SqliteDraftStore ? store.getPlan(id) : undefined;
+      const checked = store instanceof SqliteDraftStore ? (saved && { ...saved, executor: executorFor(executors!, draft) }) : plans.get(id);
       if (!checked || checked.certificate !== certificate) throw new Error("PREFLIGHT_REQUIRED");
+      boundTo(checked.executor, checked.binding);
       const check = base.getCheck(id, checked.binding.checkId);
       if (check.status !== "passed" || check.scope !== "execution") throw new Error("PREFLIGHT_REQUIRED");
-      const previous = runByDraft.get(id);
-      if (previous) return checked.executor.runtime.getRun(previous);
-      const run = checked.executor.runtime.create(id, draft.version, checked.plan, checked.binding, draft.continuation?.receipts);
+      const previous = runIdForDraft(id);
+      if (previous) return snapshotRun(previous);
+      let run: Run;
+      checking.add(id);
+      try {
+        run = checked.executor.runtime.create(id, draft.version, checked.plan, checked.binding, draft.continuation?.receipts);
+        if (store instanceof SqliteDraftStore) {
+          const actualId = store.publishRun(run, certificate);
+          if (actualId !== run.id) return store.getRun(actualId);
+        }
+      } finally { checking.delete(id); }
       // Establish the discoverable run and seal before the first dispatch can occur.
       runByDraft.set(id, run.id);
       runExecutors.set(run.id, checked.executor);
       return checked.executor.runtime.resume(run.id);
     },
     getRun(id: string): Run {
-      const executor = runExecutors.get(id);
-      if (!executor) throw new Error("RUN_NOT_FOUND");
-      return executor.runtime.getRun(id);
+      return snapshotRun(id);
     },
     async resume(id: string): Promise<Run> {
-      const executor = runExecutors.get(id);
-      if (!executor) throw new Error("RUN_NOT_FOUND");
-      return executor.runtime.resume(id);
+      return runtimeForRun(id).runtime.resume(id);
     }
   };
   return { base, execution };

@@ -37,3 +37,4 @@ Stripe 实验：[005：测试 Customer 与恢复验证](design/005-stripe-adapte
 - [部分创建成功后的派生](design/008-partial-continuation.md)
 - [停止重试与事件时间](design/009-stop-retry-and-event-time.md)
 - [M4：SQLite 草稿与预检持久化](design/010-draft-storage.md)
+- [M5：固定计划与执行事实持久化](design/011-execution-storage.md)

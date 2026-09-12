@@ -23,5 +23,5 @@ try {
   assert.deepEqual(engine.getCheck(restored.id, passed.checkId), passed);
   assert.equal("publish" in engine, false);
   console.log("3. Reopened completed draft check:", passed.status, "scope:", passed.scope);
-  console.log("M4: durable drafts/checks only. Execution records and restart recovery remain pending.");
+  console.log("This example persists drafts/checks. See demo:durable for execution records; restart advancement remains pending.");
 } finally { engine.close(); rmSync(directory, { recursive: true, force: true }); }

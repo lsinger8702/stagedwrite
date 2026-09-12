@@ -1,6 +1,6 @@
 # M4：SQLite 草稿与预检持久化
 
-状态：已实现。运行环境 Node.js >=22.13，使用内置 node:sqlite，不增加原生第三方依赖。
+状态：已实现。本文记录 M4 阶段边界；M5 已在 [011](011-execution-storage.md) 扩展执行模式存储并升级 schema=2。运行环境 Node.js >=22.13，使用内置 node:sqlite，不增加原生第三方依赖。
 
 ## 范围与接口
 
