@@ -34,6 +34,8 @@ export class SqliteDraftStore implements DraftStore {
           CREATE TABLE IF NOT EXISTS sw_runs (id TEXT PRIMARY KEY, draft_id TEXT NOT NULL UNIQUE, owner TEXT NOT NULL, body TEXT NOT NULL) STRICT;
           CREATE TABLE IF NOT EXISTS sw_derivations (source_run TEXT NOT NULL, kind TEXT NOT NULL, draft_id TEXT NOT NULL UNIQUE, PRIMARY KEY(source_run, kind)) STRICT;`);
         this.#db.exec("CREATE TABLE IF NOT EXISTS sw_sessions (owner TEXT PRIMARY KEY, pid INTEGER NOT NULL, host TEXT NOT NULL, released INTEGER NOT NULL) STRICT;");
+        this.#db.exec("CREATE INDEX IF NOT EXISTS sw_runs_owner ON sw_runs(owner);");
+        this.pruneReleasedSessions();
         this.#db.prepare("INSERT INTO sw_sessions VALUES (?, ?, ?, 0)").run(this.#owner, process.pid, hostname());
         this.#db.prepare("INSERT OR REPLACE INTO sw_meta VALUES ('schema', '3')").run();
         for (const selector of registry.selectors()) {
@@ -147,6 +149,7 @@ export class SqliteDraftStore implements DraftStore {
     const recovered = prepare(run, prior, this.#owner);
     this.#db.prepare("UPDATE sw_runs SET owner = ?, body = ? WHERE id = ? AND owner = ?")
       .run(this.#owner, JSON.stringify(recovered), run.id, prior);
+    this.pruneReleasedSessions();
     return recovered;
   }
   derive(draft: GraphDraft, sourceRun: string, kind: "revise" | "continue"): GraphDraft {
@@ -164,6 +167,17 @@ export class SqliteDraftStore implements DraftStore {
     if (!row) throw new Error("DRAFT_NOT_FOUND");
     return row.check_body === null ? undefined : JSON.parse(row.check_body as string) as GraphCheck;
   }
-  close(): void { if (!this.#closed) { this.transaction(() => { this.#db.prepare("UPDATE sw_sessions SET released = 1 WHERE owner = ?").run(this.#owner); });
-    this.#db.close(); this.#closed = true; } }
+  /** Only released, unreferenced sessions are disposable; run evidence stays intact. */
+  private pruneReleasedSessions(): void {
+    this.#db.exec("DELETE FROM sw_sessions WHERE released = 1 AND NOT EXISTS (SELECT 1 FROM sw_runs WHERE sw_runs.owner = sw_sessions.owner)");
+  }
+  close(): void {
+    if (this.#closed) return;
+    this.transaction(() => {
+      this.#db.prepare("UPDATE sw_sessions SET released = 1 WHERE owner = ?").run(this.#owner);
+      this.pruneReleasedSessions();
+    });
+    this.#db.close();
+    this.#closed = true;
+  }
 }

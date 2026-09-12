@@ -179,3 +179,36 @@ test("replaying a recovery command cannot unlock a failed local checkpoint", asy
   next.close(); const reopened = open(path); const latest = reopened.getRun(run.id);
   assert.equal(reopened.recover(run.id, command(latest, "fresh")).state, "unknown"); reopened.close(); db.close();
 });
+
+test("released sessions without runs are pruned but live sessions remain", t => {
+  const path = file(t); const live = open(path); const db = new DatabaseSync(path);
+  for (let i = 0; i < 4; i++) { const observer = open(path); observer.close(); }
+  assert.equal(db.prepare("SELECT count(*) AS n FROM sw_sessions").get()?.n, 1);
+  const draft = live.create(selector); live.close();
+  assert.equal(db.prepare("SELECT count(*) AS n FROM sw_sessions").get()?.n, 0);
+  const reopened = open(path); assert.deepEqual(reopened.getDraft(draft.id), draft); reopened.close(); db.close();
+});
+
+test("session cleanup preserves ownership evidence until every run has transferred", async t => {
+  const path = file(t); const first = open(path); const a = await start(first), b = await start(first); first.close();
+  const db = new DatabaseSync(path); const oldOwner = db.prepare("SELECT owner FROM sw_runs WHERE id=?").get(a.id)!.owner!;
+  assert.equal(db.prepare("SELECT released FROM sw_sessions WHERE owner=?").get(oldOwner)?.released, 1);
+  const next = open(path); const claimed = next.recover(a.id, command(a));
+  assert.ok(db.prepare("SELECT owner FROM sw_sessions WHERE owner=?").get(oldOwner));
+  next.recover(b.id, command(b)); assert.equal(db.prepare("SELECT owner FROM sw_sessions WHERE owner=?").get(oldOwner), undefined);
+  assert.equal(claimed.events.at(-1)?.recovery?.previousOwner, oldOwner);
+  assert.deepEqual(next.recover(a.id, command(a)), claimed); next.close();
+  const third = open(path); const snapshot = third.getRun(a.id);
+  assert.equal(third.recover(a.id, command(snapshot, "third")).state, "unknown"); third.close(); db.close();
+});
+
+test("cleanup failure rolls back close and ownership transfer without losing evidence", async t => {
+  const path = file(t); const first = open(path); const run = await start(first); first.close();
+  const next = open(path); const db = new DatabaseSync(path);
+  db.exec("CREATE TRIGGER reject_cleanup BEFORE DELETE ON sw_sessions BEGIN SELECT RAISE(ABORT, 'cleanup failure'); END;");
+  assert.throws(() => next.recover(run.id, command(run)), /cleanup failure/);
+  assert.deepEqual(next.getRun(run.id), run); await assert.rejects(next.resume(run.id), /RECOVERY_REQUIRED/);
+  assert.throws(() => next.close(), /cleanup failure/);
+  assert.equal(db.prepare("SELECT count(*) AS n FROM sw_sessions WHERE released=0").get()?.n, 1);
+  db.exec("DROP TRIGGER reject_cleanup"); assert.equal(next.recover(run.id, command(run)).state, "unknown"); next.close(); db.close();
+});

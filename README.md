@@ -87,6 +87,16 @@ The database is trusted internal state, not an import format for arbitrary run J
 Run `npm run demo:durable` for stored plans and partial continuation, or `npm run demo:recovery` for a real child-process
 exit followed by explicit recovery using a local simulated receipt ledger. See [M6 design](docs/design/012-restart-recovery.md).
 
+## Retention and capacity
+
+Drafts, tombstones, run snapshots and derivation records have no automatic expiration. This prototype is for
+bounded trials; capacity limits, general garbage collection and archival APIs are not implemented.
+Only released sessions with no current run ownership are pruned, during open, successful recovery and close.
+Sessions referenced by any run, live sessions and unreleased orphan sessions remain. Cleanup preserves the
+owner identifiers in recovery events and rolls back with its enclosing transaction on failure.
+See [retention policy](docs/design/014-retention.md) and [review decisions](docs/design/013-review-decisions.md).
+Existing-object import remains a [design proposal](docs/design/015-existing-objects.md), not an available API.
+
 ## Define and edit a graph
 
 ```ts
