@@ -32,7 +32,9 @@
     "demo:storage": "npm run build && node dist/examples/storage.js",
     "demo:durable": "npm run build && node dist/examples/durable-execution.js",
     "demo:recovery": "npm run build && node dist/examples/restart-recovery.js",
-    "demo:import": "npm run build && node dist/examples/import-confirmed.js"
+    "demo:import": "npm run build && node dist/examples/import-confirmed.js",
+    "verify:package": "npm run build && node scripts/package-smoke.mjs",
+    "bench": "npm run build && node scripts/benchmark.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

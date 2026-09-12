@@ -196,7 +196,7 @@ the source remains sealed and its execution history remains available. Unknown, 
 applied runs cannot be revised this way. For mapped create-only plans, use `continueFrom` for partial-success derivation (below).
 
 Run `npm run demo:dependencies` for a project/task graph: zero-effect refusal → revise → parent result reference → recover a lost child response.
-The legacy `StagedWrite` class is deprecated; use `createStagedWrite` for new integrations.
+The legacy `StagedWrite` class is deprecated and retained for compatibility through the planned 0.1.0 release; use `createStagedWrite` for new integrations. It remains memory-only and does not receive graph persistence/import features.
 
 ## Recovery contract
 
@@ -336,3 +336,11 @@ Start with a reproducible issue or focused failing test. Keep code, examples and
 ## License
 
 Apache-2.0. Written from scratch; no production code or account logs are included.
+
+## Release verification
+
+Run `npm run verify:package` to install the tarball in a temporary consumer directory and verify package imports,
+public TypeScript declarations and SQLite reopen behavior. This uses npm dependency resolution and is included in CI.
+Run `npm run bench` for a quick baseline or `npm run bench -- --full` for the full size/rule matrix.
+See [measured performance](docs/benchmarks/baseline.md) and [release readiness](docs/design/016-release-readiness.md).
+The package is still private and unpublished; independent external trial remains pending.

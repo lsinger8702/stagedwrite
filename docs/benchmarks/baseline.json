@@ -1,0 +1,169 @@
+{
+  "measuredAt": "2026-09-12T20:12:12.771Z",
+  "runtime": "v24.19.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "cpu": "Apple M4 Pro",
+  "mode": "full",
+  "notes": "One warmup, five samples. max is not a stable p95. Heap is a process snapshot, not a per-case peak; no forced GC. Storage fixture grows tombstones via zero-effect revisions.",
+  "preflight": [
+    {
+      "nodes": 100,
+      "rules": 0,
+      "suggestionsPerRule": 0,
+      "samples": 5,
+      "medianMs": 0.15,
+      "maxMs": 0.16,
+      "heapUsedMiB": 10.81
+    },
+    {
+      "nodes": 100,
+      "rules": 10,
+      "suggestionsPerRule": 0,
+      "samples": 5,
+      "medianMs": 0.64,
+      "maxMs": 0.81,
+      "heapUsedMiB": 10.88
+    },
+    {
+      "nodes": 100,
+      "rules": 10,
+      "suggestionsPerRule": 1,
+      "samples": 5,
+      "medianMs": 1.46,
+      "maxMs": 1.51,
+      "heapUsedMiB": 12.77
+    },
+    {
+      "nodes": 100,
+      "rules": 100,
+      "suggestionsPerRule": 0,
+      "samples": 5,
+      "medianMs": 5.12,
+      "maxMs": 5.21,
+      "heapUsedMiB": 12.25
+    },
+    {
+      "nodes": 100,
+      "rules": 100,
+      "suggestionsPerRule": 1,
+      "samples": 5,
+      "medianMs": 12.39,
+      "maxMs": 12.51,
+      "heapUsedMiB": 13.18
+    },
+    {
+      "nodes": 1000,
+      "rules": 0,
+      "suggestionsPerRule": 0,
+      "samples": 5,
+      "medianMs": 1.26,
+      "maxMs": 1.35,
+      "heapUsedMiB": 14.08
+    },
+    {
+      "nodes": 1000,
+      "rules": 10,
+      "suggestionsPerRule": 0,
+      "samples": 5,
+      "medianMs": 5.76,
+      "maxMs": 5.9,
+      "heapUsedMiB": 14.28
+    },
+    {
+      "nodes": 1000,
+      "rules": 10,
+      "suggestionsPerRule": 1,
+      "samples": 5,
+      "medianMs": 11.65,
+      "maxMs": 11.91,
+      "heapUsedMiB": 20.31
+    },
+    {
+      "nodes": 1000,
+      "rules": 100,
+      "suggestionsPerRule": 0,
+      "samples": 5,
+      "medianMs": 47.17,
+      "maxMs": 47.38,
+      "heapUsedMiB": 25.98
+    },
+    {
+      "nodes": 1000,
+      "rules": 100,
+      "suggestionsPerRule": 1,
+      "samples": 5,
+      "medianMs": 105.3,
+      "maxMs": 110.73,
+      "heapUsedMiB": 43.36
+    },
+    {
+      "nodes": 10000,
+      "rules": 0,
+      "suggestionsPerRule": 0,
+      "samples": 5,
+      "medianMs": 17.01,
+      "maxMs": 18.48,
+      "heapUsedMiB": 42.73
+    },
+    {
+      "nodes": 10000,
+      "rules": 10,
+      "suggestionsPerRule": 0,
+      "samples": 5,
+      "medianMs": 88.39,
+      "maxMs": 92.55,
+      "heapUsedMiB": 71.32
+    },
+    {
+      "nodes": 10000,
+      "rules": 10,
+      "suggestionsPerRule": 1,
+      "samples": 5,
+      "medianMs": 177.39,
+      "maxMs": 178.89,
+      "heapUsedMiB": 128.34
+    },
+    {
+      "nodes": 10000,
+      "rules": 100,
+      "suggestionsPerRule": 0,
+      "samples": 5,
+      "medianMs": 733.14,
+      "maxMs": 759.35,
+      "heapUsedMiB": 87.3
+    },
+    {
+      "nodes": 10000,
+      "rules": 100,
+      "suggestionsPerRule": 1,
+      "samples": 5,
+      "medianMs": 1605.69,
+      "maxMs": 1610.42,
+      "heapUsedMiB": 94.96
+    }
+  ],
+  "storage": [
+    {
+      "generations": 1,
+      "drafts": 1,
+      "deletedIdsPerGeneration": 10,
+      "finalTombstones": 10,
+      "databaseBytesAfterClose": 86016
+    },
+    {
+      "generations": 10,
+      "drafts": 10,
+      "deletedIdsPerGeneration": 10,
+      "finalTombstones": 100,
+      "databaseBytesAfterClose": 143360
+    },
+    {
+      "generations": 100,
+      "drafts": 100,
+      "deletedIdsPerGeneration": 10,
+      "finalTombstones": 1000,
+      "databaseBytesAfterClose": 1368064
+    }
+  ]
+}

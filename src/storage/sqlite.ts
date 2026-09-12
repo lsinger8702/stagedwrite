@@ -26,6 +26,8 @@ export class SqliteDraftStore implements DraftStore {
         this.#db.exec("CREATE TABLE IF NOT EXISTS sw_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;");
         const version = this.#db.prepare("SELECT value FROM sw_meta WHERE key = 'schema'").get();
         if (version && !["1", "2", "3", "4"].includes(version.value as string)) throw new Error("STORAGE_VERSION_UNSUPPORTED");
+        // Versions 1–4 only add tables/indexes. A future column change needs an explicit
+        // migration before advancing schema, plus fixtures for every supported old layout.
         this.#db.exec(`CREATE TABLE IF NOT EXISTS sw_definitions (
           type TEXT NOT NULL, version TEXT NOT NULL, digest TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(type, version)) STRICT;
           CREATE TABLE IF NOT EXISTS sw_drafts (
@@ -35,6 +37,18 @@ export class SqliteDraftStore implements DraftStore {
           CREATE TABLE IF NOT EXISTS sw_derivations (source_run TEXT NOT NULL, kind TEXT NOT NULL, draft_id TEXT NOT NULL UNIQUE, PRIMARY KEY(source_run, kind)) STRICT;`);
         this.#db.exec("CREATE TABLE IF NOT EXISTS sw_imports (source_run TEXT NOT NULL, request_id TEXT NOT NULL, command TEXT NOT NULL, draft_id TEXT NOT NULL UNIQUE, PRIMARY KEY(source_run, request_id)) STRICT;");
         this.#db.exec("CREATE TABLE IF NOT EXISTS sw_sessions (owner TEXT PRIMARY KEY, pid INTEGER NOT NULL, host TEXT NOT NULL, released INTEGER NOT NULL) STRICT;");
+        const requiredColumns: Record<string, string[]> = {
+          sw_definitions: ["type", "version", "digest", "body"],
+          sw_drafts: ["id", "version", "body", "check_epoch", "check_body"],
+          sw_plans: ["draft_id", "body"], sw_runs: ["id", "draft_id", "owner", "body"],
+          sw_derivations: ["source_run", "kind", "draft_id"],
+          sw_sessions: ["owner", "pid", "host", "released"],
+          sw_imports: ["source_run", "request_id", "command", "draft_id"]
+        };
+        for (const [table, required] of Object.entries(requiredColumns)) {
+          const columns = new Set(this.#db.prepare(`PRAGMA table_info(${table})`).all().map(row => row.name));
+          if (required.some(column => !columns.has(column))) throw new Error("STORAGE_SCHEMA_MISMATCH");
+        }
         this.#db.exec("CREATE INDEX IF NOT EXISTS sw_runs_owner ON sw_runs(owner);");
         this.pruneReleasedSessions();
         this.#db.prepare("INSERT INTO sw_sessions VALUES (?, ?, ?, 0)").run(this.#owner, process.pid, hostname());
