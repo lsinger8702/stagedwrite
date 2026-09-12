@@ -2,13 +2,13 @@
 
 An experimental TypeScript library for staged writes from agent tools to external systems.
 
-**Status: early prototype, v0.0.1.** Graph registration, editing, preflight and in-memory execution are connected. There is no durable storage or process-restart recovery, and no published npm package yet. The opt-in Stripe test Customer adapter has offline contract coverage; real-account verification is still pending.
+**Status: early prototype, v0.0.1.** Graph registration, editing, preflight and in-memory execution are connected. SQLite draft/check persistence is available in draft-only mode. Execution records remain in memory; there is no execution restart recovery or published npm package yet. The opt-in Stripe test Customer adapter has offline contract coverage; real-account verification is still pending.
 
 StagedWrite separates author intent, preflight diagnostics, a fixed execution plan and remote effects. An ambiguous remote outcome stops execution until the adapter can reconcile it.
 
 ## Run it
 
-Use Node.js 22 and npm:
+Use Node.js 22.13 or newer and npm:
 
 ```sh
 npm ci
@@ -24,6 +24,31 @@ Other examples:
 - `npm run demo:graph`: atomic edits and a shared asset reference.
 - `npm run demo:preflight`: missing values, explicit repair and stale-check rejection.
 - `npm run demo`: the original scalar prototype, using the same execution state machine.
+
+## Persist drafts and checks (M4)
+
+```ts
+const engine = createStagedWrite({
+  definitions: [definition],
+  rules: [],
+  storage: { kind: "sqlite", path: "./drafts.sqlite" }
+});
+const ids = engine.listDraftIds();
+// getCheck(draftId) discovers the current check after restart.
+// getDraft, edit, preflight and getCheck read/write this database.
+engine.close(); // Reopen with the same definitions and rule identities.
+```
+
+SQLite stores graph snapshots, versions, tombstones, definition identities and the current check. Editing uses a
+conditional database update and invalidates the check atomically. Preflight first persists invalidation, then saves
+its result only if both the draft version and check generation still match. Competing connections cannot overwrite
+newer edits or checks. Old definition versions must still be registered; changing a stored definition under the same
+ID/version is rejected. A changed rule digest makes a restored check non-current.
+
+This storage option is **draft-only** and cannot be combined with executable mode. It does not save fixed plans,
+runs, remote receipts or publication seals. The default memory execution mode is unchanged. `close()` closes a
+draft engine's storage; executable-engine shutdown is not yet supported. Run `npm run demo:storage` for reopening
+a SQLite draft and check. Automated tests also verify recovery in a separate process.
 
 ## Define and edit a graph
 
@@ -114,6 +139,10 @@ The legacy `StagedWrite` class is deprecated; use `createStagedWrite` for new in
 - Recovery must use the original step/key and stable target configuration; a process-local cache cannot be the only evidence source. Unsupported recovery is explicit and keeps unknown runs stopped.
 
 Callers own retry budgets, backoff and scheduling. The engine cannot make a remote honor idempotency keys. No exactly-once claim.
+
+Failed steps expose `failureReason` (`remote_refusal`, `manual_no_effect`, or `retry_stopped`) and
+`failureEventSequence`, pointing to the event that explains the failure. These fields aid display and auditing;
+recovery eligibility continues to depend on effect evidence.
 
 ## Stop retrying
 
@@ -218,14 +247,14 @@ Proven Customer request refusals stop as failed. A documented limiter response c
 
 ## Limits and next work
 
-- In-memory only: process loss loses graphs, plans, run records and keys. No crash recovery guarantee.
+- Execution remains in memory: process loss loses plans, run records, receipts and keys. SQLite mode persists drafts/checks only; no execution crash recovery guarantee.
 - Trusted in-process code, one engine instance. No multi-worker fencing, tenant isolation or approval enforcement.
 - Scalar graph fields; no nested JSON, arrays, inheritance, restore/import or automatic topology constraints.
 - Rules and plans are pure/synchronous by contract; their code is not hashed. Implementers must version changed behavior.
 - No durable retry budget, compensation, production billing integration or MCP server.
 - Stripe recovery now requires version-2 context metadata; old attempt-only objects are not automatically claimed.
 
-M1 definition assembly, M2 graph edits, M3 preflight and the in-memory graph execution bridge are implemented. Next: SQLite draft/check storage (M4), durable plans/runs (M5), restart recovery (M6), and external trial/release (M7). This remains an experimental 0.0.1, not a completed 0.1.0 MVP.
+M1 definition assembly, M2 graph edits, M3 preflight and the in-memory graph execution bridge are implemented. M4 SQLite draft/check storage is implemented. Next: durable plans/runs (M5), restart recovery (M6), and external trial/release (M7). This remains an experimental 0.0.1, not a completed 0.1.0 MVP.
 
 ## Read and contribute
 

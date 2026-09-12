@@ -57,6 +57,9 @@ export interface ReusedReceipt {
 }
 export interface ExecutionStep extends Step {
   reusedFrom?: ReusedReceipt;
+  /** Explanation only; eligibility still uses recorded effect evidence. */
+  failureReason?: "remote_refusal" | "manual_no_effect" | "retry_stopped";
+  failureEventSequence?: number;
   key: string;
   status: "ready" | "dispatching" | "applied" | "unknown" | "failed" | "skipped" | "reused";
   skipReason?: "dependency_failed" | "run_stopped";

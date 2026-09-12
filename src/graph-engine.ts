@@ -1,4 +1,6 @@
 import { continuationReceipts, validateContinuation } from "./execution/continuation.js";
+import { MemoryDraftStore } from "./storage/drafts.js";
+import { SqliteDraftStore } from "./storage/sqlite.js";
 import { randomUUID } from "node:crypto";
 import { DefinitionRegistry } from "./registry/registry.js";
 import type { DefinitionSelector } from "./registry/types.js";
@@ -12,8 +14,8 @@ import { definitionDigest, type Json } from "./registry/json.js";
 import type { Run, Step, ExecutionBinding, Adjudication, StopRetry, Clock } from "./types.js";
 
 interface CommonOptions { definitions: readonly unknown[]; rules?: readonly GraphRule[] }
-export interface DraftOptions extends CommonOptions { mode?: "draft"; executors?: never }
-export interface ExecutableOptions extends CommonOptions { mode: "executable"; executors: readonly GraphExecutor[]; clock?: Clock }
+export interface DraftOptions extends CommonOptions { mode?: "draft"; executors?: never; storage?: { kind: "sqlite"; path: string } }
+export interface ExecutableOptions extends CommonOptions { mode: "executable"; storage?: never; executors: readonly GraphExecutor[]; clock?: Clock }
 export type DraftEngine = ReturnType<typeof assembleGraphEngine>["base"];
 export type ExecutableGraphEngine = DraftEngine & ReturnType<typeof assembleGraphEngine>["execution"];
 export function createStagedWrite(options: DraftOptions): DraftEngine;
@@ -32,13 +34,13 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
   const plans = new Map<string, { certificate: string; plan: Step[]; binding: ExecutionBinding; executor: BoundExecutor }>();
   const runByDraft = new Map<string, string>();
   const runExecutors = new Map<string, BoundExecutor>();
-  const drafts = new Map<string, GraphDraft>();
   const preflight = new GraphPreflight(registry, options.rules === undefined ? [] : options.rules);
-  const checks = new Map<string, GraphCheck>();
+  if (options.storage !== undefined && ((options as { mode?: string }).mode === "executable" || options.storage?.kind !== "sqlite")) throw new Error("DRAFT_STORAGE_ONLY");
+  const store = options.storage ? new SqliteDraftStore(options.storage.path, registry) : new MemoryDraftStore();
   const checking = new Set<string>();
   const requireDraft = (id: string): GraphDraft => {
-    const draft = drafts.get(id);
-    if (!draft) throw new Error("DRAFT_NOT_FOUND");
+    const draft = store.get(id);
+    if (registry.getDefinition(draft).digest !== draft.definitionDigest) throw new Error("DEFINITION_MISMATCH");
     return draft;
   };
   const evaluateEdit = (id: string, expectedVersion: number, ops: readonly GraphOp[]) =>
@@ -50,9 +52,11 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
         id: randomUUID(), version: 0, type: selector.type, typeVersion: selector.typeVersion,
         definitionDigest: digest, nodes: {}, edges: {}, tombstones: { nodes: [], edges: [] }
       };
-      drafts.set(draft.id, draft);
+      store.create(draft);
       return structuredClone(draft);
     },
+    listDraftIds(): string[] { return store.ids(); },
+    close(): void { if (checking.size) throw new Error("CHECK_BUSY"); if (executors) throw new Error("EXECUTABLE_CLOSE_UNSUPPORTED"); store.close(); },
     getDraft(id: string): GraphDraft { return structuredClone(requireDraft(id)); },
     evaluateEdit,
     preview: evaluateEdit,
@@ -60,9 +64,8 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
       if (runByDraft.has(id)) throw new Error("DRAFT_SEALED");
       if (checking.has(id)) throw new Error("CHECK_BUSY");
       const { candidate } = evaluateEdit(id, expectedVersion, ops);
-      // Synchronous in-memory CAS: no await or callback between evaluation and save.
-      drafts.set(id, candidate);
-      checks.delete(id);
+      // Conditional storage update: candidate and check invalidation commit together.
+      store.edit(candidate, expectedVersion);
       plans.delete(id);
       return structuredClone(candidate);
     },
@@ -70,7 +73,7 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
       if (runByDraft.has(id)) throw new Error("DRAFT_SEALED");
       if (checking.has(id)) throw new Error("CHECK_BUSY");
       const draft = requireDraft(id);
-      checks.delete(id);
+      const epoch = store.beginCheck(id, draft.version);
       plans.delete(id);
       checking.add(id);
       try {
@@ -101,15 +104,16 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
             }
           }
         }
-        checks.set(id, result);
+        store.saveCheck(result, epoch);
         return structuredClone(result);
       } finally { checking.delete(id); }
     },
-    getCheck(id: string, checkId: string): GraphCheck {
+    getCheck(id: string, checkId?: string): GraphCheck {
       const draft = requireDraft(id);
-      const check = checks.get(id);
-      if (!check || check.checkId !== checkId || check.version !== draft.version ||
+      const check = store.getCheck(id);
+      if (!check || (checkId !== undefined && check.checkId !== checkId) || check.version !== draft.version ||
           check.definitionDigest !== draft.definitionDigest || check.rulesDigest !== preflight.rulesDigest(draft)) throw new Error("CHECK_NOT_CURRENT");
+      if (requireDraft(id).version !== draft.version) throw new Error("CHECK_NOT_CURRENT");
       return structuredClone(check);
     },
     getDefinition: (selector: DefinitionSelector) => registry.getDefinition(selector),
@@ -134,7 +138,7 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
       if (existing) return base.getDraft(existing);
       const draft: GraphDraft = { ...structuredClone(original), id: randomUUID(), version: 0,
         sourceRunId: runId, continuation: { sourceRunId: runId, receipts } };
-      drafts.set(draft.id, draft);
+      store.create(draft);
       continuations.set(runId, draft.id);
       return structuredClone(draft);
     },
@@ -153,7 +157,7 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
       const existing = revisions.get(runId);
       if (existing) return base.getDraft(existing);
       const draft = { ...structuredClone(requireDraft(run.draftId)), id: randomUUID(), version: 0, sourceRunId: runId };
-      drafts.set(draft.id, draft);
+      store.create(draft);
       revisions.set(runId, draft.id);
       return structuredClone(draft);
     },

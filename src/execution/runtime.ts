@@ -55,7 +55,11 @@ export class ExecutionRuntime {
       } else if (decision.kind === "no_effect") {
         step.status = decision.next === "retry" ? "ready" : "failed";
         run.state = decision.next === "retry" ? "blocked" : "failed";
-        if (decision.next === "stop") this.stopRemaining(run, step.id);
+        if (decision.next === "stop") {
+          step.failureReason = "manual_no_effect";
+          step.failureEventSequence = run.events.length;
+          this.stopRemaining(run, step.id);
+        }
       } else {
         // Administrative closure is not evidence of no effects. Keep the step unknown.
         run.state = "closed";
@@ -81,6 +85,8 @@ export class ExecutionRuntime {
       if (!pending) throw new Error("NO_PENDING_STEPS");
       this.record(run, pending.id, "retry_stopped", { stopRetry: command, reason: command.reason });
       pending.status = "failed";
+      pending.failureReason = "retry_stopped";
+      pending.failureEventSequence = run.events.length;
       run.state = "failed";
       this.stopRemaining(run, pending.id, false);
       return structuredClone(run);
@@ -140,7 +146,11 @@ export class ExecutionRuntime {
             step.status = retryable ? "ready" : "failed";
             run.state = retryable ? "blocked" : "failed";
             this.record(run, step.id, "not_applied", { reason: result.reason, retryable });
-            if (!retryable) this.stopRemaining(run, step.id);
+            if (!retryable) {
+              step.failureReason = "remote_refusal";
+              step.failureEventSequence = run.events.length;
+              this.stopRemaining(run, step.id);
+            }
           }
           return structuredClone(run);
         }

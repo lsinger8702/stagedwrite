@@ -28,7 +28,8 @@
     "demo:continuation": "npm run build && node dist/examples/continuation.js",
     "demo:manual": "npm run build && node dist/examples/manual-recovery.js",
     "demo:dependencies": "npm run build && node dist/examples/dependencies.js",
-    "demo:execution": "npm run build && node dist/examples/graph-execution.js"
+    "demo:execution": "npm run build && node dist/examples/graph-execution.js",
+    "demo:storage": "npm run build && node dist/examples/storage.js"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -36,5 +37,8 @@
   },
   "dependencies": {
     "ajv": "^8.20.0"
+  },
+  "engines": {
+    "node": ">=22.13.0"
   }
 }
