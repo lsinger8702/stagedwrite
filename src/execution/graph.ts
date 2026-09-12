@@ -44,5 +44,11 @@ export function assembleExecutors(registry: DefinitionRegistry, input: readonly 
 }
 export const executorFor = (entries: Map<string, BoundExecutor>, selector: DefinitionSelector): BoundExecutor => entries.get(key(selector))!;
 export function fixedPlan(executor: BoundExecutor, draft: GraphDraft): Step[] {
-  return validatePlan(executor.plan(deepFreeze(structuredClone(draft))));
+  const plan = validatePlan(executor.plan(deepFreeze(structuredClone(draft))));
+  const mapped = new Set<string>();
+  for (const step of plan) if (step.effect) {
+    if (!Object.hasOwn(draft.nodes, step.effect.nodeId) || mapped.has(step.effect.nodeId)) throw new Error("INVALID_EFFECT_MAPPING");
+    mapped.add(step.effect.nodeId);
+  }
+  return plan;
 }

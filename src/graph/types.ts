@@ -1,4 +1,4 @@
-import type { Field, Value } from "../types.js";
+import type { Field, Value, ReusedReceipt } from "../types.js";
 import type { DefinitionSelector } from "../registry/types.js";
 
 export interface GraphNode { id: string; nodeType: string; fields: Record<string, Field> }
@@ -7,8 +7,10 @@ export interface GraphDraft extends DefinitionSelector {
   id: string;
   version: number;
   definitionDigest: string;
-  /** Proven zero-effect failed run from which this editable draft was copied. */
+  /** Source failed run for a revision or partial continuation. */
   sourceRunId?: string;
+  /** Engine-owned receipts; graph edits cannot supply or alter these. */
+  continuation?: { sourceRunId: string; receipts: Record<string, ReusedReceipt> };
   nodes: Record<string, GraphNode>;
   edges: Record<string, GraphEdge>;
   tombstones: { nodes: string[]; edges: string[] };

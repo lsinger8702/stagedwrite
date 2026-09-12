@@ -100,7 +100,7 @@ Terminal failure marks all unattempted steps `skipped`, with `dependency_failed`
 For a terminal run proven to have no effects, `engine.revise(runId)` returns an editable copy with a new ID,
 version 0 and `sourceRunId`. It needs a new preflight certificate. Repeated revision calls return the same copy;
 the source remains sealed and its execution history remains available. Unknown, blocked, successful and partially
-applied runs cannot be revised this way. Partial-success derivation needs an explicit node/result mapping and is pending.
+applied runs cannot be revised this way. For mapped create-only plans, use `continueFrom` for partial-success derivation (below).
 
 Run `npm run demo:dependencies` for a campaign/adset graph: zero-effect refusal → revise → parent result reference → recover a lost child response.
 The legacy `StagedWrite` class is deprecated; use `createStagedWrite` for new integrations.
@@ -146,7 +146,31 @@ these strings are audit assertions, not authentication or automatic proof. Run s
 keep secrets out of them and enforce access control in the host. Storage is still in memory.
 
 Run `npm run demo:manual` for an offline unsupported-recovery → manual receipt → explicit resume example.
-Partial-success draft derivation remains pending; adjudication does not revise a failed step's business intent.
+Adjudication does not revise a failed step's business intent; mapped create-only plans can use `continueFrom` below.
+
+## Continue a partial creation
+
+Executors can opt into one-create-step-per-node mapping:
+
+```ts
+{ id: "create_parent", effect: { kind: "create", nodeId: "parent" }, payload: { name: "Parent" } }
+```
+
+After a terminal partial failure, `engine.continueFrom(runId)` copies the graph into a new draft with engine-owned
+receipts in `draft.continuation`. Repeated calls return the same draft. Edit the failed portion, run preflight again,
+and publish with the new certificate. Successful nodes cannot be changed or removed. Their original steps must
+remain in the plan with identical IDs, mappings, payloads, dependencies and input references.
+
+The new run marks these steps `reused` and records `reusedFrom` with source run/step, node, remote reference and
+resolved inputs. It does not dispatch them. Dependent steps receive the original remote reference; new requests
+use new keys. The original run remains unchanged. Preflight binds the executor, target, plan and continuation
+receipts; planners cannot substitute a different operation for a reused create.
+
+This path requires a complete one-to-one create mapping for the source and new graph. Unmapped operations,
+updates, deletes, multiple effects per node, unknown outcomes and closed runs cannot use it. Existing remote
+objects are assumed to remain valid: reuse records past creation evidence, not a fresh remote-state check.
+Run `npm run demo:continuation` for parent success → child refusal → edit child → reuse parent → child recovery.
+See [the continuation contract](docs/design/008-partial-continuation.md).
 
 ## Stripe test Customer experiment
 

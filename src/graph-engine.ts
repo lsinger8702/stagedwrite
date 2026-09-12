@@ -1,3 +1,4 @@
+import { continuationReceipts, validateContinuation } from "./execution/continuation.js";
 import { randomUUID } from "node:crypto";
 import { DefinitionRegistry } from "./registry/registry.js";
 import type { DefinitionSelector } from "./registry/types.js";
@@ -80,9 +81,16 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
             const executor = executorFor(executors, draft);
             try {
               const plan = fixedPlan(executor, draft);
+              if (draft.continuation) {
+                const source = runExecutors.get(draft.continuation.sourceRunId)!.runtime.getRun(draft.continuation.sourceRunId);
+                if (source.binding?.executorId !== executor.id || source.binding.executorVersion !== executor.version ||
+                    source.binding.target !== executor.target || source.binding.definitionDigest !== draft.definitionDigest) throw new Error("CONTINUATION_BINDING_MISMATCH");
+                validateContinuation(plan, draft, source, requireDraft(source.draftId));
+              }
               const binding: ExecutionBinding = { checkId: result.checkId, definitionDigest: result.definitionDigest,
                 rulesDigest: result.rulesDigest, executorId: executor.id, executorVersion: executor.version,
                 target: executor.target, planDigest: definitionDigest(plan as unknown as Json) };
+              if (draft.continuation) binding.continuationDigest = definitionDigest(draft.continuation as unknown as Json);
               result.certificate = randomUUID();
               result.execution = binding;
               plans.set(id, { certificate: result.certificate, plan, binding, executor });
@@ -108,7 +116,23 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
     validateValues: (selector: DefinitionSelector, nodeType: string, values: unknown) => registry.validateValues(selector, nodeType, values)
   };
   const revisions = new Map<string, string>();
+  const continuations = new Map<string, string>();
   const execution = {
+    /** Continue a terminal partial failure with mapped, immutable successful creates. */
+    continueFrom(runId: string): GraphDraft {
+      const executor = runExecutors.get(runId);
+      if (!executor) throw new Error("RUN_NOT_FOUND");
+      const run = executor.runtime.getRun(runId);
+      const original = requireDraft(run.draftId);
+      const receipts = continuationReceipts(run, original);
+      const existing = continuations.get(runId);
+      if (existing) return base.getDraft(existing);
+      const draft: GraphDraft = { ...structuredClone(original), id: randomUUID(), version: 0,
+        sourceRunId: runId, continuation: { sourceRunId: runId, receipts } };
+      drafts.set(draft.id, draft);
+      continuations.set(runId, draft.id);
+      return structuredClone(draft);
+    },
     adjudicate(runId: string, stepId: string, command: Adjudication): Run {
       const executor = runExecutors.get(runId);
       if (!executor) throw new Error("RUN_NOT_FOUND");
@@ -137,7 +161,7 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
       if (check.status !== "passed" || check.scope !== "execution") throw new Error("PREFLIGHT_REQUIRED");
       const previous = runByDraft.get(id);
       if (previous) return checked.executor.runtime.getRun(previous);
-      const run = checked.executor.runtime.create(id, draft.version, checked.plan, checked.binding);
+      const run = checked.executor.runtime.create(id, draft.version, checked.plan, checked.binding, draft.continuation?.receipts);
       // Establish the discoverable run and seal before the first dispatch can occur.
       runByDraft.set(id, run.id);
       runExecutors.set(run.id, checked.executor);

@@ -34,3 +34,4 @@ Stripe 实验：[005：测试 Customer 与恢复验证](design/005-stripe-adapte
 图执行桥：[006：固定计划、发布与恢复](design/006-graph-execution.md)，已实现进程内闭环。
 
 - [人工核对与不确定执行的关闭](design/007-manual-reconciliation.md)
+- [部分创建成功后的派生](design/008-partial-continuation.md)

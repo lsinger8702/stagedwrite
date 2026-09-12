@@ -2,18 +2,26 @@ import { validateAdjudication } from "./adjudication.js";
 import { definitionDigest, type Json } from "../registry/json.js";
 import { validatePlan } from "./plan.js";
 import { randomUUID } from "node:crypto";
-import type { Adapter, ApplyOutcome, ReconcileOutcome, Event, Run, Step, Adjudication } from "../types.js";
+import type { Adapter, ApplyOutcome, ReconcileOutcome, Event, Run, Step, Adjudication, ReusedReceipt } from "../types.js";
 
 /** Shared in-memory execution state machine for legacy and graph entry points. */
 export class ExecutionRuntime {
   private runs = new Map<string, Run>();
   private busy = new Set<string>();
   constructor(private readonly adapter: Pick<Adapter, "apply" | "reconcile">) {}
-  create(draftId: string, version: number, plan: Step[], binding?: Run["binding"]): Run {
+  create(draftId: string, version: number, plan: Step[], binding?: Run["binding"], receipts: Record<string, ReusedReceipt> = {}): Run {
     const id = randomUUID();
     const run: Run = { id, draftId, version, state: "running", events: [],
       ...(binding ? { binding: structuredClone(binding) } : {}),
       steps: validatePlan(plan).map(step => ({ ...structuredClone(step), key: `${id}:${step.id}`, status: "ready" })) };
+    for (const step of run.steps) if (Object.hasOwn(receipts, step.id)) {
+      const receipt = structuredClone(receipts[step.id]!);
+      step.status = "reused";
+      step.remoteRef = receipt.remoteRef;
+      step.resolvedPayload = structuredClone(receipt.resolvedPayload);
+      step.reusedFrom = receipt;
+      run.events.push({ sequence: run.events.length + 1, stepId: step.id, kind: "reused", reusedFrom: structuredClone(receipt) });
+    }
     this.runs.set(id, run);
     return structuredClone(run);
   }
@@ -57,11 +65,11 @@ export class ExecutionRuntime {
     run.state = "running";
     try {
       for (const step of run.steps) {
-        if (step.status === "applied" || step.status === "skipped") continue;
+        if (step.status === "applied" || step.status === "reused" || step.status === "skipped") continue;
         if (!step.resolvedPayload) {
           const payload = structuredClone(step.payload);
           for (const dependency of step.dependsOn ?? []) {
-            if (run.steps.find(s => s.id === dependency)?.status !== "applied") throw new Error("DEPENDENCY_NOT_APPLIED");
+            if (!["applied", "reused"].includes(run.steps.find(s => s.id === dependency)?.status ?? "")) throw new Error("DEPENDENCY_NOT_APPLIED");
           }
           for (const [field, dependency] of Object.entries(step.inputRefs ?? {})) {
             const parent = run.steps.find(s => s.id === dependency)!;

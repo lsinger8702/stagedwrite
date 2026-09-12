@@ -20,3 +20,4 @@ jobs:
       - run: npm run demo:execution
       - run: npm run demo:dependencies
       - run: npm run demo:manual
+      - run: npm run demo:continuation

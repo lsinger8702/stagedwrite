@@ -20,6 +20,8 @@ export interface Step {
   dependsOn?: readonly string[];
   /** Payload field -> dependency step whose remoteRef supplies that field. */
   inputRefs?: Record<string, string>;
+  /** Opt-in mapping for create-only graph continuation. */
+  effect?: { kind: "create"; nodeId: string };
 }
 type Applied = { kind: "applied"; remoteRef: string };
 type Unknown = { kind: "unknown"; reason: string };
@@ -46,9 +48,17 @@ export interface Check {
   diagnostics: Diagnostic[];
   certificate?: string;
 }
+export interface ReusedReceipt {
+  nodeId: string;
+  sourceRunId: string;
+  sourceStepId: string;
+  remoteRef: string;
+  resolvedPayload: Record<string, Value>;
+}
 export interface ExecutionStep extends Step {
+  reusedFrom?: ReusedReceipt;
   key: string;
-  status: "ready" | "dispatching" | "applied" | "unknown" | "failed" | "skipped";
+  status: "ready" | "dispatching" | "applied" | "unknown" | "failed" | "skipped" | "reused";
   skipReason?: "dependency_failed" | "run_stopped";
   blockedBy?: string;
   /** Frozen dispatch inputs reused for reconciliation and retries. */
@@ -73,7 +83,8 @@ export interface Adjudication {
 export interface Event {
   sequence: number;
   stepId: string;
-  kind: "dispatching" | "applied" | "unknown" | "not_applied" | "no_effect" | "reconciling" | "skipped" | "adjudicated";
+  kind: "dispatching" | "applied" | "unknown" | "not_applied" | "no_effect" | "reconciling" | "skipped" | "adjudicated" | "reused";
+  reusedFrom?: ReusedReceipt;
   adjudication?: Adjudication;
   recordedAt?: string;
   reason?: string;
@@ -87,6 +98,7 @@ export interface ExecutionBinding {
   executorVersion: string;
   target: string;
   planDigest: string;
+  continuationDigest?: string;
 }
 export interface Run {
   binding?: ExecutionBinding;
