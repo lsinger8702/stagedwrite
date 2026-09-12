@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createStagedWrite, defineDraftType } from "../src/index.js";
+import { createStagedWrite, defineDraftType, StagedWrite } from "../src/index.js";
 import type { GraphExecutor, Step, ApplyOutcome } from "../src/index.js";
 const definition = defineDraftType({ id: "example.executable", version: "1", nodeTypes: {
   item: { valueSchema: { type: "object", properties: { name: { type: "string" } }, additionalProperties: false }, requiredAtPublish: ["name"] }
@@ -101,4 +101,104 @@ test("planner reentry cannot edit a graph or leave a usable certificate", () => 
   const check = engine.preflight(draftId);
   assert.equal(check.status, "incomplete"); assert.equal(check.certificate, undefined);
   assert.equal(engine.getDraft(draftId).version, 1);
+});
+
+
+test("both public entries reject invalid dependencies and result references before dispatch", () => {
+  const root: Step = { id: "parent", payload: {} };
+  const invalid: unknown[] = [
+    [{ id: "child", payload: {}, dependsOn: ["parent"] }, root],
+    [root, { id: "child", payload: {}, dependsOn: ["missing"] }],
+    [{ ...root, dependsOn: ["parent"] }],
+    [root, { id: "child", payload: {}, dependsOn: ["parent", "parent"] }],
+    [root, { id: "child", payload: {}, inputRefs: { parentId: "parent" } }],
+    [root, { id: "child", payload: { parentId: "literal" }, dependsOn: ["parent"], inputRefs: { parentId: "parent" } }],
+    [{ ...root, dependsOn: null }], [{ ...root, inputRefs: [] }],
+    [{ ...root, payload: { bad: Infinity } }]
+  ];
+  for (const plan of invalid) {
+    const { engine, draft } = setup(binding({ plan: () => plan as Step[] }));
+    assert.equal(engine.preflight(draft.id).certificate, undefined);
+    const old = new StagedWrite({ plan: () => plan as Step[], apply: async () => { throw new Error("must not dispatch"); }, reconcile: async () => ({ kind: "unknown", reason: "test" }) }, []);
+    assert.throws(() => old.preflight(old.create().id), /INVALID_PLAN/);
+  }
+});
+
+const dependentPlan: Step[] = [
+  { id: "parent", payload: { name: "campaign" } },
+  { id: "child", payload: { name: "adset" }, dependsOn: ["parent"], inputRefs: { campaignId: "parent" } }
+];
+test("recovered parent result feeds child and frozen child inputs survive retries and reconciliation", async () => {
+  const calls: { id: string; key: string; payload: Step["payload"] }[] = [];
+  let childCalls = 0;
+  const { engine, draft } = setup(binding({ plan: () => dependentPlan,
+    apply: async (s, key) => {
+      calls.push({ id: s.id, key, payload: structuredClone(s.payload) });
+      if (s.id === "parent") return { kind: "unknown", reason: "lost parent response" };
+      assert.equal(s.payload.campaignId, "remote_campaign");
+      s.payload.campaignId = "adapter mutation";
+      return ++childCalls === 1 ? { kind: "not_applied", retryable: true, reason: "limited" } : { kind: "unknown", reason: "lost child response" };
+    },
+    reconcile: async s => {
+      if (s.id === "child") assert.equal(s.payload.campaignId, "remote_campaign");
+      return { kind: "applied", remoteRef: s.id === "parent" ? "remote_campaign" : "remote_adset" };
+    }
+  }));
+  const run = await engine.publish(draft.id, engine.preflight(draft.id).certificate!);
+  assert.equal(run.state, "unknown"); assert.equal(calls.length, 1);
+  assert.equal((await engine.resume(run.id)).state, "blocked");
+  assert.equal((await engine.resume(run.id)).state, "unknown");
+  const finished = await engine.resume(run.id);
+  assert.equal(finished.state, "published");
+  assert.deepEqual(calls.map(c => c.id), ["parent", "child", "child"]);
+  assert.deepEqual(calls[1], calls[2]);
+  assert.deepEqual(finished.steps[1]?.payload, { name: "adset" });
+  assert.equal(finished.steps[1]?.resolvedPayload?.campaignId, "remote_campaign");
+});
+
+test("terminal failure marks all remaining steps skipped with distinct reasons", async () => {
+  const { engine, draft } = setup(binding({ plan: () => [...dependentPlan,
+    { id: "grandchild", payload: {}, dependsOn: ["child"] }, { id: "independent", payload: {} }],
+    apply: async () => ({ kind: "not_applied", reason: "invalid name", retryable: false }) }));
+  const run = await engine.publish(draft.id, engine.preflight(draft.id).certificate!);
+  assert.deepEqual(run.steps.map(s => s.status), ["failed", "skipped", "skipped", "skipped"]);
+  assert.deepEqual(run.steps.slice(1).map(s => s.skipReason), ["dependency_failed", "dependency_failed", "run_stopped"]);
+  assert.deepEqual(run.steps.slice(1).map(s => s.blockedBy), ["parent", "child", "parent"]);
+  assert.equal(run.events.filter(e => e.kind === "skipped").length, 3);
+  assert.deepEqual(await engine.resume(run.id), run);
+});
+
+test("zero-effect revision keeps source sealed, preserves history and requires a new certificate", async () => {
+  let refused = true;
+  const { engine, draft } = setup(binding({ apply: async () => refused ? { kind: "not_applied", reason: "name rejected" } : { kind: "applied", remoteRef: "created" } }));
+  const check = engine.preflight(draft.id);
+  const run = await engine.publish(draft.id, check.certificate!);
+  const revised = engine.revise(run.id);
+  assert.notEqual(revised.id, draft.id); assert.equal(revised.version, 0); assert.equal(revised.sourceRunId, run.id);
+  assert.deepEqual(revised.nodes, draft.nodes);
+  assert.equal(engine.revise(run.id).id, revised.id);
+  assert.throws(() => engine.edit(draft.id, draft.version, []), /DRAFT_SEALED/);
+  await assert.rejects(engine.publish(revised.id, check.certificate!), /PREFLIGHT_REQUIRED/);
+  engine.edit(revised.id, 0, [{ op: "set", nodeId: "one", path: "/name", value: "fixed" }]);
+  refused = false;
+  const next = await engine.publish(revised.id, engine.preflight(revised.id).certificate!);
+  assert.equal(next.state, "published"); assert.notEqual(next.steps[0]?.key, run.steps[0]?.key);
+  assert.deepEqual(engine.getRun(run.id), run);
+  assert.deepEqual(await engine.publish(draft.id, check.certificate!), run);
+  assert.equal(engine.getDraft(draft.id).nodes.one?.fields.name?.kind, "value");
+});
+
+test("revision rejects uncertain, retryable, successful and partially applied runs", async () => {
+  for (const outcome of [
+    { kind: "unknown", reason: "lost" }, { kind: "not_applied", reason: "limited", retryable: true }, { kind: "applied", remoteRef: "exists" }
+  ] as ApplyOutcome[]) {
+    const { engine, draft } = setup(binding({ apply: async () => outcome }));
+    const run = await engine.publish(draft.id, engine.preflight(draft.id).certificate!);
+    assert.throws(() => engine.revise(run.id), /ZERO_EFFECT_FAILURE_REQUIRED/);
+  }
+  const { engine, draft } = setup(binding({ plan: () => dependentPlan, apply: async s => s.id === "parent" ?
+    { kind: "applied", remoteRef: "exists" } : { kind: "not_applied", reason: "bad child" } }));
+  const partial = await engine.publish(draft.id, engine.preflight(draft.id).certificate!);
+  assert.equal(partial.state, "failed");
+  assert.throws(() => engine.revise(partial.id), /ZERO_EFFECT_FAILURE_REQUIRED/);
 });

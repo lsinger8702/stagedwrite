@@ -1,9 +1,11 @@
+import { validatePlan } from "./execution/plan.js";
 import { randomUUID } from "node:crypto";
 import { edited } from "./draft.js";
 import { ExecutionRuntime } from "./execution/runtime.js";
 import type { Adapter, Check, Draft, Op, Rule, Run, Step } from "./types.js";
 
-/** In-memory, single-process prototype. No crash durability or external authorization. */
+/** @deprecated Use createStagedWrite for graph drafts.
+ * In-memory, single-process prototype. No crash durability or external authorization. */
 export class StagedWrite {
   private drafts = new Map<string, Draft>();
   private checks = new Map<string, { version: number; certificate: string; plan: Step[] }>();
@@ -39,10 +41,7 @@ export class StagedWrite {
     const diagnostics = this.rules.flatMap(rule => rule(structuredClone(draft)));
     const check: Check = { draftId: id, version: draft.version, diagnostics };
     if (diagnostics.length === 0) {
-      const plan = structuredClone(this.adapter.plan(structuredClone(draft)));
-      if (!plan.length || plan.some(s => !s.id) || new Set(plan.map(s => s.id)).size !== plan.length) {
-        throw new Error("INVALID_PLAN");
-      }
+      const plan = validatePlan(this.adapter.plan(structuredClone(draft)));
       const certificate = randomUUID();
       this.checks.set(id, { version: draft.version, certificate, plan });
       check.certificate = certificate;

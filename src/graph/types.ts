@@ -7,6 +7,8 @@ export interface GraphDraft extends DefinitionSelector {
   id: string;
   version: number;
   definitionDigest: string;
+  /** Proven zero-effect failed run from which this editable draft was copied. */
+  sourceRunId?: string;
   nodes: Record<string, GraphNode>;
   edges: Record<string, GraphEdge>;
   tombstones: { nodes: string[]; edges: string[] };

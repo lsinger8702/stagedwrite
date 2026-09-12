@@ -88,6 +88,23 @@ See [the complete executable graph example](examples/graph-execution.ts). A pass
 
 Successful edits and repeated preflight invalidate old checks/plans. Preview and rejected edits preserve them. `getCheck(draftId,checkId)` rejects obsolete or foreign checks. Publishing seals the draft and establishes its run before dispatch. Repeated publish observes that run; only resume advances it. Both graph and scalar entry points share [ExecutionRuntime](src/execution/runtime.ts).
 
+## Dependencies and failure revisions
+
+A sequential plan may declare `dependsOn: ["parent"]` and `inputRefs: { campaignId: "parent" }`.
+The latter fills `payload.campaignId` from the applied parent's `remoteRef`. Dependencies must occur earlier;
+references require an explicit dependency and cannot overwrite literal payload fields. Both public entry points
+validate this contract. Dispatch inputs are recorded and reused unchanged for retries and reconciliation.
+Graph relations are mapped by the executor; the library does not infer execution dependencies from every graph edge.
+
+Terminal failure marks all unattempted steps `skipped`, with `dependency_failed` or `run_stopped` as the reason.
+For a terminal run proven to have no effects, `engine.revise(runId)` returns an editable copy with a new ID,
+version 0 and `sourceRunId`. It needs a new preflight certificate. Repeated revision calls return the same copy;
+the source remains sealed and its execution history remains available. Unknown, blocked, successful and partially
+applied runs cannot be revised this way. Partial-success derivation needs an explicit node/result mapping and is pending.
+
+Run `npm run demo:dependencies` for a campaign/adset graph: zero-effect refusal → revise → parent result reference → recover a lost child response.
+The legacy `StagedWrite` class is deprecated; use `createStagedWrite` for new integrations.
+
 ## Recovery contract
 
 - `apply` returns `applied`, `unknown`, or `not_applied` with optional `retryable`.

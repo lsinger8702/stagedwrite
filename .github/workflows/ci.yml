@@ -18,3 +18,4 @@ jobs:
       - run: npm run demo:graph
       - run: npm run demo:preflight
       - run: npm run demo:execution
+      - run: npm run demo:dependencies

@@ -1,3 +1,4 @@
+import { validatePlan } from "./plan.js";
 import { randomUUID } from "node:crypto";
 import type { Adapter, ApplyOutcome, ReconcileOutcome, Event, Run, Step } from "../types.js";
 
@@ -10,7 +11,7 @@ export class ExecutionRuntime {
     const id = randomUUID();
     const run: Run = { id, draftId, version, state: "running", events: [],
       ...(binding ? { binding: structuredClone(binding) } : {}),
-      steps: plan.map(step => ({ ...structuredClone(step), key: `${id}:${step.id}`, status: "ready" })) };
+      steps: validatePlan(plan).map(step => ({ ...structuredClone(step), key: `${id}:${step.id}`, status: "ready" })) };
     this.runs.set(id, run);
     return structuredClone(run);
   }
@@ -23,10 +24,22 @@ export class ExecutionRuntime {
     run.state = "running";
     try {
       for (const step of run.steps) {
-        if (step.status === "applied") continue;
+        if (step.status === "applied" || step.status === "skipped") continue;
+        if (!step.resolvedPayload) {
+          const payload = structuredClone(step.payload);
+          for (const dependency of step.dependsOn ?? []) {
+            if (run.steps.find(s => s.id === dependency)?.status !== "applied") throw new Error("DEPENDENCY_NOT_APPLIED");
+          }
+          for (const [field, dependency] of Object.entries(step.inputRefs ?? {})) {
+            const parent = run.steps.find(s => s.id === dependency)!;
+            if (parent.remoteRef === undefined) throw new Error("DEPENDENCY_RESULT_MISSING");
+            payload[field] = parent.remoteRef;
+          }
+          step.resolvedPayload = payload;
+        }
         if (step.status === "unknown") {
           this.record(run, step.id, "reconciling");
-          const result = await this.observe("reconcile", () => this.adapter.reconcile(structuredClone(step), step.key));
+          const result = await this.observe("reconcile", () => this.adapter.reconcile({ ...structuredClone(step), payload: structuredClone(step.resolvedPayload!) }, step.key));
           if (result.kind === "applied") {
             step.status = "applied";
             step.remoteRef = result.remoteRef;
@@ -43,7 +56,7 @@ export class ExecutionRuntime {
         }
         step.status = "dispatching";
         this.record(run, step.id, "dispatching");
-        const result = await this.observe("apply", () => this.adapter.apply(structuredClone(step), step.key));
+        const result = await this.observe("apply", () => this.adapter.apply({ ...structuredClone(step), payload: structuredClone(step.resolvedPayload!) }, step.key));
         if (result.kind === "applied") {
           step.status = "applied";
           step.remoteRef = result.remoteRef;
@@ -58,6 +71,7 @@ export class ExecutionRuntime {
             step.status = retryable ? "ready" : "failed";
             run.state = retryable ? "blocked" : "failed";
             this.record(run, step.id, "not_applied", { reason: result.reason, retryable });
+            if (!retryable) this.stopRemaining(run, step.id);
           }
           return structuredClone(run);
         }
@@ -91,6 +105,18 @@ export class ExecutionRuntime {
     }
   }
 
+  private stopRemaining(run: Run, failedId: string): void {
+    const unreachable = new Set([failedId]);
+    for (const step of run.steps) {
+      if (step.status !== "ready") continue;
+      const dependency = step.dependsOn?.find(id => unreachable.has(id));
+      step.status = "skipped";
+      step.skipReason = dependency ? "dependency_failed" : "run_stopped";
+      step.blockedBy = dependency ?? failedId;
+      if (dependency) unreachable.add(step.id);
+      this.record(run, step.id, "skipped", { reason: `${step.skipReason}: ${step.blockedBy}` });
+    }
+  }
   private record(run: Run, stepId: string, kind: Event["kind"], detail: Pick<Event, "reason" | "retryable"> = {}): void {
     run.events.push({ sequence: run.events.length + 1, stepId, kind, ...detail });
   }

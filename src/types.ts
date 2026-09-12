@@ -13,7 +13,14 @@ export interface Diagnostic {
     | { kind: "blocked"; reason: "human_intent" | "unsupported" };
 }
 export type Rule = (draft: Draft) => Diagnostic[];
-export interface Step { id: string; payload: Record<string, Value> }
+export interface Step {
+  id: string;
+  payload: Record<string, Value>;
+  /** Dependencies must precede this step in the fixed sequential plan. */
+  dependsOn?: readonly string[];
+  /** Payload field -> dependency step whose remoteRef supplies that field. */
+  inputRefs?: Record<string, string>;
+}
 type Applied = { kind: "applied"; remoteRef: string };
 type Unknown = { kind: "unknown"; reason: string };
 /** A refusal proves this dispatch produced no effect and cannot later take effect.
@@ -41,13 +48,17 @@ export interface Check {
 }
 export interface ExecutionStep extends Step {
   key: string;
-  status: "ready" | "dispatching" | "applied" | "unknown" | "failed";
+  status: "ready" | "dispatching" | "applied" | "unknown" | "failed" | "skipped";
+  skipReason?: "dependency_failed" | "run_stopped";
+  blockedBy?: string;
+  /** Frozen dispatch inputs reused for reconciliation and retries. */
+  resolvedPayload?: Record<string, Value>;
   remoteRef?: string;
 }
 export interface Event {
   sequence: number;
   stepId: string;
-  kind: "dispatching" | "applied" | "unknown" | "not_applied" | "no_effect" | "reconciling";
+  kind: "dispatching" | "applied" | "unknown" | "not_applied" | "no_effect" | "reconciling" | "skipped";
   reason?: string;
   retryable?: boolean;
 }

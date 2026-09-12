@@ -120,7 +120,7 @@ test("a rejected second step preserves the first receipt and stops execution", a
   const { engine, draft, certificate } = ready(adapter);
   const run = await engine.publish(draft.id, certificate);
   assert.equal(run.state, "failed");
-  assert.deepEqual(run.steps.map(s => s.status), ["applied", "failed", "ready"]);
+  assert.deepEqual(run.steps.map(s => s.status), ["applied", "failed", "skipped"]);
   assert.equal(run.steps[0]?.remoteRef, "one");
   await engine.resume(run.id);
   assert.equal(calls, 2);

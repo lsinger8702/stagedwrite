@@ -2,7 +2,8 @@ import type { GraphDraft } from "../graph/types.js";
 import type { DefinitionSelector } from "../registry/types.js";
 import type { DefinitionRegistry } from "../registry/registry.js";
 import type { Step, Adapter } from "../types.js";
-import { deepFreeze, isObject, jsonSnapshot } from "../registry/json.js";
+import { deepFreeze } from "../registry/json.js";
+import { validatePlan } from "./plan.js";
 import { ExecutionRuntime } from "./runtime.js";
 
 export interface GraphExecutor extends DefinitionSelector {
@@ -43,16 +44,5 @@ export function assembleExecutors(registry: DefinitionRegistry, input: readonly 
 }
 export const executorFor = (entries: Map<string, BoundExecutor>, selector: DefinitionSelector): BoundExecutor => entries.get(key(selector))!;
 export function fixedPlan(executor: BoundExecutor, draft: GraphDraft): Step[] {
-  const output: unknown = executor.plan(deepFreeze(structuredClone(draft)));
-  if (output instanceof Promise) { void output.catch(() => undefined); throw new Error("INVALID_PLAN"); }
-  const issues: string[] = [];
-  const plan = jsonSnapshot(output, (path, message) => issues.push(`${path}: ${message}`));
-  if (issues.length || !Array.isArray(plan) || !plan.length) throw new Error("INVALID_PLAN");
-  const ids = new Set<string>();
-  for (const step of plan) {
-    if (!isObject(step) || Object.keys(step).length !== 2 || typeof step.id !== "string" || !step.id.trim() || ids.has(step.id) || !isObject(step.payload) ||
-      Object.values(step.payload).some(value => value !== null && !["string", "number", "boolean"].includes(typeof value))) throw new Error("INVALID_PLAN");
-    ids.add(step.id);
-  }
-  return plan as unknown as Step[];
+  return validatePlan(executor.plan(deepFreeze(structuredClone(draft))));
 }

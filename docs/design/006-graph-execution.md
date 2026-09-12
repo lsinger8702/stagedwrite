@@ -60,3 +60,33 @@ F2 分类限定为此 Customer 接口：
 M4–M6 应持久化完整图身份、检查绑定、计划、run 与首次派发意图，再实现跨进程恢复。墓碑容量策略、基准性能和内部异常恢复另列任务；本轮不宣称解决 F4/F5/S6。重新检查使旧检查失效的契约保留（F6），不在定义不匹配后继续认可旧凭据。
 
 官方依据：[原始错误类型](https://docs.stripe.com/api/errors)、[限流原因头](https://docs.stripe.com/rate-limits)、[stripe-node 自身账号查询实现](https://github.com/stripe/stripe-node/blob/master/src/resources/Accounts.ts)。错误映射只用于本实验 Customer 接口，不能推广为所有 Stripe 操作的无效果证明。
+
+
+## 第三轮：依赖、结果引用与零效果修订
+
+Step 增加可选 `dependsOn: string[]` 和 `inputRefs: Record<payload字段名, stepId>`。
+引用当前只读取依赖步骤的 `remoteRef`，不支持任意远端响应 JSON。所有依赖必须先出现在数组中，
+拒绝缺失、自引用、前向引用、重复依赖；引用必须声明直接依赖，且不能覆盖 payload 的字面量字段。
+图入口、旧入口及 runtime.create 共用 validatePlan；plan digest 包含依赖和引用声明。
+业务关系不自动成为执行依赖：例如 uses 关系和循环业务图不能统一解释成创建顺序。
+executor 负责明确投影。examples/dependencies.ts 展示 contains 边映射成父子创建步骤。
+
+派发前从 applied 依赖解析结果，记录 resolvedPayload；原始 payload/inputRefs 保留。
+apply/reconcile 收到的 payload 都是已解析快照；同一个 key 的重试和核对不能重新取可变外部输入。
+当前仍是内存记录，持久化阶段必须在网络调用前保存 resolvedPayload 和派发意图。
+
+终态失败采用全局停止策略：依赖下游 skipped/dependency_failed，其他未尝试步骤 skipped/run_stopped，
+blockedBy 记录直接不可达依赖或停止源步骤，事件保存原因。unknown/blocked 保持可恢复，不提前跳过。
+
+`revise(runId)` 仅接受 failed run，要求存在 failed 步骤，且所有步骤都是 failed/skipped；
+不使用“缺少 remoteRef”推断零副作用。证明强度依赖 adapter 的权威 not_applied 契约。
+返回新 ID、version=0、sourceRunId 的草稿，复制所有意图、边和墓碑；旧草稿永久封存、旧凭证仍只观察旧 run。
+新草稿必须重新编辑/预检，新的 run/key 不复用旧失败请求。重复 revise 返回同一份副本，避免重复调用创建多个可发布分支。
+已有 applied、unknown、blocked、running、published 的 run 均拒绝。快照隔离与原版本 CAS 规则不变。
+
+部分成功派生尚未实现。未来需要定义 step 与 node 的显式映射、创建/修改效果类型、目标绑定和可复用回执，
+并验证一个节点多步骤、共享引用和远端状态变化。单凭 remoteRef 不能推断线上完整草稿，不能自动跳过已执行操作。
+
+验收：新增 5 项回归测试覆盖两个入口的坏计划、父结果恢复后供子步骤使用、子步骤限流/丢响应时输入稳定、
+终态全部跳过与原因分类、零效果修订及部分成功/不确定拒绝；原有终态状态断言同步更新。
+`npm run demo:dependencies` 另验收真实图关系投影、修订和两次模拟创建，无真实外部写入。

@@ -107,7 +107,22 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
     getDefinition: (selector: DefinitionSelector) => registry.getDefinition(selector),
     validateValues: (selector: DefinitionSelector, nodeType: string, values: unknown) => registry.validateValues(selector, nodeType, values)
   };
+  const revisions = new Map<string, string>();
   const execution = {
+    /** Copy intent after a terminal, proven zero-effect failure; retain the sealed source. */
+    revise(runId: string): GraphDraft {
+      const executor = runExecutors.get(runId);
+      if (!executor) throw new Error("RUN_NOT_FOUND");
+      const run = executor.runtime.getRun(runId);
+      if (run.state !== "failed" || !run.steps.some(s => s.status === "failed") ||
+          run.steps.some(s => !["failed", "skipped"].includes(s.status))) throw new Error("ZERO_EFFECT_FAILURE_REQUIRED");
+      const existing = revisions.get(runId);
+      if (existing) return base.getDraft(existing);
+      const draft = { ...structuredClone(requireDraft(run.draftId)), id: randomUUID(), version: 0, sourceRunId: runId };
+      drafts.set(draft.id, draft);
+      revisions.set(runId, draft.id);
+      return structuredClone(draft);
+    },
     async publish(id: string, certificate: string): Promise<Run> {
       if (checking.has(id)) throw new Error("CHECK_BUSY");
       const draft = requireDraft(id);
