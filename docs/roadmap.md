@@ -79,3 +79,5 @@ F4 墓碑容量、F5 性能基准和 S6 内部异常恢复仍待处理；F6 保�
 I1 保持同主机边界；I4 保持再次预检作废旧资格；I5 延后为无公共复现的防御性加固。
 
 M7 内部验收：真实 v2/v3 迁移 fixture、缺列启动拒绝、tarball 独立消费者、公共声明检查均通过。详见 [016](design/016-release-readiness.md) 与 [基准结果](benchmarks/baseline.md)。外部开发者试用和 npm 发布仍未完成。
+
+第九轮发布准备：Node 22.23.2 下 147 项测试和 stagedwrite 包名的独立安装验证通过，完整性能矩阵已复测。包仍 private，尚未发布；[升级及试用说明](design/017-upgrade-and-trial.md) 明确区分旧数据可读与在途执行可恢复。

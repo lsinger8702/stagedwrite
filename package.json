@@ -1,5 +1,5 @@
 {
-  "name": "stagedwrite-prototype",
+  "name": "stagedwrite",
   "version": "0.0.1",
   "private": true,
   "description": "An experimental staged-write library for agent tools.",

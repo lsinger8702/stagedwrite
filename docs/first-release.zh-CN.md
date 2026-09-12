@@ -31,7 +31,7 @@
 
 GitHub 公开代码后，别人可以 clone 并运行，这已经是开源发布。npm 是让别人通过包管理器安装，完全可以晚一点做。
 
-当前 package 名称是本地占位 `stagedwrite-prototype`，`private: true`。正式发布 npm 前再检查名称或个人 scope、补齐仓库地址、检查打包文件并决定公开版本。
+当前 package 名称为 `stagedwrite`，仍为 `private: true`、版本 0.0.1。2026-09-13 查询 npm registry 未找到同名包；这不是名称预留或发布权限保证。正式发布前再次确认名称与账号权限、补齐发布元数据，并决定公开版本。
 
 ## 简历什么时候写、怎么写
 

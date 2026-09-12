@@ -87,6 +87,17 @@ The database is trusted internal state, not an import format for arbitrary run J
 Run `npm run demo:durable` for stored plans and partial continuation, or `npm run demo:recovery` for a real child-process
 exit followed by explicit recovery using a local simulated receipt ledger. See [M6 design](docs/design/012-restart-recovery.md).
 
+## Upgrading older databases
+
+**Schema migration preserves data; it does not grant recovery rights to old unfinished runs.**
+A schema-2 database has no owner-session evidence. After upgrading, its unfinished runs remain readable but
+`recover`, `resume` and manual mutations cannot advance them through the new engine. There is no force-claim API.
+When the original compatible process is still available, finish or resolve its work before upgrading the database.
+If it is gone, keep the database and original request evidence for external reconciliation; do not treat migration
+as proof that the remote request had no effect, or create a replacement request automatically.
+Back up the database consistently before upgrading. Older binaries reject schema 4, so reopening the upgraded
+file with an older binary is not a rollback procedure. See [the upgrade guide](docs/design/017-upgrade-and-trial.md).
+
 ## Retention and capacity
 
 Drafts, tombstones, run snapshots and derivation records have no automatic expiration. This prototype is for
@@ -121,7 +132,7 @@ See [the interface contract](docs/design/015-existing-objects.md) and run `npm r
 ## Define and edit a graph
 
 ```ts
-import { createStagedWrite, defineDraftType } from "stagedwrite-prototype";
+import { createStagedWrite, defineDraftType } from "stagedwrite";
 
 const definition = defineDraftType({
   id: "example.project", version: "1",
