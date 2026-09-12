@@ -16,9 +16,11 @@ export const campaignDefinition = defineDraftType({
     campaign: {
       valueSchema: {
         type: "object",
+        $defs: { money: { type: "number", minimum: 0 } },
         properties: {
           name: { type: "string" },
-          budget: { type: "number", minimum: 0 },
+          budget: { $ref: "#/$defs/money" },
+          spendingLimit: { $ref: "#/$defs/money" },
         },
         additionalProperties: false,
       },
@@ -43,7 +45,7 @@ const draft = engine.create({ type: "example.campaign", typeVersion: "1" });
 // { id, version: 0, type, typeVersion, definitionDigest, nodes: {}, edges: {} }
 ```
 
-该最小引擎只能编辑草稿；M1 不提供可工作的 publish。完整引擎后续必须显式装配执行能力；不能因为没有 Adapter 就悄悄跳过发布校验。
+该最小引擎只能创建和读取空草稿；M1 不提供可工作的 publish。完整引擎后续必须显式装配执行能力；不能因为没有 Adapter 就悄悄跳过发布校验。
 
 ## 三个阶段
 
@@ -55,13 +57,35 @@ const draft = engine.create({ type: "example.campaign", typeVersion: "1" });
 
 采用 JSON Schema 2020-12 的受限 profile，不自建 nullable 语法，不承诺完整 JSON Schema 支持。
 
-M1：根必须为 object，允许 $schema、type、properties、additionalProperties:false、title、description；属性为 string/number/integer/boolean，允许对应标量类型与 null 的 type 联合，允许 enum、数值 minimum/maximum、字符串 minLength/maxLength。不支持的关键字和组合启动即报错，不能静默忽略。元数据和数值约束也必须做定义级校验。
+M1：根必须为 object，允许 $schema、$defs、type、properties、additionalProperties:false、title、description；属性也可通过下述本地 $ref 引用标量定义。属性为 string/number/integer/boolean，允许对应标量类型与 null 的 type 联合，允许 enum、数值 minimum/maximum、字符串 minLength/maxLength。不支持的关键字和组合启动即报错，不能静默忽略。元数据和数值约束也必须做定义级校验。
 
 requiredAtPublish 是草稿领域元数据，只引用顶层已声明属性。valueSchema 校验已填写值；发布完整性由后续预检检查。它不直接校验 {kind:"clear"} 等意图信封：明确清空和未声明由意图层解释，null 仅在 schema 允许时为普通值。
 
 禁止隐式转换类型、删除未知字段或补默认值。不能通过删掉任意业务 schema 的 required 自动生成草稿 schema。
 
-M1 不支持 $ref；先明确拒绝。后续只解析显式提供的本地资源、固定方言并检测悬空引用，不自动联网下载。嵌套对象、数组和命名空间是复杂业务适配的必要扩展，但尚未实现，不能声称此标量 profile 已能表达真实投放草稿。
+## 引用的三种含义
+
+| 引用 | 指向什么 | M1 边界 |
+|---|---|---|
+| 图节点 ref / nodeId | 草稿内的具体业务对象 | 定义身份与关系类型；M2 实现节点、边及引用校验 |
+| Schema $ref | 可复用的字段结构定义 | 支持本 valueSchema 文档内的 $defs 引用 |
+| 远端引用 | 外部平台已存在的资源 | 后续 Adapter/执行结果负责，不用 schema 引用代替 |
+
+M1 创建空图不代表取消图引用；多个对象共享一个素材属于 M2 的图关系能力。Schema 定义引用不建立业务对象之间的边。
+
+## M1 本地 schema 引用契约
+
+- 每个节点类型的 valueSchema 是独立的 schema 文档根；`#/$defs/money` 相对此根解析，绝不相对整个 DraftTypeDefinition 或另一个节点类型解析。
+- $defs 只允许放在该根；首版引用形式限定为 `#/$defs/<name>`，指向一个已定义的完整 schema。支持 JSON Pointer 的 `~0` / `~1` 转义；其他片段、anchor、非片段 URI 及非该形状引用均报错，不猜测。
+- 属性与 $defs 条目可为标量 schema，或仅包含 $ref 的引用 schema；允许无环的引用链。不支持 $ref 旁附加校验关键字，避免把标准支持的组合误实现为静默忽略。当前受限 profile 对这些输入明确拒绝。
+- 同一 valueSchema 多字段可复用同一 $defs 条目。不同节点类型可在 TypeScript 编写时复用一个定义对象，但装配后是各自文档快照；跨节点文档 $ref 不在 M1 范围。
+- 启动时检查全部 $defs 条目及引用（包括未使用条目），悬空引用、直接/间接循环均阻止整个引擎创建。重复使用同一定义不是循环；按当前访问栈检测循环。
+- 对引用目标应用同一标量 profile 校验；不能通过 $ref 引入对象、数组或不支持的关键字。引用复用不扩大值类型范围。
+- 不支持跨文件、跨文档、远程 URL、$id 重定向、$anchor、$dynamicRef；绝不触发网络读取。
+- definitionDigest 覆盖完整定义快照，包含所有 valueSchema 的 $defs 和 $ref 原文；不只哈引用字符串，也不需要先无限展开引用。目标内容变化必须改变摘要；未使用定义变化也保守改变摘要。内联与引用等价不要求摘要相同。
+
+嵌套对象、数组和命名空间仍是复杂业务适配的必要扩展，尚未实现；不能声称本地 schema 引用已经覆盖完整投放草稿。
+
 
 ## 身份、版本与冻结
 
@@ -79,9 +103,13 @@ M1 不支持 $ref；先明确拒绝。后续只解析显式提供的本地资源
 |---|---|
 | INVALID_DEFINITION | 定义形状、字段或关系不合法 |
 | UNSUPPORTED_SCHEMA_FEATURE | 使用当前 profile 不支持的 schema 能力 |
+| SCHEMA_REF_NOT_FOUND | 合法本地引用找不到对应 $defs 条目 |
+| SCHEMA_REF_CYCLE | 本地引用链存在直接或间接循环 |
 | DEFINITION_CONFLICT | 相同 ID/版本对应不同定义 |
 | TYPE_VERSION_NOT_FOUND | 创建时找不到指定版本 |
 | DEFINITION_MISMATCH | 恢复时定义身份不一致 |
+
+不支持的引用形式或关键字使用 UNSUPPORTED_SCHEMA_FEATURE；语法无效的引用使用 INVALID_DEFINITION。引用错误带源 schema 路径、目标和可用时的引用链。
 
 批量收集定义问题，按 definition ID、版本、路径排序。关系 from/to 非空且引用已声明节点类型；拒绝危险对象键；失败不保存草稿或半成品注册表。
 
@@ -99,7 +127,12 @@ M1 不支持 $ref；先明确拒绝。后续只解析显式提供的本地资源
 - [ ] 两个引擎的定义互不污染；修改输入和返回快照不改变内部内容。
 - [ ] 错误关系、未知字段、无效 schema、重复冲突定义在启动时一次报告。
 - [ ] 同时加载 v1/v2，可创建分别绑定各自版本的空图。
-- [ ] 不支持的嵌套 schema/$ref 明确报错，不退化为无校验。
+- [ ] 两个字段引用同一 $defs 标量定义，装配成功并获得相同校验约束。
+- [ ] 无环引用链、转义名称正确解析；同名 $defs 在不同 valueSchema 内隔离。
+- [ ] 悬空引用、直接/间接循环（含未使用条目）在装配期拒绝。
+- [ ] 跨文件/远程引用、不支持的片段、$ref 校验兄弟关键字明确报错，且无网络调用。
+- [ ] 引用对象/数组定义仍被标量 profile 拒绝，不退化为无校验。
+- [ ] 仅修改 $defs 目标值就改变定义摘要；旧草稿继续绑定旧定义身份。
 - [ ] 缺发布必填字段仍可创建；没有隐式默认值。
 - [ ] 定义对象键顺序变化不影响摘要，语义值变化会影响摘要。
 - [ ] M1 不暴露可发布结论；后续完整装配有缺执行器/恢复能力声明的反例。
