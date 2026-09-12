@@ -10,3 +10,5 @@ export type { GraphDraft, GraphNode, GraphEdge, GraphOp, GraphChange, GraphIssue
 export type { GraphRule, GraphDiagnostic, SourcedGraphDiagnostic, GraphCheck } from "./preflight/types.js";
 export { StripeTestCustomerAdapter } from "./adapters/stripe-test.js";
 export type { StripeTransport } from "./adapters/stripe-test.js";
+export type { ExecutableGraphEngine, DraftOptions, ExecutableOptions } from "./graph-engine.js";
+export type { GraphExecutor } from "./execution/graph.js";

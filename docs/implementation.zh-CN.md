@@ -21,7 +21,7 @@ src/adapters/mock.ts        模拟远端：可以生效后丢失响应
 
 运行 `npm run demo:registry`，依次阅读 `src/registry/types.ts`、`src/registry/profile.ts`、`src/registry/registry.ts` 和 `src/graph-engine.ts`。`src/registry/json.ts` 固定纯 JSON 输入和摘要算法。
 
-定义装配、引用校验、冻结与空图创建已实现；`validateValues` 可独立验证标量约束。M2 已在 `src/graph/` 实现原子编辑，运行 `npm run demo:graph` 查看共享引用例子。新引擎仍只有草稿能力，下面的执行原型独立运行；M3 已在 `src/preflight/` 增加草稿预检，运行 `npm run demo:preflight` 查看缺项与显式修复闭环；图发布仍未实现。
+定义装配、引用校验、冻结与空图创建已实现；`validateValues` 可独立验证标量约束。M2 已在 `src/graph/` 实现原子编辑，运行 `npm run demo:graph` 查看共享引用例子。新引擎仍只有草稿能力，下面的执行原型独立运行；M3 已在 `src/preflight/` 增加草稿预检，运行 `npm run demo:preflight` 查看缺项与显式修复闭环；显式 executable 模式现已实现图发布，运行 `npm run demo:execution` 查看；两个入口共用 `src/execution/runtime.ts`。
 
 ## 执行原型代码阅读顺序
 

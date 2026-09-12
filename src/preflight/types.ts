@@ -15,16 +15,18 @@ export interface GraphRule extends DefinitionSelector {
   check: (draft: GraphDraft) => readonly GraphDiagnostic[];
 }
 export interface SourcedGraphDiagnostic extends GraphDiagnostic {
-  source: { kind: "builtin"; version: string } | { kind: "rule"; id: string; version: string };
+  source: { kind: "builtin"; version: string } | { kind: "rule" | "executor"; id: string; version: string };
 }
 export interface GraphCheck {
-  scope: "draft";
+  scope: "draft" | "execution";
+  certificate?: string;
+  execution?: import("../types.js").ExecutionBinding;
   checkId: string;
   draftId: string;
   version: number;
   definitionDigest: string;
   rulesDigest: string;
-  /** passed is a draft check, not authorization or readiness to publish. */
+  /** Draft scope is diagnostic-only. Execution scope requires certificate + fixed plan to publish; neither scope supplies external authorization. */
   status: "passed" | "blocked" | "incomplete";
   diagnostics: SourcedGraphDiagnostic[];
 }

@@ -111,6 +111,9 @@ export class DefinitionRegistry {
     if (!entry) throw new Error("TYPE_VERSION_NOT_FOUND");
     return entry;
   }
+  selectors(): DefinitionSelector[] {
+    return [...this.#entries.values()].map(({ definition }) => ({ type: definition.id, typeVersion: definition.version }));
+  }
   getDefinition(selector: DefinitionSelector): { definition: DraftTypeDefinition; digest: string } {
     const entry = this.#entry(selector);
     return { definition: structuredClone(entry.definition), digest: entry.digest };

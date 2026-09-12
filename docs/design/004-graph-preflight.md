@@ -4,7 +4,7 @@
 
 ## 边界
 
-新图引擎仍只有草稿能力。`preflight(draftId)` 检查发布缺项和已装配的同步图规则，返回 `scope:"draft"`、`status:"passed"|"blocked"|"incomplete"`、诊断与 `checkId`。
+本文描述默认 draft 模式。显式 executable 模式已在 [006](006-graph-execution.md) 扩展为固定计划与发布。`preflight(draftId)` 检查发布缺项和已装配的同步图规则，返回 `scope:"draft"`、`status:"passed"|"blocked"|"incomplete"`、诊断与 `checkId`。
 `passed` 只表示当前草稿检查通过，不是发布资格、执行计划或外部授权；不产生 publish certificate，也不提供 publish。
 
 - 空图返回 graph.empty，要求用户提供意图。

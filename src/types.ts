@@ -29,6 +29,8 @@ export interface Adapter {
   /** Pure and synchronous. Must not create remote effects. */
   plan(draft: Draft): Step[];
   apply(step: Step, key: string): Promise<ApplyOutcome>;
+  /** Recovery must be possible from the persisted step/key and stable target configuration.
+   * Process-local caches must not be the only source of reconciliation evidence. */
   reconcile(step: Step, key: string): Promise<ReconcileOutcome>;
 }
 export interface Check {
@@ -49,7 +51,17 @@ export interface Event {
   reason?: string;
   retryable?: boolean;
 }
+export interface ExecutionBinding {
+  checkId: string;
+  definitionDigest: string;
+  rulesDigest: string;
+  executorId: string;
+  executorVersion: string;
+  target: string;
+  planDigest: string;
+}
 export interface Run {
+  binding?: ExecutionBinding;
   id: string;
   draftId: string;
   version: number;

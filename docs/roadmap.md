@@ -27,8 +27,8 @@
 
 ## 当前下一步：补真实联调记录，并进入 M4 设计
 
-M1/M2/M3 已完成，共 59 项测试（新增 8 项 Stripe 离线契约测试）。运行 `npm run demo:registry`、`npm run demo:graph`、`npm run demo:preflight`。
-M3 的通过结论仅用于草稿检查，不代表图发布已实现；执行器装配、固定图计划、持久化与恢复仍待后续。
+M1/M2/M3 已完成，共 70 项测试（含图执行桥与 Stripe 恢复修复）。运行 `npm run demo:registry`、`npm run demo:graph`、`npm run demo:preflight`。
+图执行桥已完成：显式执行器装配、固定图计划、发布和进程内恢复；默认草稿模式仍无发布资格。持久化和跨进程恢复仍待后续。
 
 Stripe test Customer 实验已实现，[005](design/005-stripe-adapter-experiment.md) 记录契约和运行方法。离线测试通过，当前未配置测试密钥，真实账号验证仍未完成。可先进入 M4 设计，不能把该实验标成已经通过真实联调。
 
@@ -56,3 +56,11 @@ M1 引用范围已补充：valueSchema 内 $defs / $ref；装配时解析、拒�
 S2 先明确调用方负责次数、退避与调度，尚未实现引擎级预算。
 S3 的字段省略/清空远端示例、S6 的引擎内部异常状态恢复仍待处理，本轮不声称修复。
 查证 API 从 `not_applied` 改为 `no_effect`，旧 adapter 需要按 README 迁移。
+
+## 第二轮 Review 修复
+
+F1：图执行已接通，旧/新入口共用 ExecutionRuntime；Stripe 演示迁到图入口。
+F2：拒绝分类与本地 attempt 状态同步，新增限流→blocked→resume→published 完整测试。
+F3：新 adapter 可从原 step/key、账号和请求 context 重建查证；不宣称整个引擎已经支持重启恢复。
+F4 墓碑容量、F5 性能基准和 S6 内部异常恢复仍待处理；F6 保留重新预检作废旧检查的明确约定。
+详见 [006](design/006-graph-execution.md)。真实 Stripe 账号联调仍未完成。
