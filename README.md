@@ -59,8 +59,7 @@ external references and unsupported schema features fail before compilation.
 
 This **draft-only** engine creates, reads, previews and edits graphs.
 `validateValues` checks filled scalar values without modifying input; it does not
-interpret clear/reset intent or enforce `requiredAtPublish`. Graph preflight,
-persistence and execution integration remain future milestones.
+interpret clear/reset intent or enforce `requiredAtPublish`. M3 adds draft-scoped graph preflight; persistence and execution integration remain future milestones.
 
 ## M2: fill and preview a graph
 
@@ -99,6 +98,46 @@ remain acceptable; invalid filled values do not. There is still no graph `publis
 Run `npm run demo:graph` for a [shared-asset graph example](examples/graph.ts).
 See [the M2 contract](docs/design/003-graph-operations.md) for operation shapes and errors.
 
+## M3: diagnose a graph and recheck explicit repairs
+
+Register versioned synchronous rules separately from serializable definitions:
+
+```ts
+const engine = createStagedWrite({
+  definitions: [definition],
+  rules: [{
+    id: "example.policy", version: "1",
+    type: definition.id, typeVersion: definition.version,
+    check: draft => [] // return GraphDiagnostic[] with repair ops or a blocked reason
+  }]
+});
+const draft = engine.create({ type: definition.id, typeVersion: definition.version });
+const check = engine.preflight(draft.id);
+engine.getCheck(draft.id, check.checkId); // only the latest current check is accepted
+```
+
+Preflight blocks empty graphs and missing `requiredAtPublish` values. Explicit
+clear and undeclared are missing; a schema-allowed null is an explicit value.
+Business rules inspect independent frozen snapshots. They return diagnostics with
+`resolution: {kind: "ops", ops}` or `{kind: "blocked", reason}`. Repair batches
+are validated against the current graph, but applying them always requires an
+explicit `edit` followed by a new preflight. Suggestions are checked individually;
+combining them or applying them does not guarantee that all diagnostics disappear.
+
+Results have `scope: "draft"` and status `passed`, `blocked` or `incomplete`.
+Throwing/async rules, malformed diagnostics and invalid repairs yield `incomplete`.
+**Passed means draft checks passed; it is not publication readiness or authorization.**
+There is no graph publish certificate, adapter plan or publish method yet.
+
+Checks bind the draft version, definition digest and ordered rule identities/versions.
+Successful edits and repeated preflight invalidate older checks; preview and rejected
+edits retain them. `getCheck` throws `CHECK_NOT_CURRENT` for an obsolete or foreign
+check ID. Function implementations are not hashed: version your rules when changing
+behavior. Rules are trusted synchronous code and must not perform side effects.
+
+Run `npm run demo:preflight` for the [missing-value → explicit repair → recheck example](examples/preflight.ts).
+The [M3 design](docs/design/004-graph-preflight.md) specifies binding and failure behavior.
+
 ## Existing execution prototype API
 
 ```ts
@@ -119,6 +158,7 @@ See [the complete example](examples/lifecycle.ts) for imports and a runnable lif
 
 - M1 definition assembly, local schema references, immutable version bindings and empty graph creation via `createStagedWrite`.
 - M2 graph operations, pure preview, atomic edits, structural validation and deleted-ID tombstones.
+- M3 draft-scoped preflight, versioned graph rules, validated repair suggestions and stale-check rejection.
 
 The separate `new StagedWrite(adapter, rules)` execution prototype provides:
 
@@ -186,7 +226,7 @@ Chinese implementation and first-release guides:
 
 - [x] Versioned draft-type registry and empty graph creation (M1).
 - [x] Graph operations, atomic edit batches and structural validation (M2).
-- [ ] Graph-aware preflight diagnostics and repairs.
+- [x] Graph-aware preflight diagnostics and repairs (M3; draft checks only).
 - [ ] Narrow Stripe test-mode adapter experiment to validate the adapter boundary before storage work.
 - [ ] SQLite draft and execution storage with atomic transitions and restart tests.
 - [ ] Core MVP example, external trial and release (see [MVP scope](docs/mvp.md)).

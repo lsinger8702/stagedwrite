@@ -39,7 +39,7 @@ GraphDraft 保留 id/version/type/typeVersion/definitionDigest，nodes 与 edges
 
 错误使用 GraphEditError，带 `code`、可用时的 `opIndex`、`path`；最终结构错误还带 `issues`。代码包括 STALE_VERSION、EMPTY_OP_BATCH、INVALID_OP、UNSUPPORTED_PATH、NODE_NOT_FOUND、EDGE_NOT_FOUND、ID_ALREADY_USED、NODE_TYPE_NOT_FOUND、UNKNOWN_FIELD、INVALID_GRAPH、VERSION_EXHAUSTED、DEFINITION_MISMATCH。任何拒绝不改存储、版本或墓碑。
 
-M2 新图引擎仍没有 preflight/publish，也不把候选传入旧执行原型。M3 再实现图上的诊断、检查凭据与修复。
+M2 验收时没有 preflight/publish；M3 现已实现草稿范围预检（见 004），仍不提供 publish，也不把候选传入旧执行原型。
 
 ## 验收结果
 

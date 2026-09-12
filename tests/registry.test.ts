@@ -49,7 +49,8 @@ test("helper and ordinary JSON have the same identity; duplicate definitions ded
   assert.deepEqual(draft.edges, {});
   assert.equal(engine.validateValues(selector, "campaign", {}).valid, true);
   assert.equal("publish" in engine, false);
-  assert.equal("preflight" in engine, false);
+  assert.equal(engine.preflight(draft.id).scope, "draft");
+  assert.equal(engine.preflight(draft.id).status, "blocked");
   assert.equal("register" in engine, false);
 });
 
