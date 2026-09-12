@@ -7,7 +7,7 @@ StagedWrite 的主体是可嵌入业务程序的 TypeScript 库。开发者提�
 1. [MVP 范围与验收](mvp.md)：这一版要交付什么。
 2. [架构与目录](architecture.md)：模块边界、公共接口和目标目录。
 3. [开发任务](roadmap.md)：每一步做什么、如何判定完成。
-4. [第一项详细设计](design/001-registry-and-draft.md)：结构注册与空草稿创建。
+4. [第一项详细设计](design/001-registry-and-draft.md)：定义装配与空草稿创建。
 5. [功能设计模板](design/TEMPLATE.md)：后续功能沿用这份模板。
 6. [代码阅读与实现路线](implementation.zh-CN.md)：从现有原型开始。
 7. [第一次发布](first-release.zh-CN.md)：本地 Git、GitHub、版本发布的区别。
@@ -20,3 +20,7 @@ StagedWrite 的主体是可嵌入业务程序的 TypeScript 库。开发者提�
 - 本文档包只整理公开项目的范围与设计，不包含生产代码、原始日志、内部账号或原始评审记录。
 
 范围变化先更新 mvp.md；任务进度更新 roadmap.md；具体规则更新对应设计。README 的功能声明必须与实际代码一致。
+
+## 最新评估
+
+[复杂场景适配矩阵](design/002-complex-draft-fit.md) 区分核心已规划能力、行为不兼容和后续扩展。当前代码没有随这次文档修订新增注册或图能力。

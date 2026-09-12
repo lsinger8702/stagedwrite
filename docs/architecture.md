@@ -15,7 +15,7 @@
 
 ## 固定约定
 
-- 开发者注册定义，使用者通过 OP 填充实例；两种写入入口分开。
+- 开发者独立导出定义，createStagedWrite 启动时显式装配并冻结；使用者通过 OP 填充实例。注册表属于实例，不是全局对象。
 - 草稿绑定类型 ID、类型版本和定义身份；旧草稿不自动升级。
 - 草稿图描述业务对象关系，执行计划描述远端效果，两者不等同。
 - 本地节点 ID 独立于远端 ID；远端引用在执行结果中记录。
@@ -53,8 +53,16 @@ docs/
 
 先确定 DraftTypeDefinition、Draft、Node、Edge、Op；再确定 Diagnostic、PreflightResult、PublishPlan、Run、Outcome。接口可以在 0.x 演进，但示例、测试、文档必须同步。
 
-拟议入口：registerDraftType、create、edit、preflight、publish、resume、getDraft、getRun。MCP 将来只调用这些入口，不复制状态机。
+拟议入口：defineDraftType → createStagedWrite({ definitions })；运行时使用 create、edit、preflight、publish、resume、getDraft、getRun。MCP 将来只调用这些入口，不复制状态机。
 
 ## 持久化注意事项
 
 先持久化派发意图，再发远端请求，再记录结果；网络等待不能占用 SQLite 写事务。单执行器重启时先确保旧执行器退出，再将未完成派发视为 UNKNOWN。计划、规则、Adapter 的版本一致性及不兼容恢复行为要在发布模块设计中明确。
+
+## 复杂场景评估后的补充
+
+结构采用 JSON Schema 2020-12 的显式受限 profile；不支持特性启动报错。定义格式与执行能力绑定分开，完整引擎装配检查两者对应关系。M1 的仅草稿模式不得产生发布资格。
+
+evaluateEdit 作为纯计算入口，edit 与 preview 复用候选计算；提交层单独处理 CAS、版本、缓存失效。节点 ID 不因删除而释放重用。作者输入与每轮解析结果分离，不把推导值静默写入作者状态。
+
+reset 仍为未声明，恢复发布基线将用独立 restore 语义。当前永久封存草稿只满足一次发布；长期编辑容器需要 revision/run 分离。详细缺口见 [复杂场景适配](design/002-complex-draft-fit.md)。
