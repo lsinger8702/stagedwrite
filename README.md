@@ -2,7 +2,7 @@
 
 An experimental TypeScript library for staged writes from agent tools to external systems.
 
-**Status: local prototype, v0.0.1.** The runnable example uses an in-memory fake remote. It does not call Stripe, charge money, or survive a process restart. No published npm package is available from this repository yet.
+**Status: early prototype, v0.0.1.** The runnable example uses an in-memory fake remote. It does not call Stripe, charge money, or survive a process restart. No published npm package is available from this repository yet.
 
 StagedWrite separates draft editing, preflight diagnostics, and execution. When a remote call has an ambiguous outcome, the execution stops and asks the adapter to reconcile before proceeding.
 
@@ -39,11 +39,12 @@ See [the complete example](examples/lifecycle.ts) for imports and a runnable lif
 ## Implemented
 
 - Incomplete drafts; `set`, `remove` (explicit clear), and `reset` (undeclared).
-- Atomic in-memory edit batches with expected-version checking.
+- Atomic in-memory edit batches with expected-version checking; empty batches are rejected.
 - Registered synchronous rules returning repair ops or a blocked reason.
 - An opaque preflight handle bound server-side to a draft version and frozen plan.
 - Sequential execution, per-step keys, remote references and append-only in-memory events.
 - Unknown-outcome blocking, reconciliation and explicit resume.
+- Adapter-declared retryable refusals pause as `blocked`, preserving the original key and earlier receipts. Refusal reasons are recorded in events.
 - Single-engine concurrency guard and repeat-publish observation.
 - Failure-focused tests and a GitHub Actions workflow.
 
@@ -55,10 +56,29 @@ All diagnostics block publication in this prototype. A repair suggestion is neve
 - One engine instance, trusted in-process adapters and rules. No multi-worker fencing, authentication, tenants or approval enforcement.
 - Simple top-level scalar fields only; no nested paths, arrays, inheritance or general schema validation.
 - Preflight does not probe remote state, enforce evidence TTLs or bind authorization. Its certificate is an internal lookup handle, not a signed attestation.
-- Adapter results are trusted. `not_applied` must prove the original request cannot still take effect; an empty search result is insufficient.
-- A definitive apply rejection stops the run as `failed`; earlier applied steps remain visible and are not rolled back. This label does not mean there were no effects.
-- No automatic retry budget, compensation, durable storage, Stripe adapter or MCP server yet.
+- Adapter results are trusted. `apply` returns `not_applied` only for a proven refusal with no possible later effect. `reconcile` returns `no_effect` only when the earlier request is proven to have no effect and cannot still complete; an empty search result is insufficient. HTTP status alone is not proof.
+- A refusal with `retryable: true` pauses the run as `blocked`; explicit `resume` retries that step under its original key. An omitted or false `retryable` makes the refusal terminal (`failed`). Earlier applied steps remain visible and are not rolled back. Neither label means there were no effects.
+- Callers own retry limits, backoff and scheduling, including redispatch after `no_effect` reconciliation. Each `resume` may dispatch each remaining step once; there is no internal retry loop or durable retry budget.
+- No compensation, durable storage, Stripe adapter or MCP server yet.
 - Idempotency keys are supplied to adapters; the library cannot make a remote system honor them. No exactly-once claim.
+
+## Adapter recovery contract
+
+`apply` returns `ApplyOutcome`; `reconcile` returns `ReconcileOutcome`.
+`Outcome` remains an alias for `ApplyOutcome`. Adapters previously returning
+`not_applied` from reconciliation must migrate to `no_effect` **only when they have
+conclusive evidence**. An old or invalid result is treated as `unknown`, never as
+permission to redispatch. The reconciliation event also uses `no_effect`.
+
+For `blocked`, inspect the latest `not_applied` event's `reason` and `retryable`
+fields, then schedule `resume(run.id)` within your own retry budget. Repeated
+`publish` only observes the run and does not retry. The draft remains sealed.
+
+[Recovery fixtures](tests/recovery.test.ts) cover transient refusals, terminal
+refusals, delayed search visibility and an intentionally incorrect adapter that
+creates duplicate effects. In the delayed-visibility fixture, a dedicated remote
+contains only this intent; production adapters also need reliable object identity
+and correlation. A visible arbitrary object is not proof that this step succeeded.
 
 ## Read and extend
 
@@ -83,12 +103,13 @@ Chinese implementation and first-release guides:
 - [ ] Versioned draft-type registry and empty graph creation.
 - [ ] Graph operations, atomic edit batches and structural validation.
 - [ ] Graph-aware preflight diagnostics and repairs.
+- [ ] Narrow Stripe test-mode adapter experiment to validate the adapter boundary before storage work.
 - [ ] SQLite draft and execution storage with atomic transitions and restart tests.
 - [ ] Core MVP example, external trial and release (see [MVP scope](docs/mvp.md)).
 
 After the core MVP:
 
-- [ ] Stripe test-mode adapter using real preview evidence and documented recovery behavior.
+- [ ] Expand the Stripe experiment with real preview evidence and documented recovery behavior.
 - [ ] MCP tools wrapping the same core API.
 
 Contributions: start with a reproducible issue or a focused failing test. Run `npm test` and `npm run demo` before submitting a change. Domain rules, adapters and new state transitions should include an example explaining their behavior.

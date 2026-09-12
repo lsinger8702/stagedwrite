@@ -14,15 +14,22 @@ export interface Diagnostic {
 }
 export type Rule = (draft: Draft) => Diagnostic[];
 export interface Step { id: string; payload: Record<string, Value> }
-export type Outcome = { kind: "applied"; remoteRef: string }
-  | { kind: "not_applied"; reason: string }
-  | { kind: "unknown"; reason: string };
+type Applied = { kind: "applied"; remoteRef: string };
+type Unknown = { kind: "unknown"; reason: string };
+/** A refusal proves this dispatch produced no effect and cannot later take effect.
+ * HTTP status alone is not proof. Omitted retryable means final refusal. */
+export type ApplyOutcome = Applied | Unknown
+  | { kind: "not_applied"; reason: string; retryable?: boolean };
+/** no_effect proves the earlier request has no effect and cannot still complete.
+ * An empty search (even after a visibility delay) is not sufficient proof. */
+export type ReconcileOutcome = Applied | Unknown | { kind: "no_effect"; reason: string };
+/** Compatibility name for apply results. Reconciliation uses ReconcileOutcome. */
+export type Outcome = ApplyOutcome;
 export interface Adapter {
   /** Pure and synchronous. Must not create remote effects. */
   plan(draft: Draft): Step[];
-  apply(step: Step, key: string): Promise<Outcome>;
-  /** not_applied must rule out a still-running original request. */
-  reconcile(step: Step, key: string): Promise<Outcome>;
+  apply(step: Step, key: string): Promise<ApplyOutcome>;
+  reconcile(step: Step, key: string): Promise<ReconcileOutcome>;
 }
 export interface Check {
   draftId: string;
@@ -38,13 +45,15 @@ export interface ExecutionStep extends Step {
 export interface Event {
   sequence: number;
   stepId: string;
-  kind: "dispatching" | "applied" | "unknown" | "not_applied" | "reconciling";
+  kind: "dispatching" | "applied" | "unknown" | "not_applied" | "no_effect" | "reconciling";
+  reason?: string;
+  retryable?: boolean;
 }
 export interface Run {
   id: string;
   draftId: string;
   version: number;
-  state: "running" | "unknown" | "failed" | "published";
+  state: "running" | "unknown" | "blocked" | "failed" | "published";
   steps: ExecutionStep[];
   events: Event[];
 }

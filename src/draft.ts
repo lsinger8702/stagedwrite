@@ -2,6 +2,7 @@ import type { Draft, Op } from "./types.js";
 
 export function edited(draft: Draft, expectedVersion: number, ops: Op[]): Draft {
   if (draft.version !== expectedVersion) throw new Error("STALE_VERSION");
+  if (ops.length === 0) throw new Error("EMPTY_OP_BATCH");
   const next = structuredClone(draft);
   for (const op of ops) {
     // Restrict the prototype to simple field names; nested JSON Pointer is future work.

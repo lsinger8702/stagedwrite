@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { edited } from "./draft.js";
-import type { Adapter, Check, Draft, Event, Op, Outcome, Rule, Run, Step } from "./types.js";
+import type { Adapter, Check, Draft, Event, Op, ApplyOutcome, ReconcileOutcome, Rule, Run, Step } from "./types.js";
 
 /** In-memory, single-process prototype. No crash durability or external authorization. */
 export class StagedWrite {
@@ -81,7 +81,7 @@ export class StagedWrite {
         if (step.status === "applied") continue;
         if (step.status === "unknown") {
           this.record(run, step.id, "reconciling");
-          const result = await this.observe(() => this.adapter.reconcile(structuredClone(step), step.key));
+          const result = await this.observe("reconcile", () => this.adapter.reconcile(structuredClone(step), step.key));
           if (result.kind === "applied") {
             step.status = "applied";
             step.remoteRef = result.remoteRef;
@@ -90,23 +90,30 @@ export class StagedWrite {
           }
           if (result.kind === "unknown") {
             run.state = "unknown";
-            this.record(run, step.id, "unknown");
+            this.record(run, step.id, "unknown", { reason: result.reason });
             return structuredClone(run);
           }
-          this.record(run, step.id, "not_applied");
+          this.record(run, step.id, "no_effect", { reason: result.reason });
           step.status = "ready";
         }
         step.status = "dispatching";
         this.record(run, step.id, "dispatching");
-        const result = await this.observe(() => this.adapter.apply(structuredClone(step), step.key));
+        const result = await this.observe("apply", () => this.adapter.apply(structuredClone(step), step.key));
         if (result.kind === "applied") {
           step.status = "applied";
           step.remoteRef = result.remoteRef;
           this.record(run, step.id, "applied");
         } else {
-          step.status = result.kind === "unknown" ? "unknown" : "failed";
-          run.state = step.status;
-          this.record(run, step.id, result.kind);
+          if (result.kind === "unknown") {
+            step.status = "unknown";
+            run.state = "unknown";
+            this.record(run, step.id, "unknown", { reason: result.reason });
+          } else {
+            const retryable = result.retryable === true;
+            step.status = retryable ? "ready" : "failed";
+            run.state = retryable ? "blocked" : "failed";
+            this.record(run, step.id, "not_applied", { reason: result.reason, retryable });
+          }
           return structuredClone(run);
         }
       }
@@ -115,11 +122,23 @@ export class StagedWrite {
     } finally { this.busy.delete(run.id); }
   }
 
-  private async observe(call: () => Promise<Outcome>): Promise<Outcome> {
+  private observe(phase: "apply", call: () => Promise<ApplyOutcome>): Promise<ApplyOutcome>;
+  private observe(phase: "reconcile", call: () => Promise<ReconcileOutcome>): Promise<ReconcileOutcome>;
+  private async observe(phase: "apply" | "reconcile", call: () => Promise<ApplyOutcome | ReconcileOutcome>): Promise<ApplyOutcome | ReconcileOutcome> {
     try {
       const result = await call();
-      if (result?.kind === "applied" && typeof result.remoteRef === "string" && result.remoteRef.length) return result;
-      if (result?.kind === "not_applied" || result?.kind === "unknown") return result;
+      // Copy validated primitives: adapter-owned objects never enter execution records.
+      if (result?.kind === "applied" && typeof result.remoteRef === "string" && result.remoteRef.length) {
+        return { kind: "applied", remoteRef: result.remoteRef };
+      }
+      if (result && "reason" in result && typeof result.reason === "string") {
+        if (result.kind === "unknown") return { kind: "unknown", reason: result.reason };
+        if (phase === "reconcile" && result.kind === "no_effect") return { kind: "no_effect", reason: result.reason };
+        if (phase === "apply" && result.kind === "not_applied" &&
+            (result.retryable === undefined || typeof result.retryable === "boolean")) {
+          return { kind: "not_applied", reason: result.reason, retryable: result.retryable === true };
+        }
+      }
       return { kind: "unknown", reason: "Invalid adapter outcome" };
     } catch {
       // A thrown exception is not authoritative evidence that the remote did nothing.
@@ -127,8 +146,8 @@ export class StagedWrite {
     }
   }
 
-  private record(run: Run, stepId: string, kind: Event["kind"]): void {
-    run.events.push({ sequence: run.events.length + 1, stepId, kind });
+  private record(run: Run, stepId: string, kind: Event["kind"], detail: Pick<Event, "reason" | "retryable"> = {}): void {
+    run.events.push({ sequence: run.events.length + 1, stepId, kind, ...detail });
   }
   private requireDraft(id: string): Draft {
     const draft = this.drafts.get(id);

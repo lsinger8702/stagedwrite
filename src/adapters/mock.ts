@@ -1,4 +1,4 @@
-import type { Adapter, Draft, Outcome, Rule, Step } from "../types.js";
+import type { Adapter, Draft, Outcome, ReconcileOutcome, Rule, Step } from "../types.js";
 
 /** Teaching fixture only: these prices and controls do not describe Stripe. */
 export const subscriptionRule: Rule = draft => {
@@ -40,7 +40,7 @@ export class MockAdapter implements Adapter {
     if (this.mode === "commit_then_timeout" && step.id === "record_change") throw new Error("Simulated lost response");
     return { kind: "applied", remoteRef };
   }
-  async reconcile(_step: Step, key: string): Promise<Outcome> {
+  async reconcile(_step: Step, key: string): Promise<ReconcileOutcome> {
     const remoteRef = this.effects.get(key);
     // This fake remote is synchronous and authoritative; real APIs need stronger evidence.
     return remoteRef ? { kind: "applied", remoteRef } : { kind: "unknown", reason: "Unresolved" };

@@ -84,7 +84,7 @@ test("authoritative no-effect reconciliation permits a same-key retry", async ()
       keys.push(key);
       return keys.length === 1 ? { kind: "unknown", reason: "response lost" } : { kind: "applied", remoteRef: "one" };
     },
-    reconcile: async () => ({ kind: "not_applied", reason: "Authoritative terminal no-effect receipt" })
+    reconcile: async () => ({ kind: "no_effect", reason: "Authoritative terminal no-effect receipt" })
   };
   const { engine, draft, certificate } = ready(adapter);
   const run = await engine.publish(draft.id, certificate);

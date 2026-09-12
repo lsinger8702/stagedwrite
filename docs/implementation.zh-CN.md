@@ -34,4 +34,4 @@ src/adapters/mock.ts        模拟远端：可以生效后丢失响应
 
 第一项详细设计见 [001：结构注册与空图创建](design/001-registry-and-draft.md)。原先“先持久化，再 Stripe”的顺序已被上述计划替代；先稳定数据语义，再设计存储。
 
-每项遵循：短设计 → 实现 → 验收 → 更新文档 → 提交。后续 Stripe 和 MCP 在核心 MVP 完成后接入。
+每项遵循：短设计 → 实现 → 验收 → 更新文档 → 提交。M1 后、SQLite 前先做范围受限的 Stripe test-mode adapter 实验；完整 Stripe 接入和 MCP 仍在核心 MVP 后推进。
