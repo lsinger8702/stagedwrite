@@ -16,7 +16,7 @@ function setup(overrides: Partial<GraphExecutor> = {}, clock: Clock = () => 0) {
   const certificate = engine.preflight(draft.id).certificate!;
   return { engine, draft, calls, publish: () => engine.publish(draft.id, certificate) };
 }
-const command = (r: Run, requestId = "stop-1"): StopRetry => ({ requestId, expectedSequence: r.events.length, actor: "operator", reason: "Retry budget exhausted" });
+const command = (r: Run, requestId = "stop-1"): StopRetry => ({ requestId, expectedSequence: r.events.length, actor: "operator", reason: "Retry limit exhausted" });
 
 test("stopping repeated zero-effect refusals is terminal, idempotent and permits revision", async () => {
   const { engine, publish, calls } = setup(); let run = await publish(); run = await engine.resume(run.id);

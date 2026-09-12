@@ -2,32 +2,32 @@ import { createStagedWrite, defineDraftType } from "../src/index.js";
 import type { GraphRule } from "../src/index.js";
 
 const definition = defineDraftType({
-  id: "example.budget", version: "1",
-  nodeTypes: { campaign: {
-    valueSchema: { type: "object", properties: { budget: { type: "number", minimum: 0 } }, additionalProperties: false },
-    requiredAtPublish: ["budget"]
+  id: "example.capacity", version: "1",
+  nodeTypes: { project: {
+    valueSchema: { type: "object", properties: { capacity: { type: "number", minimum: 0 } }, additionalProperties: false },
+    requiredAtPublish: ["capacity"]
   } }, relationTypes: {}
 });
-const budgetRule: GraphRule = {
-  id: "example.budget-limit", version: "1", type: definition.id, typeVersion: definition.version,
+const capacityRule: GraphRule = {
+  id: "example.capacity-limit", version: "1", type: definition.id, typeVersion: definition.version,
   check: draft => {
-    const budget = draft.nodes.campaign?.fields.budget;
-    return budget?.kind === "value" && Number(budget.value) > 10 ? [{
-      code: "budget.limit", path: "/nodes/campaign/fields/budget", message: "Example policy caps the budget at 10.",
-      resolution: { kind: "ops", ops: [{ op: "set", nodeId: "campaign", path: "/budget", value: 10 }] }
+    const capacity = draft.nodes.project?.fields.capacity;
+    return capacity?.kind === "value" && Number(capacity.value) > 10 ? [{
+      code: "capacity.limit", path: "/nodes/project/fields/capacity", message: "Example policy caps the capacity at 10.",
+      resolution: { kind: "ops", ops: [{ op: "set", nodeId: "project", path: "/capacity", value: 10 }] }
     }] : [];
   }
 };
-const engine = createStagedWrite({ definitions: [definition], rules: [budgetRule] });
+const engine = createStagedWrite({ definitions: [definition], rules: [capacityRule] });
 let draft = engine.create({ type: definition.id, typeVersion: definition.version });
-draft = engine.edit(draft.id, 0, [{ op: "node.add", id: "campaign", nodeType: "campaign" }]);
+draft = engine.edit(draft.id, 0, [{ op: "node.add", id: "project", nodeType: "project" }]);
 console.log("1. Missing intent:", engine.preflight(draft.id).diagnostics);
-draft = engine.edit(draft.id, draft.version, [{ op: "set", nodeId: "campaign", path: "/budget", value: 20 }]);
+draft = engine.edit(draft.id, draft.version, [{ op: "set", nodeId: "project", path: "/capacity", value: 20 }]);
 const blocked = engine.preflight(draft.id);
 console.log("2. Policy diagnostic:", blocked.status, blocked.diagnostics);
 const repair = blocked.diagnostics[0]?.resolution;
 if (repair?.kind === "ops") {
-  console.log("3. Demo author explicitly chooses the lower budget; the engine did not apply it automatically.");
+  console.log("3. Demo author explicitly chooses the lower capacity; the engine did not apply it automatically.");
   draft = engine.edit(draft.id, blocked.version, repair.ops);
 }
 try { engine.getCheck(draft.id, blocked.checkId); }

@@ -7,22 +7,22 @@ import { canonicalJson, definitionDigest } from "../src/registry/json.js";
 
 function definition(version = "1") {
   return {
-    id: "example.campaign", version,
+    id: "example.project", version,
     nodeTypes: {
-      campaign: {
+      project: {
         valueSchema: {
           type: "object" as const,
-          $defs: { money: { type: "number" as const, minimum: 0 } },
-          properties: { name: { type: "string" as const }, budget: { $ref: "#/$defs/money" }, limit: { $ref: "#/$defs/money" } },
+          $defs: { quantity: { type: "number" as const, minimum: 0 } },
+          properties: { name: { type: "string" as const }, capacity: { $ref: "#/$defs/quantity" }, limit: { $ref: "#/$defs/quantity" } },
           additionalProperties: false as const
         },
-        requiredAtPublish: ["name", "budget"]
+        requiredAtPublish: ["name", "capacity"]
       }
     },
-    relationTypes: { related: { from: ["campaign"], to: ["campaign"] } }
+    relationTypes: { related: { from: ["project"], to: ["project"] } }
   };
 }
-const selector = { type: "example.campaign", typeVersion: "1" };
+const selector = { type: "example.project", typeVersion: "1" };
 function issues(...definitions: unknown[]): readonly DefinitionIssue[] {
   try { createStagedWrite({ definitions }); }
   catch (error) { assert.ok(error instanceof DefinitionAssemblyError); return error.issues; }
@@ -30,7 +30,7 @@ function issues(...definitions: unknown[]): readonly DefinitionIssue[] {
 }
 function withSchema(schema: unknown) {
   const d = definition();
-  return { ...d, nodeTypes: { campaign: { valueSchema: schema } } };
+  return { ...d, nodeTypes: { project: { valueSchema: schema } } };
 }
 function withField(field: unknown, defs: unknown = {}) {
   return withSchema({ type: "object", properties: { value: field }, $defs: defs, additionalProperties: false });
@@ -47,7 +47,7 @@ test("helper and ordinary JSON have the same identity; duplicate definitions ded
   assert.equal(draft.definitionDigest, engine.getDefinition(selector).digest);
   assert.deepEqual(draft.nodes, {});
   assert.deepEqual(draft.edges, {});
-  assert.equal(engine.validateValues(selector, "campaign", {}).valid, true);
+  assert.equal(engine.validateValues(selector, "project", {}).valid, true);
   assert.equal("publish" in engine, false);
   assert.equal(engine.preflight(draft.id).scope, "draft");
   assert.equal(engine.preflight(draft.id).status, "blocked");
@@ -58,24 +58,24 @@ test("input, returned snapshots and separate registries cannot mutate an assembl
   const input = definition();
   const engine = createStagedWrite({ definitions: [input] });
   const original = engine.getDefinition(selector);
-  input.nodeTypes.campaign.valueSchema.$defs.money.minimum = 10;
+  input.nodeTypes.project.valueSchema.$defs.quantity.minimum = 10;
   const other = createStagedWrite({ definitions: [input] });
   const returned = engine.getDefinition(selector);
-  (returned.definition as ReturnType<typeof definition>).nodeTypes.campaign.valueSchema.$defs.money.minimum = 999;
+  (returned.definition as ReturnType<typeof definition>).nodeTypes.project.valueSchema.$defs.quantity.minimum = 999;
   const draft = engine.create(selector);
   (draft.nodes as Record<string, unknown>).injected = {};
   draft.typeVersion = "injected";
   assert.deepEqual(engine.getDefinition(selector), original);
   assert.deepEqual(engine.getDraft(draft.id).nodes, {});
   assert.equal(engine.getDraft(draft.id).typeVersion, "1");
-  assert.equal(engine.validateValues(selector, "campaign", { budget: 1 }).valid, true);
-  assert.equal(other.validateValues(selector, "campaign", { budget: 1 }).valid, false);
+  assert.equal(engine.validateValues(selector, "project", { capacity: 1 }).valid, true);
+  assert.equal(other.validateValues(selector, "project", { capacity: 1 }).valid, false);
   assert.notEqual(other.getDefinition(selector).digest, original.digest);
 });
 
 test("versions are exact and explicit; drafts retain the selected version and digest", () => {
   const v2 = definition("2");
-  v2.nodeTypes.campaign.valueSchema.$defs.money.minimum = 20;
+  v2.nodeTypes.project.valueSchema.$defs.quantity.minimum = 20;
   const engine = createStagedWrite({ definitions: [definition(), v2] });
   const one = engine.create(selector);
   const two = engine.create({ ...selector, typeVersion: "2" });
@@ -83,7 +83,7 @@ test("versions are exact and explicit; drafts retain the selected version and di
   assert.notEqual(one.definitionDigest, two.definitionDigest);
   assert.equal(engine.getDraft(one.id).definitionDigest, one.definitionDigest);
   for (const typeVersion of ["latest", "3", "01"]) assert.throws(() => engine.create({ ...selector, typeVersion }), /TYPE_VERSION_NOT_FOUND/);
-  assert.throws(() => engine.create({ ...selector, type: "Example.campaign" }), /TYPE_VERSION_NOT_FOUND/);
+  assert.throws(() => engine.create({ ...selector, type: "Example.project" }), /TYPE_VERSION_NOT_FOUND/);
   assert.throws(() => engine.getDraft("missing"), /DRAFT_NOT_FOUND/);
   assert.throws(() => engine.validateValues(selector, "missing", {}), /NODE_TYPE_NOT_FOUND/);
 });
@@ -98,20 +98,20 @@ test("assembly reports independent problems across definitions in stable order",
   assert.ok(errors.some(e => e.path === "/unknown"));
   assert.deepEqual(errors, issues(invalid, bad));
   const conflict = definition();
-  conflict.nodeTypes.campaign.valueSchema.$defs.money.minimum = 9;
+  conflict.nodeTypes.project.valueSchema.$defs.quantity.minimum = 9;
   assert.equal(issues(definition(), conflict)[0]?.code, "DEFINITION_CONFLICT");
   assert.equal(createStagedWrite({ definitions: [definition()] }).create(selector).version, 0);
 });
 
 test("shared references compile constraints without coercion, defaults or deletion", () => {
   const engine = createStagedWrite({ definitions: [definition()] });
-  for (const field of ["budget", "limit"]) {
-    assert.equal(engine.validateValues(selector, "campaign", { [field]: 0 }).valid, true);
-    for (const value of [-1, "2", null]) assert.equal(engine.validateValues(selector, "campaign", { [field]: value }).valid, false);
+  for (const field of ["capacity", "limit"]) {
+    assert.equal(engine.validateValues(selector, "project", { [field]: 0 }).valid, true);
+    for (const value of [-1, "2", null]) assert.equal(engine.validateValues(selector, "project", { [field]: value }).valid, false);
   }
-  const values = { budget: "2", extra: 7 };
+  const values = { capacity: "2", extra: 7 };
   const before = structuredClone(values);
-  const result = engine.validateValues(selector, "campaign", values);
+  const result = engine.validateValues(selector, "project", values);
   assert.equal(result.valid, false);
   assert.ok(result.issues.some(e => e.keyword === "additionalProperties"));
   assert.deepEqual(values, before);
@@ -123,8 +123,8 @@ test("acyclic chains, escaped names and per-document definitions resolve indepen
   const secondSchema = { type: "object", properties: { value: { $ref: "#/$defs/alias" } }, $defs: { alias: { type: "string" } }, additionalProperties: false };
   const input = { ...first, nodeTypes: { ...first.nodeTypes, other: { valueSchema: secondSchema } } };
   const engine = createStagedWrite({ definitions: [input] });
-  assert.equal(engine.validateValues(selector, "campaign", { value: 3 }).valid, true);
-  assert.equal(engine.validateValues(selector, "campaign", { value: 2 }).valid, false);
+  assert.equal(engine.validateValues(selector, "project", { value: 3 }).valid, true);
+  assert.equal(engine.validateValues(selector, "project", { value: 2 }).valid, false);
   assert.equal(engine.validateValues(selector, "other", { value: "text" }).valid, true);
   assert.equal(engine.validateValues(selector, "other", { value: 3 }).valid, false);
 });
@@ -163,14 +163,14 @@ test("profile rejects unsupported and malformed features, including unused defs"
     assert.ok(issues(withSchema({ type: "object", properties: {}, additionalProperties: false, ...extra })).length > 0);
   }
   const badRequired = definition();
-  badRequired.nodeTypes.campaign.requiredAtPublish = ["missing"];
+  badRequired.nodeTypes.project.requiredAtPublish = ["missing"];
   assert.ok(issues(badRequired).some(e => e.path.includes("requiredAtPublish")));
 });
 
 test("nullable scalar constraints and Unicode string length follow JSON Schema", () => {
   const engine = createStagedWrite({ definitions: [withField({ type: ["string", "null"], minLength: 1, maxLength: 1, enum: [null, "😀"] })] });
-  for (const value of [null, "😀"]) assert.equal(engine.validateValues(selector, "campaign", { value }).valid, true);
-  for (const value of ["", "xx", 1]) assert.equal(engine.validateValues(selector, "campaign", { value }).valid, false);
+  for (const value of [null, "😀"]) assert.equal(engine.validateValues(selector, "project", { value }).valid, true);
+  for (const value of ["", "xx", 1]) assert.equal(engine.validateValues(selector, "project", { value }).valid, false);
 });
 
 test("JSON input rejects dangerous keys, cycles and values JSON.stringify would discard", () => {
@@ -184,7 +184,7 @@ test("JSON input rejects dangerous keys, cycles and values JSON.stringify would 
   assert.equal(getterCalls, 0);
   assert.equal(Object.hasOwn(Object.prototype, "polluted"), false);
   const engine = createStagedWrite({ definitions: [definition()] });
-  assert.equal(engine.validateValues(selector, "campaign", { budget: Infinity }).valid, false);
+  assert.equal(engine.validateValues(selector, "project", { capacity: Infinity }).valid, false);
 });
 
 test("canonical JSON has fixed key/number rules and a known digest vector", () => {
@@ -204,9 +204,9 @@ test("key ordering is irrelevant but unused defs and scalar changes alter defini
   }
   const digest = (d: unknown) => createStagedWrite({ definitions: [d] }).getDefinition(selector).digest;
   assert.equal(digest(original), digest(reversed(original)));
-  const updated = definition(); updated.nodeTypes.campaign.valueSchema.$defs.money.minimum = 1;
+  const updated = definition(); updated.nodeTypes.project.valueSchema.$defs.quantity.minimum = 1;
   assert.notEqual(digest(original), digest(updated));
   const unused = structuredClone(original);
-  Object.assign(unused.nodeTypes.campaign.valueSchema.$defs, { unused: { type: "boolean" } });
+  Object.assign(unused.nodeTypes.project.valueSchema.$defs, { unused: { type: "boolean" } });
   assert.notEqual(digest(original), digest(unused));
 });

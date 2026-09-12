@@ -125,8 +125,8 @@ test("both public entries reject invalid dependencies and result references befo
 });
 
 const dependentPlan: Step[] = [
-  { id: "parent", payload: { name: "campaign" } },
-  { id: "child", payload: { name: "adset" }, dependsOn: ["parent"], inputRefs: { campaignId: "parent" } }
+  { id: "parent", payload: { name: "project" } },
+  { id: "child", payload: { name: "task" }, dependsOn: ["parent"], inputRefs: { projectId: "parent" } }
 ];
 test("recovered parent result feeds child and frozen child inputs survive retries and reconciliation", async () => {
   const calls: { id: string; key: string; payload: Step["payload"] }[] = [];
@@ -135,13 +135,13 @@ test("recovered parent result feeds child and frozen child inputs survive retrie
     apply: async (s, key) => {
       calls.push({ id: s.id, key, payload: structuredClone(s.payload) });
       if (s.id === "parent") return { kind: "unknown", reason: "lost parent response" };
-      assert.equal(s.payload.campaignId, "remote_campaign");
-      s.payload.campaignId = "adapter mutation";
+      assert.equal(s.payload.projectId, "remote_project");
+      s.payload.projectId = "adapter mutation";
       return ++childCalls === 1 ? { kind: "not_applied", retryable: true, reason: "limited" } : { kind: "unknown", reason: "lost child response" };
     },
     reconcile: async s => {
-      if (s.id === "child") assert.equal(s.payload.campaignId, "remote_campaign");
-      return { kind: "applied", remoteRef: s.id === "parent" ? "remote_campaign" : "remote_adset" };
+      if (s.id === "child") assert.equal(s.payload.projectId, "remote_project");
+      return { kind: "applied", remoteRef: s.id === "parent" ? "remote_project" : "remote_task" };
     }
   }));
   const run = await engine.publish(draft.id, engine.preflight(draft.id).certificate!);
@@ -152,8 +152,8 @@ test("recovered parent result feeds child and frozen child inputs survive retrie
   assert.equal(finished.state, "published");
   assert.deepEqual(calls.map(c => c.id), ["parent", "child", "child"]);
   assert.deepEqual(calls[1], calls[2]);
-  assert.deepEqual(finished.steps[1]?.payload, { name: "adset" });
-  assert.equal(finished.steps[1]?.resolvedPayload?.campaignId, "remote_campaign");
+  assert.deepEqual(finished.steps[1]?.payload, { name: "task" });
+  assert.equal(finished.steps[1]?.resolvedPayload?.projectId, "remote_project");
 });
 
 test("terminal failure marks all remaining steps skipped with distinct reasons", async () => {

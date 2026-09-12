@@ -9,24 +9,24 @@
 ## 使用方式
 
 ```ts
-export const campaignDefinition = defineDraftType({
-  id: "example.campaign",
+export const projectDefinition = defineDraftType({
+  id: "example.project",
   version: "1",
   nodeTypes: {
-    campaign: {
+    project: {
       valueSchema: {
         type: "object",
-        $defs: { money: { type: "number", minimum: 0 } },
+        $defs: { quantity: { type: "number", minimum: 0 } },
         properties: {
           name: { type: "string" },
-          budget: { $ref: "#/$defs/money" },
-          spendingLimit: { $ref: "#/$defs/money" },
+          capacity: { $ref: "#/$defs/quantity" },
+          capacityLimit: { $ref: "#/$defs/quantity" },
         },
         additionalProperties: false,
       },
-      requiredAtPublish: ["name", "budget"],
+      requiredAtPublish: ["name", "capacity"],
     },
-    adSet: {
+    task: {
       valueSchema: {
         type: "object",
         properties: { name: { type: "string" } },
@@ -36,12 +36,12 @@ export const campaignDefinition = defineDraftType({
     },
   },
   relationTypes: {
-    contains: { from: ["campaign"], to: ["adSet"] },
+    contains: { from: ["project"], to: ["task"] },
   },
 });
 
-const engine = createStagedWrite({ definitions: [campaignDefinition] });
-const draft = engine.create({ type: "example.campaign", typeVersion: "1" });
+const engine = createStagedWrite({ definitions: [projectDefinition] });
+const draft = engine.create({ type: "example.project", typeVersion: "1" });
 // { id, version: 0, type, typeVersion, definitionDigest, nodes: {}, edges: {} }
 ```
 
@@ -71,11 +71,11 @@ requiredAtPublish 是草稿领域元数据，只引用顶层已声明属性。va
 | Schema $ref | 可复用的字段结构定义 | 支持本 valueSchema 文档内的 $defs 引用 |
 | 远端引用 | 外部平台已存在的资源 | 后续 Adapter/执行结果负责，不用 schema 引用代替 |
 
-M1 创建空图不代表取消图引用；多个对象共享一个素材属于 M2 的图关系能力。Schema 定义引用不建立业务对象之间的边。
+M1 创建空图不代表取消图引用；多个对象共享一个文档属于 M2 的图关系能力。Schema 定义引用不建立业务对象之间的边。
 
 ## M1 本地 schema 引用契约
 
-- 每个节点类型的 valueSchema 是独立的 schema 文档根；`#/$defs/money` 相对此根解析，绝不相对整个 DraftTypeDefinition 或另一个节点类型解析。
+- 每个节点类型的 valueSchema 是独立的 schema 文档根；`#/$defs/quantity` 相对此根解析，绝不相对整个 DraftTypeDefinition 或另一个节点类型解析。
 - $defs 只允许放在该根；首版引用形式限定为 `#/$defs/<name>`，指向一个已定义的完整 schema。支持 JSON Pointer 的 `~0` / `~1` 转义；其他片段、anchor、非片段 URI 及非该形状引用均报错，不猜测。
 - 属性与 $defs 条目可为标量 schema，或仅包含 $ref 的引用 schema；允许无环的引用链。不支持 $ref 旁附加校验关键字，避免把标准支持的组合误实现为静默忽略。当前受限 profile 对这些输入明确拒绝。
 - 同一 valueSchema 多字段可复用同一 $defs 条目。不同节点类型可在 TypeScript 编写时复用一个定义对象，但装配后是各自文档快照；跨节点文档 $ref 不在 M1 范围。
@@ -84,7 +84,7 @@ M1 创建空图不代表取消图引用；多个对象共享一个素材属于 M
 - 不支持跨文件、跨文档、远程 URL、$id 重定向、$anchor、$dynamicRef；绝不触发网络读取。
 - definitionDigest 覆盖完整定义快照，包含所有 valueSchema 的 $defs 和 $ref 原文；不只哈引用字符串，也不需要先无限展开引用。目标内容变化必须改变摘要；未使用定义变化也保守改变摘要。内联与引用等价不要求摘要相同。
 
-嵌套对象、数组和命名空间仍是复杂业务适配的必要扩展，尚未实现；不能声称本地 schema 引用已经覆盖完整投放草稿。
+嵌套对象、数组和命名空间仍是复杂业务适配的必要扩展，尚未实现；不能声称本地 schema 引用已经覆盖任意复杂对象图。
 
 
 ## 身份、版本与冻结
@@ -145,7 +145,7 @@ M1 创建空图不代表取消图引用；多个对象共享一个素材属于 M
 - profile 补充：enum 必须非空、无重复且每项匹配声明类型；约束必须用于对应类型；minimum 不大于 maximum，minLength 不大于 maxLength；长度为非负安全整数。`requiredAtPublish`、关系端点不得重复，节点类型至少一个，关系类型可为空。
 - 输入仅接受普通 JSON 对象/数组与有限标量。拒绝函数、undefined、非有限数、Date、getter、symbol、循环、稀疏数组和危险对象键。JSON 嵌套最多 128 层；不调用输入的 getter 或 toJSON。接入代码与定义仍属于可信进程内输入，不承诺恶意 Proxy 的隔离。
 - 引用支持字面名称与 JSON Pointer ~0/~1 转义；合法 URI 百分号编码暂不支持，畸形百分号转义报 INVALID_DEFINITION。每个 valueSchema 独立解析，未使用定义同样检查。
-- 摘要格式：`sha256:stagedwrite-json-v1:<小写十六进制>`。对完整定义按 UTF-16 码元顺序递归排序对象键（包括数字形式键），数组保留顺序，原始值按 ECMAScript JSON 编码，再对 UTF-8 字节做 SHA-256。只允许有限 IEEE-754 数字，-0 规范为 0；不做 Unicode 归一化。不是 RFC 8785 的兼容声明。缺省字段与显式空值/空数组的摘要不要求相同。
+- 摘要格式：`sha256:stagedwrite-json-v1:<小写十六进制>`。对完整定义按 UTF-16 码元顺序递归排序对象键（包括数字形式键），数组保留顺序，原始值按 ECMAScript JSON 编码，再对 UTF-8 编码结果做 SHA-256。只允许有限 IEEE-754 数字，-0 规范为 0；不做 Unicode 归一化。不是 RFC 8785 的兼容声明。缺省字段与显式空值/空数组的摘要不要求相同。
 - 新入口在 `src/graph-engine.ts`；定义模块在 `src/registry/`。旧 `StagedWrite` 仍是独立的顶层字段执行原型，两者尚未连接，不能把新空图交给旧发布引擎。
 - `getDefinition({type,typeVersion})` 返回 `{definition,digest}` 的独立快照；`validateValues(selector,nodeType,values)` 是纯字段值校验，返回 `{valid,issues}`，供集成方验证约束。它不填图、不校验意图信封、不检查发布完整性。未知节点类型报 NODE_TYPE_NOT_FOUND。
 - M1 最初草稿为 `EmptyGraphDraft`，当前已由 M2 扩展为 `GraphDraft`（含墓碑），旧类型只保留为 deprecated 导出。getDraft 未命中报 DRAFT_NOT_FOUND；没有导入、恢复或 register 热修改方法。DEFINITION_MISMATCH 保留给后续持久化恢复，不是当前可触发接口。

@@ -14,8 +14,8 @@ const draft = engine.create(selector);
 engine.edit(draft.id, 0, [{ op: "node.add", id: "one", nodeType: "item" }]);
 let run = await engine.publish(draft.id, engine.preflight(draft.id).certificate!);
 run = await engine.resume(run.id);
-const stopped = engine.stopRetry(run.id, { requestId: "stop-budget-1", expectedSequence: run.events.length,
-  actor: "example-operator", reason: "Two attempts exhausted the example retry budget" });
+const stopped = engine.stopRetry(run.id, { requestId: "stop-limit-1", expectedSequence: run.events.length,
+  actor: "example-operator", reason: "Two attempts exhausted the example retry limit" });
 assert.equal(stopped.state, "failed");
 await engine.resume(run.id); assert.equal(calls, 2);
 console.log("1. Stopped without another request:", stopped.state, "calls:", calls);

@@ -5,26 +5,26 @@ import type { GraphRule, GraphDiagnostic, DraftEngine } from "../src/index.js";
 
 const definition = defineDraftType({
   id: "example.check", version: "1",
-  nodeTypes: { campaign: {
-    valueSchema: { type: "object", properties: { budget: { type: "number", minimum: 0 }, note: { type: ["string", "null"] } }, additionalProperties: false },
-    requiredAtPublish: ["budget", "note"]
+  nodeTypes: { project: {
+    valueSchema: { type: "object", properties: { capacity: { type: "number", minimum: 0 }, note: { type: ["string", "null"] } }, additionalProperties: false },
+    requiredAtPublish: ["capacity", "note"]
   } }, relationTypes: {}
 });
 const selector = { type: definition.id, typeVersion: definition.version };
-function rule(check: GraphRule["check"], version = "1"): GraphRule { return { ...selector, id: "budget-policy", version, check }; }
+function rule(check: GraphRule["check"], version = "1"): GraphRule { return { ...selector, id: "capacity-policy", version, check }; }
 function setup(rules: GraphRule[] = []) {
   const engine = createStagedWrite({ definitions: [definition], rules });
   const draft = engine.create(selector);
   return { engine, draft };
 }
 function fill(engine: DraftEngine, id: string) {
-  return engine.edit(id, 0, [{ op: "node.add", id: "c/1", nodeType: "campaign" },
-    { op: "set", nodeId: "c/1", path: "/budget", value: 20 },
+  return engine.edit(id, 0, [{ op: "node.add", id: "c/1", nodeType: "project" },
+    { op: "set", nodeId: "c/1", path: "/capacity", value: 20 },
     { op: "set", nodeId: "c/1", path: "/note", value: null }]);
 }
 const suggestion: GraphDiagnostic = {
-  code: "budget.limit", path: "/nodes/c~11/fields/budget", message: "Budget exceeds the example limit.",
-  resolution: { kind: "ops", ops: [{ op: "set", nodeId: "c/1", path: "/budget", value: 10 }] }
+  code: "capacity.limit", path: "/nodes/c~11/fields/capacity", message: "Capacity exceeds the example limit.",
+  resolution: { kind: "ops", ops: [{ op: "set", nodeId: "c/1", path: "/capacity", value: 10 }] }
 };
 
 test("empty graphs and missing required values block, with escaped graph paths", () => {
@@ -32,10 +32,10 @@ test("empty graphs and missing required values block, with escaped graph paths",
   const empty = engine.preflight(draft.id);
   assert.equal(empty.status, "blocked");
   assert.equal(empty.diagnostics[0]?.code, "graph.empty");
-  engine.edit(draft.id, 0, [{ op: "node.add", id: "c/1", nodeType: "campaign" }]);
+  engine.edit(draft.id, 0, [{ op: "node.add", id: "c/1", nodeType: "project" }]);
   const check = engine.preflight(draft.id);
   assert.equal(check.status, "blocked");
-  assert.deepEqual(check.diagnostics.map(d => d.path), ["/nodes/c~11/fields/budget", "/nodes/c~11/fields/note"]);
+  assert.deepEqual(check.diagnostics.map(d => d.path), ["/nodes/c~11/fields/capacity", "/nodes/c~11/fields/note"]);
   assert.ok(check.diagnostics.every(d => d.resolution.kind === "blocked" && d.resolution.reason === "human_intent"));
   assert.equal(engine.getDraft(draft.id).version, 1);
 });
@@ -53,8 +53,8 @@ test("schema-allowed null is explicit value; clear and reset both block required
 
 test("rule repair is validated but only explicit edit applies it, then preflight must rerun", () => {
   const { engine, draft } = setup([rule(d => {
-    const budget = d.nodes["c/1"]?.fields.budget;
-    return budget?.kind === "value" && Number(budget.value) > 10 ? [suggestion] : [];
+    const capacity = d.nodes["c/1"]?.fields.capacity;
+    return capacity?.kind === "value" && Number(capacity.value) > 10 ? [suggestion] : [];
   })]);
   const before = fill(engine, draft.id);
   const check = engine.preflight(draft.id);
@@ -83,7 +83,7 @@ test("checks are latest-only and isolated by draft, engine and edit version", ()
   assert.throws(() => engine.getCheck(otherDraft.id, second.checkId), /CHECK_NOT_CURRENT/);
   const other = setup(); fill(other.engine, other.draft.id); other.engine.preflight(other.draft.id);
   assert.throws(() => other.engine.getCheck(other.draft.id, second.checkId), /CHECK_NOT_CURRENT/);
-  engine.edit(draft.id, 1, [{ op: "set", nodeId: "c/1", path: "/budget", value: 20 }]);
+  engine.edit(draft.id, 1, [{ op: "set", nodeId: "c/1", path: "/capacity", value: 20 }]);
   assert.throws(() => engine.getCheck(draft.id, second.checkId), /CHECK_NOT_CURRENT/);
 });
 
@@ -93,7 +93,7 @@ test("preview and rejected edits keep the last check usable", () => {
   engine.preview(draft.id, 1, [{ op: "remove", nodeId: "c/1", path: "/note" }]);
   assert.throws(() => engine.edit(draft.id, 1, []), /EMPTY_OP_BATCH/);
   assert.throws(() => engine.edit(draft.id, 0, [{ op: "reset", nodeId: "c/1", path: "/note" }]), /STALE_VERSION/);
-  assert.throws(() => engine.edit(draft.id, 1, [{ op: "set", nodeId: "c/1", path: "/budget", value: -1 }]), /INVALID_GRAPH/);
+  assert.throws(() => engine.edit(draft.id, 1, [{ op: "set", nodeId: "c/1", path: "/capacity", value: -1 }]), /INVALID_GRAPH/);
   assert.deepEqual(engine.getCheck(draft.id, check.checkId), check);
 });
 
@@ -103,8 +103,8 @@ test("throwing, async, malformed and impossible repair rules yield incomplete ch
     (async () => { throw new Error("async unsupported"); }) as unknown as GraphRule["check"],
     (() => [{ code: "bad", path: "not-a-pointer" }]) as unknown as GraphRule["check"],
     () => [{ ...suggestion, resolution: { kind: "ops", ops: [] } }],
-    () => [{ ...suggestion, resolution: { kind: "ops", ops: [{ op: "set", nodeId: "missing", path: "/budget", value: 1 }] } }],
-    () => [{ ...suggestion, resolution: { kind: "ops", ops: [{ op: "set", nodeId: "c/1", path: "/budget", value: -1 }] } }]
+    () => [{ ...suggestion, resolution: { kind: "ops", ops: [{ op: "set", nodeId: "missing", path: "/capacity", value: 1 }] } }],
+    () => [{ ...suggestion, resolution: { kind: "ops", ops: [{ op: "set", nodeId: "c/1", path: "/capacity", value: -1 }] } }]
   ];
   for (const check of badChecks) {
     const { engine, draft } = setup([rule(check)]); const before = fill(engine, draft.id);
@@ -125,15 +125,15 @@ test("one invalid diagnostic discards all suggestions from that rule", () => {
 
 test("rule input is frozen and isolated, and returned checks cannot mutate cached diagnostics", () => {
   let observed = 0;
-  const modifying = rule(d => { d.nodes["c/1"]!.fields.budget = { kind: "value", value: 999 }; return []; });
-  const reading = { ...rule(d => { observed = Number((d.nodes["c/1"]!.fields.budget as { value: number }).value); return [suggestion]; }), id: "read" };
+  const modifying = rule(d => { d.nodes["c/1"]!.fields.capacity = { kind: "value", value: 999 }; return []; });
+  const reading = { ...rule(d => { observed = Number((d.nodes["c/1"]!.fields.capacity as { value: number }).value); return [suggestion]; }), id: "read" };
   const { engine, draft } = setup([modifying, reading]); fill(engine, draft.id);
   const check = engine.preflight(draft.id);
   assert.equal(check.status, "incomplete");
   assert.equal(observed, 20);
   check.diagnostics.length = 0;
   assert.equal(engine.getCheck(draft.id, check.checkId).diagnostics.length, 2);
-  assert.deepEqual(engine.getDraft(draft.id).nodes["c/1"]?.fields.budget, { kind: "value", value: 20 });
+  assert.deepEqual(engine.getDraft(draft.id).nodes["c/1"]?.fields.capacity, { kind: "value", value: 20 });
 });
 
 test("bindings are frozen, versioned and restricted to their definition", () => {
@@ -175,12 +175,12 @@ test("same-draft callback reentry is blocked and the check lock is always releas
 });
 
 test("a graph rule can propose a node-and-edge repair without reserving identities", () => {
-  const graphDefinition = { ...definition, relationTypes: { related: { from: ["campaign"], to: ["campaign"] } } };
+  const graphDefinition = { ...definition, relationTypes: { related: { from: ["project"], to: ["project"] } } };
   const graphRule = rule(d => Object.keys(d.edges).length ? [] : [{
-    code: "graph.related", path: "/edges", message: "The example requires a related campaign.",
+    code: "graph.related", path: "/edges", message: "The example requires a related project.",
     resolution: { kind: "ops", ops: [
-      { op: "node.add", id: "related", nodeType: "campaign" },
-      { op: "set", nodeId: "related", path: "/budget", value: 0 },
+      { op: "node.add", id: "related", nodeType: "project" },
+      { op: "set", nodeId: "related", path: "/capacity", value: 0 },
       { op: "set", nodeId: "related", path: "/note", value: null },
       { op: "edge.add", id: "relation", relationType: "related", from: "c/1", to: "related" }
     ] }

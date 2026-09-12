@@ -25,7 +25,7 @@ check 接收独立冻结草稿快照，必须纯同步返回 GraphDiagnostic[]�
 诊断包含 code/path/message 与 resolution：`{kind:"ops",ops:GraphOp[]}` 或 `{kind:"blocked",reason:"human_intent"|"unsupported",message?}`。
 诊断 path 是图根 JSON Pointer；修复 OP 使用 M2 的 nodeId 与单字段 path。每条修复在同一原始快照上单独经过 evaluateGraphEdit 验证，但不保证消除该诊断，也不保证多条建议可直接合并。应用后必须重新预检。
 
-内建缺项不会猜预算、名称或节点，因此返回 human_intent。规则修复需调用者明确选择，再走普通 edit/CAS。诊断补充 source（内建检查或规则 id/version）便于定位；非法结果整条规则拒绝，不保留其部分建议。
+内建缺项不会猜容量、名称或节点，因此返回 human_intent。规则修复需调用者明确选择，再走普通 edit/CAS。诊断补充 source（内建检查或规则 id/version）便于定位；非法结果整条规则拒绝，不保留其部分建议。
 
 ## 检查记录与时效
 

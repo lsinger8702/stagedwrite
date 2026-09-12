@@ -25,7 +25,7 @@ publish 验证当前凭据，创建包含 binding 的 Run，在第一次 apply �
 
 新图入口与旧 StagedWrite 均调用 `src/execution/runtime.ts` 的同一执行状态机，不存在第二份状态转换实现。成功步骤跳过；unknown 先 reconcile；有充分无效果证据才允许重新派发；可重试拒绝 blocked，明确终态拒绝 failed。并发 resume 拒绝 RUN_BUSY。
 
-当前仍内存、单进程；发布封存后不能继续编辑。failed 可能保留之前已成功效果，新建草稿重试不能自动消除这些效果。没有补偿、持久重试预算或崩溃恢复保证。
+当前仍内存、单进程；发布封存后不能继续编辑。failed 可能保留之前已成功效果，新建草稿重试不能自动消除这些效果。没有补偿、持久重试次数上限或崩溃恢复保证。
 
 ## Stripe 接入和恢复上下文
 
@@ -59,7 +59,7 @@ F2 分类限定为此 Customer 接口：
 
 M4–M6 应持久化完整图身份、检查绑定、计划、run 与首次派发意图，再实现跨进程恢复。墓碑容量策略、基准性能和内部异常恢复另列任务；本轮不宣称解决 F4/F5/S6。重新检查使旧检查失效的契约保留（F6），不在定义不匹配后继续认可旧凭据。
 
-官方依据：[原始错误类型](https://docs.stripe.com/api/errors)、[限流原因头](https://docs.stripe.com/rate-limits)、[stripe-node 自身账号查询实现](https://github.com/stripe/stripe-node/blob/master/src/resources/Accounts.ts)。错误映射只用于本实验 Customer 接口，不能推广为所有 Stripe 操作的无效果证明。
+官方依据：[原始错误类型](https://docs.stripe.com/api/errors)、[限流原因头](https://docs.stripe.com/rate-limits)、[stripe-node 自身账号查询实现](https://github.com/stripe/stripe-node/blob/master/src/resources/Accounts.ts)。错误映射只用于本实验 Customer 接口，不能适用于所有 Stripe 操作的无效果证明。
 
 
 ## 第三轮：依赖、结果引用与零效果修订

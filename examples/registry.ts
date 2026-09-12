@@ -1,34 +1,34 @@
 import { createStagedWrite, defineDraftType } from "../src/index.js";
 
-// Public teaching domain; independent of any production adapter or account.
-export const campaignDefinition = defineDraftType({
-  id: "example.campaign",
+// Teaching example: projects contain tasks with shared numeric constraints.
+export const projectDefinition = defineDraftType({
+  id: "example.project",
   version: "1",
   nodeTypes: {
-    campaign: {
+    project: {
       valueSchema: {
         type: "object",
-        $defs: { money: { type: "number", minimum: 0 } },
+        $defs: { quantity: { type: "number", minimum: 0 } },
         properties: {
           name: { type: "string", minLength: 1 },
-          budget: { $ref: "#/$defs/money" },
-          spendingLimit: { $ref: "#/$defs/money" }
+          capacity: { $ref: "#/$defs/quantity" },
+          capacityLimit: { $ref: "#/$defs/quantity" }
         },
         additionalProperties: false
       },
-      requiredAtPublish: ["name", "budget"]
+      requiredAtPublish: ["name", "capacity"]
     },
-    adSet: {
+    task: {
       valueSchema: { type: "object", properties: { name: { type: "string" } }, additionalProperties: false },
       requiredAtPublish: ["name"]
     }
   },
-  relationTypes: { contains: { from: ["campaign"], to: ["adSet"] } }
+  relationTypes: { contains: { from: ["project"], to: ["task"] } }
 });
 
-const engine = createStagedWrite({ definitions: [campaignDefinition] });
-const selector = { type: "example.campaign", typeVersion: "1" };
+const engine = createStagedWrite({ definitions: [projectDefinition] });
+const selector = { type: "example.project", typeVersion: "1" };
 console.log("1. Create an incomplete empty graph:", engine.create(selector));
-console.log("2. Missing publish fields are allowed here:", engine.validateValues(selector, "campaign", {}));
-console.log("3. Shared money constraint rejects a negative budget:", engine.validateValues(selector, "campaign", { budget: -1 }));
+console.log("2. Missing publish fields are allowed here:", engine.validateValues(selector, "project", {}));
+console.log("3. Shared quantity constraint rejects a negative capacity:", engine.validateValues(selector, "project", { capacity: -1 }));
 console.log("M1 example: see demo:graph for M2 editing. See demo:preflight for M3 draft checks. See demo:execution for executable mode. Persistence remains future work.");

@@ -21,7 +21,7 @@ The graph execution demo registers a definition, creates an incomplete graph, fi
 Other examples:
 
 - `npm run demo:registry`: schema references and empty graph creation.
-- `npm run demo:graph`: atomic edits and a shared asset reference.
+- `npm run demo:graph`: atomic edits and a shared document reference.
 - `npm run demo:preflight`: missing values, explicit repair and stale-check rejection.
 - `npm run demo`: the original scalar prototype, using the same execution state machine.
 
@@ -56,16 +56,16 @@ a SQLite draft and check. Automated tests also verify recovery in a separate pro
 import { createStagedWrite, defineDraftType } from "stagedwrite-prototype";
 
 const definition = defineDraftType({
-  id: "example.campaign", version: "1",
+  id: "example.project", version: "1",
   nodeTypes: {
-    campaign: {
+    project: {
       valueSchema: {
         type: "object",
-        $defs: { money: { type: "number", minimum: 0 } },
-        properties: { budget: { $ref: "#/$defs/money" } },
+        $defs: { quantity: { type: "number", minimum: 0 } },
+        properties: { capacity: { $ref: "#/$defs/quantity" } },
         additionalProperties: false
       },
-      requiredAtPublish: ["budget"]
+      requiredAtPublish: ["capacity"]
     }
   },
   relationTypes: {}
@@ -73,8 +73,8 @@ const definition = defineDraftType({
 const engine = createStagedWrite({ definitions: [definition] });
 const draft = engine.create({ type: definition.id, typeVersion: definition.version });
 const ops = [
-  { op: "node.add", id: "campaign-1", nodeType: "campaign" },
-  { op: "set", nodeId: "campaign-1", path: "/budget", value: 100 }
+  { op: "node.add", id: "project-1", nodeType: "project" },
+  { op: "set", nodeId: "project-1", path: "/capacity", value: 100 }
 ] as const;
 const preview = engine.preview(draft.id, draft.version, ops);
 const saved = engine.edit(draft.id, draft.version, ops);
@@ -104,7 +104,7 @@ const check = engine.preflight(draftId);
 if (check.certificate) {
   let run = await engine.publish(draftId, check.certificate);
   if (run.state === "unknown" || run.state === "blocked") {
-    run = await engine.resume(run.id); // caller decides retry timing and budget
+    run = await engine.resume(run.id); // caller decides retry timing and capacity
   }
 }
 ```
@@ -115,8 +115,8 @@ Successful edits and repeated preflight invalidate old checks/plans. Preview and
 
 ## Dependencies and failure revisions
 
-A sequential plan may declare `dependsOn: ["parent"]` and `inputRefs: { campaignId: "parent" }`.
-The latter fills `payload.campaignId` from the applied parent's `remoteRef`. Dependencies must occur earlier;
+A sequential plan may declare `dependsOn: ["parent"]` and `inputRefs: { projectId: "parent" }`.
+The latter fills `payload.projectId` from the applied parent's `remoteRef`. Dependencies must occur earlier;
 references require an explicit dependency and cannot overwrite literal payload fields. Both public entry points
 validate this contract. Dispatch inputs are recorded and reused unchanged for retries and reconciliation.
 Graph relations are mapped by the executor; the library does not infer execution dependencies from every graph edge.
@@ -127,7 +127,7 @@ version 0 and `sourceRunId`. It needs a new preflight certificate. Repeated revi
 the source remains sealed and its execution history remains available. Unknown, blocked, successful and partially
 applied runs cannot be revised this way. For mapped create-only plans, use `continueFrom` for partial-success derivation (below).
 
-Run `npm run demo:dependencies` for a campaign/adset graph: zero-effect refusal → revise → parent result reference → recover a lost child response.
+Run `npm run demo:dependencies` for a project/task graph: zero-effect refusal → revise → parent result reference → recover a lost child response.
 The legacy `StagedWrite` class is deprecated; use `createStagedWrite` for new integrations.
 
 ## Recovery contract
@@ -138,7 +138,7 @@ The legacy `StagedWrite` class is deprecated; use `createStagedWrite` for new in
 - Earlier successes and remote receipts remain visible. **Failed does not mean no effects occurred.** No automatic rollback is provided.
 - Recovery must use the original step/key and stable target configuration; a process-local cache cannot be the only evidence source. Unsupported recovery is explicit and keeps unknown runs stopped.
 
-Callers own retry budgets, backoff and scheduling. The engine cannot make a remote honor idempotency keys. No exactly-once claim.
+Callers own retry limits, backoff and scheduling. The engine cannot make a remote honor idempotency keys. No exactly-once claim.
 
 Failed steps expose `failureReason` (`remote_refusal`, `manual_no_effect`, or `retry_stopped`) and
 `failureEventSequence`, pointing to the event that explains the failure. These fields aid display and auditing;
@@ -151,10 +151,10 @@ A caller can end a paused retry sequence without sending another request:
 ```ts
 const observed = engine.getRun(runId);
 engine.stopRetry(runId, {
-  requestId: "stop-budget-1",
+  requestId: "stop-limit-1",
   expectedSequence: observed.events.length,
   actor: "operator-id",
-  reason: "Retry budget exhausted"
+  reason: "Retry limit exhausted"
 });
 ```
 
@@ -251,7 +251,7 @@ Proven Customer request refusals stop as failed. A documented limiter response c
 - Trusted in-process code, one engine instance. No multi-worker fencing, tenant isolation or approval enforcement.
 - Scalar graph fields; no nested JSON, arrays, inheritance, restore/import or automatic topology constraints.
 - Rules and plans are pure/synchronous by contract; their code is not hashed. Implementers must version changed behavior.
-- No durable retry budget, compensation, production billing integration or MCP server.
+- No durable retry limit, compensation, production billing integration or MCP server.
 - Stripe recovery now requires version-2 context metadata; old attempt-only objects are not automatically claimed.
 
 M1 definition assembly, M2 graph edits, M3 preflight and the in-memory graph execution bridge are implemented. M4 SQLite draft/check storage is implemented. Next: durable plans/runs (M5), restart recovery (M6), and external trial/release (M7). This remains an experimental 0.0.1, not a completed 0.1.0 MVP.
