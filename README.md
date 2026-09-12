@@ -20,7 +20,49 @@ The demo creates a mock subscription change, blocks an immediate amount above a 
 
 Prices, policies and effects are teaching fixtures, not Stripe billing behavior. Recovery happens in the same process.
 
-## Core API
+## M1: register a definition and create an empty graph
+
+```ts
+import { createStagedWrite, defineDraftType } from "stagedwrite-prototype";
+
+const definition = defineDraftType({
+  id: "example.campaign", version: "1",
+  nodeTypes: {
+    campaign: {
+      valueSchema: {
+        type: "object",
+        $defs: { money: { type: "number", minimum: 0 } },
+        properties: { budget: { $ref: "#/$defs/money" } },
+        additionalProperties: false
+      },
+      requiredAtPublish: ["budget"]
+    }
+  },
+  relationTypes: {}
+});
+const engine = createStagedWrite({ definitions: [definition] });
+const selector = { type: "example.campaign", typeVersion: "1" };
+const draft = engine.create(selector); // version 0, empty nodes/edges, bound definition digest
+engine.getDraft(draft.id);
+engine.validateValues(selector, "campaign", { budget: -1 }); // valid: false
+```
+
+The package-name import above assumes a local link/build; this package is not on npm.
+Run `npm run demo:registry` for the [complete local example](examples/registry.ts).
+
+Assembly validates ordinary JSON as well as helper output, collects definition
+errors in `DefinitionAssemblyError.issues`, and freezes instance-owned snapshots.
+Each node's schema has its own local `$defs` namespace. Missing/cyclic references,
+external references and unsupported schema features fail before compilation.
+`getDefinition(selector)` returns a copy and its digest. Digests use the versioned
+`sha256:stagedwrite-json-v1` format described in [the M1 design](docs/design/001-registry-and-draft.md).
+
+This **draft-only** engine creates and reads empty graphs. `validateValues` checks
+filled scalar values without modifying input; it does not interpret clear/reset
+intent or enforce `requiredAtPublish`. Graph edits, graph preflight, persistence and
+execution integration are future milestones. There is no `publish` method here.
+
+## Existing execution prototype API
 
 ```ts
 const engine = new StagedWrite(adapter, rules);
@@ -37,6 +79,10 @@ if (check.certificate) {
 See [the complete example](examples/lifecycle.ts) for imports and a runnable lifecycle.
 
 ## Implemented
+
+- M1 definition assembly, local schema references, immutable version bindings and empty graph creation via `createStagedWrite`.
+
+The separate `new StagedWrite(adapter, rules)` execution prototype provides:
 
 - Incomplete drafts; `set`, `remove` (explicit clear), and `reset` (undeclared).
 - Atomic in-memory edit batches with expected-version checking; empty batches are rejected.
@@ -100,7 +146,7 @@ Chinese implementation and first-release guides:
 
 ## Next milestones
 
-- [ ] Versioned draft-type registry and empty graph creation.
+- [x] Versioned draft-type registry and empty graph creation (M1).
 - [ ] Graph operations, atomic edit batches and structural validation.
 - [ ] Graph-aware preflight diagnostics and repairs.
 - [ ] Narrow Stripe test-mode adapter experiment to validate the adapter boundary before storage work.

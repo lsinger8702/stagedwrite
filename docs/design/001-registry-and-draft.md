@@ -1,12 +1,12 @@
 # 001：定义、装配与空图创建
 
-状态：设计草案，未实现。2026-09-12 更新；对应 M1。以下接口均为拟议接口。
+状态：M1 已实现并通过验收。2026-09-12 更新。本文标为后续的编辑、发布和恢复能力尚未实现。
 
 ## 目的与范围
 
 开发者独立导出可序列化定义，创建引擎时显式装配，成功后冻结注册表。M1 只交付定义校验、装配、版本绑定与空图；规则执行、填图、远端调用仍属后续任务。
 
-## 拟议使用方式
+## 使用方式
 
 ```ts
 export const campaignDefinition = defineDraftType({
@@ -50,7 +50,7 @@ const draft = engine.create({ type: "example.campaign", typeVersion: "1" });
 ## 三个阶段
 
 1. defineDraftType：类型提示与纯定义构造，不修改全局状态。JSON 文件解析后可作为同一种输入；此 helper 不是可信校验边界。
-2. createStagedWrite：统一检查原始输入、复制定义、解析本地依赖、编译校验器，建立实例专属注册表。任何问题导致整个装配失败，不返回半装配引擎。
+2. createStagedWrite：统一检查原始输入、复制定义、解析本地依赖、用 Ajv 8 的 2020-12 实现编译校验器，建立实例专属注册表。任何问题导致整个装配失败，不返回半装配引擎。
 3. engine.create：只选择已装配的明确版本。启动后没有 register/unregister 热修改入口。升级时重建引擎，可同时装入 v1、v2。
 
 ## 字段 schema 的明确范围
@@ -93,7 +93,7 @@ M1 创建空图不代表取消图引用；多个对象共享一个素材属于 M
 - 定义只包含 JSON 数据，不包含函数、凭证、客户端或环境配置。
 - 装配深拷贝并冻结定义；不冻结接入方的 SDK 客户端内部状态。
 - 同身份相同定义可去重；同身份不同定义报 DEFINITION_CONFLICT。
-- definitionDigest 按固定规范化 JSON 规则计算，标明算法；对象键排序、数组顺序保留。它证明定义身份，不证明代码身份或授权。完整规范化与数值规则需在实现中固定并测试。
+- definitionDigest 按固定规范化 JSON 规则计算，标明算法；对象键排序、数组顺序保留。它证明定义身份，不证明代码身份或授权。规则见下方“已固定的实现决定”。
 - 草稿绑定 type/version/digest。恢复缺定义或摘要不符时阻断；不回退到 latest。
 - 结构摘要不能覆盖业务函数。规则与 Adapter 后续独立声明 ID/版本，并绑定到预检及执行计划。不能用函数 toString 充当代码版本。
 
@@ -123,26 +123,40 @@ M1 创建空图不代表取消图引用；多个对象共享一个素材属于 M
 
 ## 验收
 
-- [ ] helper 定义与同内容普通 JSON 输入得到相同定义身份。
-- [ ] 两个引擎的定义互不污染；修改输入和返回快照不改变内部内容。
-- [ ] 错误关系、未知字段、无效 schema、重复冲突定义在启动时一次报告。
-- [ ] 同时加载 v1/v2，可创建分别绑定各自版本的空图。
-- [ ] 两个字段引用同一 $defs 标量定义，装配成功并获得相同校验约束。
-- [ ] 无环引用链、转义名称正确解析；同名 $defs 在不同 valueSchema 内隔离。
-- [ ] 悬空引用、直接/间接循环（含未使用条目）在装配期拒绝。
-- [ ] 跨文件/远程引用、不支持的片段、$ref 校验兄弟关键字明确报错，且无网络调用。
-- [ ] 引用对象/数组定义仍被标量 profile 拒绝，不退化为无校验。
-- [ ] 仅修改 $defs 目标值就改变定义摘要；旧草稿继续绑定旧定义身份。
-- [ ] 缺发布必填字段仍可创建；没有隐式默认值。
-- [ ] 定义对象键顺序变化不影响摘要，语义值变化会影响摘要。
-- [ ] M1 不暴露可发布结论；后续完整装配有缺执行器/恢复能力声明的反例。
+- [x] helper 定义与同内容普通 JSON 输入得到相同定义身份。
+- [x] 两个引擎的定义互不污染；修改输入和返回快照不改变内部内容。
+- [x] 错误关系、未知字段、无效 schema、重复冲突定义在启动时一次报告。
+- [x] 同时加载 v1/v2，可创建分别绑定各自版本的空图。
+- [x] 两个字段引用同一 $defs 标量定义，装配成功并获得相同校验约束。
+- [x] 无环引用链、转义名称正确解析；同名 $defs 在不同 valueSchema 内隔离。
+- [x] 悬空引用、直接/间接循环（含未使用条目）在装配期拒绝。
+- [x] 跨文件/远程引用、不支持的片段、$ref 校验兄弟关键字明确报错，且无网络调用。
+- [x] 引用对象/数组定义仍被标量 profile 拒绝，不退化为无校验。
+- [x] 仅修改 $defs 目标值就改变定义摘要；旧草稿继续绑定旧定义身份。
+- [x] 缺发布必填字段仍可创建；没有隐式默认值。
+- [x] 定义对象键顺序变化不影响摘要，语义值变化会影响摘要。
+- [x] M1 不暴露可发布结论。
 
-## 尚待实现决定
+后续完整装配仍需增加缺执行器/恢复能力声明的反例，不计入 M1 完成项。
 
-实现时固定 schema profile 的元校验与规范化算法，优先复用成熟校验器并关闭数据修改选项。M2 前必须补对象图和路径设计；复杂字段、基线恢复、命名空间参见 002，不能由 adapter 私自改核心 OP 含义。
+## 已固定的实现决定
+
+- Schema：先校验本项目受限 profile、解析所有本地引用，再交给 Ajv 8 的 `Ajv2020` 同步编译。严格模式、完整错误报告；关闭 coerceTypes/useDefaults/removeAdditional，启用 ownProperties。没有 loadSchema 或网络解析入口。原始 $defs/$ref 保留在定义快照与摘要中，编译副本解析为标量约束。
+- profile 补充：enum 必须非空、无重复且每项匹配声明类型；约束必须用于对应类型；minimum 不大于 maximum，minLength 不大于 maxLength；长度为非负安全整数。`requiredAtPublish`、关系端点不得重复，节点类型至少一个，关系类型可为空。
+- 输入仅接受普通 JSON 对象/数组与有限标量。拒绝函数、undefined、非有限数、Date、getter、symbol、循环、稀疏数组和危险对象键。JSON 嵌套最多 128 层；不调用输入的 getter 或 toJSON。接入代码与定义仍属于可信进程内输入，不承诺恶意 Proxy 的隔离。
+- 引用支持字面名称与 JSON Pointer ~0/~1 转义；合法 URI 百分号编码暂不支持，畸形百分号转义报 INVALID_DEFINITION。每个 valueSchema 独立解析，未使用定义同样检查。
+- 摘要格式：`sha256:stagedwrite-json-v1:<小写十六进制>`。对完整定义按 UTF-16 码元顺序递归排序对象键（包括数字形式键），数组保留顺序，原始值按 ECMAScript JSON 编码，再对 UTF-8 字节做 SHA-256。只允许有限 IEEE-754 数字，-0 规范为 0；不做 Unicode 归一化。不是 RFC 8785 的兼容声明。缺省字段与显式空值/空数组的摘要不要求相同。
+- 新入口在 `src/graph-engine.ts`；定义模块在 `src/registry/`。旧 `StagedWrite` 仍是独立的顶层字段执行原型，两者尚未连接，不能把新空图交给旧发布引擎。
+- `getDefinition({type,typeVersion})` 返回 `{definition,digest}` 的独立快照；`validateValues(selector,nodeType,values)` 是纯字段值校验，返回 `{valid,issues}`，供集成方验证约束。它不填图、不校验意图信封、不检查发布完整性。未知节点类型报 NODE_TYPE_NOT_FOUND。
+- 草稿为 `EmptyGraphDraft`，M1 的 nodes/edges 类型刻意限定为空。getDraft 未命中报 DRAFT_NOT_FOUND；没有导入、恢复或 register 热修改方法。DEFINITION_MISMATCH 保留给后续持久化恢复，不是当前可触发接口。
+
+M2 前必须补对象图和路径设计；复杂字段、基线恢复、命名空间参见 002，不能由 adapter 私自改核心 OP 含义。
 
 ## 参考
 
 - [Fastify schema 装配与校验](https://fastify.dev/docs/latest/Reference/Validation-and-Serialization/)
 - [JSON Schema 定义与引用](https://json-schema.org/understanding-json-schema/structuring)
 - [Zod JSON Schema 转换边界](https://zod.dev/json-schema)
+
+- [Ajv JSON Schema 版本](https://ajv.js.org/json-schema.html)
+- [Ajv 校验选项](https://ajv.js.org/options.html)

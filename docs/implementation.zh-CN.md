@@ -15,9 +15,15 @@ src/engine.ts               控制流程、预检凭据、执行状态和内存�
 src/adapters/mock.ts        模拟远端：可以生效后丢失响应
 ```
 
-框架管理流程；规则回答“为什么不能发”；adapter 回答“具体怎么发、怎么查”。MCP 将来只是调用核心 API 的外壳。
+库管理流程；规则回答“为什么不能发”；adapter 回答“具体怎么发、怎么查”。MCP 将来只是调用核心 API 的外壳。
 
-## 代码阅读顺序
+## M1 注册与空图入口
+
+运行 `npm run demo:registry`，依次阅读 `src/registry/types.ts`、`src/registry/profile.ts`、`src/registry/registry.ts` 和 `src/graph-engine.ts`。`src/registry/json.ts` 固定纯 JSON 输入和摘要算法。
+
+定义装配、引用校验、冻结与空图创建已实现；`validateValues` 可独立验证标量约束。新引擎目前只有草稿能力，下面的执行原型仍然独立运行，后续按 M2/M3 集成。
+
+## 执行原型代码阅读顺序
 
 1. 先运行 `npm run demo`，对照 `examples/lifecycle.ts` 看五个调用。
 2. 读 `src/types.ts`，理解 Draft、Diagnostic、Step、Run、Outcome。
