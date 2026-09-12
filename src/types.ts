@@ -91,10 +91,13 @@ export interface StopRetry {
   actor: string;
   reason: string;
 }
+/** Explicit ownership transfer; does not authorize a new remote effect. */
+export interface RecoveryRequest extends StopRetry {}
 export interface Event {
   sequence: number;
   stepId: string;
-  kind: "dispatching" | "applied" | "unknown" | "not_applied" | "no_effect" | "reconciling" | "skipped" | "adjudicated" | "reused" | "retry_stopped";
+  kind: "dispatching" | "applied" | "unknown" | "not_applied" | "no_effect" | "reconciling" | "skipped" | "adjudicated" | "reused" | "retry_stopped" | "recovery_claimed";
+  recovery?: { command: RecoveryRequest; previousOwner: string; owner: string };
   stopRetry?: StopRetry;
   reusedFrom?: ReusedReceipt;
   adjudication?: Adjudication;

@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { Run } from "../types.js";
+import { hostname } from "node:os";
+import { definitionDigest, type Json } from "../registry/json.js";
+import type { RecoveryRequest, Run } from "../types.js";
 import { createRequire } from "node:module";
 import type { DatabaseSync as Database } from "node:sqlite";
 import type { GraphDraft } from "../graph/types.js";
@@ -7,7 +9,7 @@ import type { GraphCheck } from "../preflight/types.js";
 import type { DefinitionRegistry } from "../registry/registry.js";
 import type { DraftStore, StoredPlan } from "./drafts.js";
 
-/** SQLite snapshots and atomic publication ownership; recovered runs remain read-only in M5. */
+/** SQLite snapshots and atomic publication ownership; explicit local-process ownership transfer. */
 export class SqliteDraftStore implements DraftStore {
   #db: Database;
   #closed = false;
@@ -23,7 +25,7 @@ export class SqliteDraftStore implements DraftStore {
       this.transaction(() => {
         this.#db.exec("CREATE TABLE IF NOT EXISTS sw_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;");
         const version = this.#db.prepare("SELECT value FROM sw_meta WHERE key = 'schema'").get();
-        if (version && !["1", "2"].includes(version.value as string)) throw new Error("STORAGE_VERSION_UNSUPPORTED");
+        if (version && !["1", "2", "3"].includes(version.value as string)) throw new Error("STORAGE_VERSION_UNSUPPORTED");
         this.#db.exec(`CREATE TABLE IF NOT EXISTS sw_definitions (
           type TEXT NOT NULL, version TEXT NOT NULL, digest TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(type, version)) STRICT;
           CREATE TABLE IF NOT EXISTS sw_drafts (
@@ -31,7 +33,9 @@ export class SqliteDraftStore implements DraftStore {
         this.#db.exec(`CREATE TABLE IF NOT EXISTS sw_plans (draft_id TEXT PRIMARY KEY, body TEXT NOT NULL) STRICT;
           CREATE TABLE IF NOT EXISTS sw_runs (id TEXT PRIMARY KEY, draft_id TEXT NOT NULL UNIQUE, owner TEXT NOT NULL, body TEXT NOT NULL) STRICT;
           CREATE TABLE IF NOT EXISTS sw_derivations (source_run TEXT NOT NULL, kind TEXT NOT NULL, draft_id TEXT NOT NULL UNIQUE, PRIMARY KEY(source_run, kind)) STRICT;`);
-        this.#db.prepare("INSERT OR REPLACE INTO sw_meta VALUES ('schema', '2')").run();
+        this.#db.exec("CREATE TABLE IF NOT EXISTS sw_sessions (owner TEXT PRIMARY KEY, pid INTEGER NOT NULL, host TEXT NOT NULL, released INTEGER NOT NULL) STRICT;");
+        this.#db.prepare("INSERT INTO sw_sessions VALUES (?, ?, ?, 0)").run(this.#owner, process.pid, hostname());
+        this.#db.prepare("INSERT OR REPLACE INTO sw_meta VALUES ('schema', '3')").run();
         for (const selector of registry.selectors()) {
           const { definition, digest } = registry.getDefinition(selector);
           const prior = this.#db.prepare("SELECT digest FROM sw_definitions WHERE type = ? AND version = ?").get(selector.type, selector.typeVersion);
@@ -111,6 +115,40 @@ export class SqliteDraftStore implements DraftStore {
     this.open(); const result = this.#db.prepare("UPDATE sw_runs SET body = ? WHERE id = ? AND owner = ?").run(JSON.stringify(run), run.id, this.#owner);
     if (result.changes !== 1) throw new Error("RUN_OWNER_MISMATCH");
   }
+  /** The liveness check, sequence check, state conversion and owner write are atomic. */
+  recover(id: string, command: RecoveryRequest, prepare: (run: Run, previousOwner: string, owner: string) => Run): Run {
+    return this.transaction(() => {
+      const row = this.#db.prepare("SELECT owner FROM sw_runs WHERE id = ?").get(id);
+      if (!row) throw new Error("RUN_NOT_FOUND");
+      const run = this.getRun(id);
+      const previous = run.events.find(e => e.recovery?.command.requestId === command.requestId)?.recovery;
+      if (previous) {
+        if (definitionDigest(previous.command as unknown as Json) !== definitionDigest(command as unknown as Json)) throw new Error("RECOVERY_CONFLICT");
+        if (row.owner !== this.#owner || previous.owner !== this.#owner) throw new Error("RECOVERY_OWNER_MISMATCH");
+        return run;
+      }
+      if (command.expectedSequence !== run.events.length) throw new Error("STALE_RUN");
+      if (["published", "failed", "closed"].includes(run.state)) throw new Error("RECOVERABLE_RUN_REQUIRED");
+      const session = this.#db.prepare("SELECT pid, host, released FROM sw_sessions WHERE owner = ?").get(row.owner!);
+      if (!session) throw new Error("OWNER_EVIDENCE_REQUIRED");
+      if (session.released !== 1) {
+        if (session.host !== hostname() || !Number.isSafeInteger(session.pid) || (session.pid as number) <= 0) throw new Error("OWNER_EVIDENCE_REQUIRED");
+        try { process.kill(session.pid as number, 0); }
+        catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw new Error("OWNER_EVIDENCE_REQUIRED");
+          return this.claim(run, row.owner as string, prepare);
+        }
+        throw new Error("RUN_OWNER_ACTIVE");
+      }
+      return this.claim(run, row.owner as string, prepare);
+    });
+  }
+  private claim(run: Run, prior: string, prepare: (run: Run, previousOwner: string, owner: string) => Run): Run {
+    const recovered = prepare(run, prior, this.#owner);
+    this.#db.prepare("UPDATE sw_runs SET owner = ?, body = ? WHERE id = ? AND owner = ?")
+      .run(this.#owner, JSON.stringify(recovered), run.id, prior);
+    return recovered;
+  }
   derive(draft: GraphDraft, sourceRun: string, kind: "revise" | "continue"): GraphDraft {
     return this.transaction(() => {
       const existing = this.#db.prepare("SELECT draft_id FROM sw_derivations WHERE source_run = ? AND kind = ?").get(sourceRun, kind);
@@ -126,5 +164,6 @@ export class SqliteDraftStore implements DraftStore {
     if (!row) throw new Error("DRAFT_NOT_FOUND");
     return row.check_body === null ? undefined : JSON.parse(row.check_body as string) as GraphCheck;
   }
-  close(): void { if (!this.#closed) { this.#db.close(); this.#closed = true; } }
+  close(): void { if (!this.#closed) { this.transaction(() => { this.#db.prepare("UPDATE sw_sessions SET released = 1 WHERE owner = ?").run(this.#owner); });
+    this.#db.close(); this.#closed = true; } }
 }

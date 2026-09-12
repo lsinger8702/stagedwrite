@@ -2,7 +2,7 @@
 
 An experimental TypeScript library for staged writes from agent tools to external systems.
 
-**Status: early prototype, v0.0.1.** Graph registration, editing, preflight and execution are connected. SQLite persists drafts, fixed plans, run snapshots and receipts. Advancing an existing unfinished run after restart remains disabled pending M6; there is no published npm package yet. The opt-in Stripe test Customer adapter has offline contract coverage; real-account verification is still pending.
+**Status: early prototype, v0.0.1.** Graph registration, editing, preflight and execution are connected. SQLite persists drafts, fixed plans, run snapshots and receipts. Explicit same-host recovery can reclaim unfinished runs after their owner closes or exits; there is no published npm package yet. The opt-in Stripe test Customer adapter has offline contract coverage; real-account verification is still pending.
 
 StagedWrite separates author intent, preflight diagnostics, a fixed execution plan and remote effects. An ambiguous remote outcome stops execution until the adapter can reconcile it.
 
@@ -58,15 +58,34 @@ It commits each observed result before moving to the next step. Manual decisions
 states are saved together. `revise` and `continueFrom` save their draft and source relationship atomically, so repeated
 derivation after reopening returns the same draft. Use `listRunIds()` and `getRun()` to inspect saved records.
 
-**Restart boundary:** an unexecuted stored plan can be published after reopening. Existing runs can be read, and terminal
-failed runs can produce a new revision/continuation under their usual evidence checks. Advancing or adjudicating an
-existing unfinished run from a new engine returns `RESTART_RECOVERY_NOT_ENABLED`. Persisted `running/dispatching` means
-an interrupted observation, never proof of no effects. M6 will implement explicit ownership transfer and recovery.
+**Restart recovery (M6):** reopening does not automatically dispatch. Inspect the run, explicitly claim ownership,
+then choose whether to resume or record verified manual evidence:
 
-A checkpoint failure stops the current engine from advancing that run (`RUN_STORAGE_FAILED`); it does not reinterpret
-a remote success as a refusal. `close()` refuses while a check or adapter call is active. SQLite schema version 1 upgrades
-to version 2 transactionally; old binaries reject the newer schema. The database is trusted internal state.
-Run `npm run demo:durable` for a stored plan, partial failure, reopened continuation and reused receipt.
+```ts
+const run = engine.getRun(runId);
+const recovered = engine.recover(run.id, {
+  requestId: "recovery-1", expectedSequence: run.events.length,
+  actor: "operator", reason: "Previous process exited"
+}); // No adapter call; interrupted dispatch becomes unknown.
+const result = await engine.resume(recovered.id); // Reconcile unknown before any retry.
+```
+
+The previous owner must have closed, or its PID must be absent on the same host. Live or uncertain owners cannot
+be displaced. Use a local SQLite file on one trusted host and one PID namespace; shared network storage and
+cross-host/container failover are unsupported. PID reuse conservatively blocks recovery. There is no timeout takeover.
+Request IDs make recovery resubmission idempotent for the current owner; sequence checks reject stale commands.
+Original keys, resolved inputs and successful receipts are retained. Empty remote searches remain unknown.
+Adapters must establish that a request cannot still complete before reporting `no_effect`.
+
+Without a successful claim, a new engine returns `RECOVERY_REQUIRED` for nonterminal mutations. Terminal runs remain
+readable, and failed runs can derive revisions/continuations under their usual evidence checks.
+A checkpoint failure stops local advancement (`RUN_STORAGE_FAILED`); close and reopen before recovery.
+`close()` refuses while a check, recovery or adapter call is active. Schema versions 1/2 upgrade transactionally to 3;
+legacy runs without owner-session evidence remain read-only (`OWNER_EVIDENCE_REQUIRED`). Old binaries reject schema 3.
+The database is trusted internal state, not an import format for arbitrary run JSON.
+
+Run `npm run demo:durable` for stored plans and partial continuation, or `npm run demo:recovery` for a real child-process
+exit followed by explicit recovery using a local simulated receipt ledger. See [M6 design](docs/design/012-restart-recovery.md).
 
 ## Define and edit a graph
 
@@ -265,14 +284,14 @@ Proven Customer request refusals stop as failed. A documented limiter response c
 
 ## Limits and next work
 
-- Default mode is in memory. SQLite persists execution facts, but restart advancement is disabled pending M6; no end-to-end crash recovery guarantee.
+- Default mode is in memory. SQLite supports explicit same-host recovery; remote outcomes still depend on adapter evidence and idempotency.
 - Trusted in-process code, one engine instance. No multi-worker fencing, tenant isolation or approval enforcement.
 - Scalar graph fields; no nested JSON, arrays, inheritance, restore/import or automatic topology constraints.
 - Rules and plans are pure/synchronous by contract; their code is not hashed. Implementers must version changed behavior.
 - No durable retry limit, compensation, production billing integration or MCP server.
 - Stripe recovery now requires version-2 context metadata; old attempt-only objects are not automatically claimed.
 
-M1 definition assembly, M2 graph edits, M3 preflight and the in-memory graph execution bridge are implemented. M4 SQLite draft/check storage is implemented. M5 plan/run persistence is implemented. Next: restart recovery (M6) and external trial/release (M7). This remains an experimental 0.0.1, not a completed 0.1.0 MVP.
+M1 definition assembly, M2 graph edits, M3 preflight and the in-memory graph execution bridge are implemented. M4 SQLite draft/check storage is implemented. M5 plan/run persistence is implemented. M6 explicit same-host recovery is implemented. Next: external trial/release (M7). This remains an experimental 0.0.1, not a completed 0.1.0 MVP.
 
 ## Read and contribute
 

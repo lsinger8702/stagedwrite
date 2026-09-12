@@ -37,5 +37,5 @@ try {
   assert.deepEqual(engine.getRun(completed.id), completed);
   console.log("2. Persisted partial receipts reused:", completed.steps.map(s => s.status));
   console.log("3. Reopened completed run:", completed.state, "effects:", effects);
-  console.log("M5 persists execution facts. Advancing pre-existing unfinished runs after restart remains disabled until M6.");
+  console.log("M5 persists execution facts. See demo:recovery for explicit M6 ownership transfer.");
 } finally { engine.close(); rmSync(directory, { recursive: true, force: true }); }

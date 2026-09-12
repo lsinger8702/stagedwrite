@@ -33,9 +33,16 @@ export class ExecutionRuntime {
     return structuredClone(run);
   }
   restore(run: Run): void { if (!this.runs.has(run.id)) { this.runs.set(run.id, structuredClone(run)); this.restored.add(run.id); } }
+  acceptRecovery(run: Run): void {
+    if (this.poisoned.has(run.id)) throw new Error("RUN_STORAGE_FAILED");
+    if (this.busy.has(run.id)) throw new Error("RUN_BUSY");
+    this.runs.set(run.id, structuredClone(run));
+    this.committed.set(run.id, structuredClone(run));
+    this.restored.delete(run.id);
+  }
   isBusy(): boolean { return this.busy.size > 0; }
   private writable(id: string): void {
-    if (this.restored.has(id)) throw new Error("RESTART_RECOVERY_NOT_ENABLED");
+    if (this.restored.has(id)) throw new Error("RECOVERY_REQUIRED");
     if (this.poisoned.has(id)) throw new Error("RUN_STORAGE_FAILED");
   }
   private checkpoint(run: Run): void {

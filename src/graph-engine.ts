@@ -1,3 +1,4 @@
+import { prepareRecovery, validateRecovery } from "./execution/recovery.js";
 import { continuationReceipts, validateContinuation } from "./execution/continuation.js";
 import { MemoryDraftStore } from "./storage/drafts.js";
 import { SqliteDraftStore } from "./storage/sqlite.js";
@@ -11,7 +12,7 @@ import { GraphPreflight } from "./preflight/check.js";
 import type { GraphRule, GraphCheck } from "./preflight/types.js";
 import { assembleExecutors, executorFor, fixedPlan, type GraphExecutor, type BoundExecutor } from "./execution/graph.js";
 import { definitionDigest, type Json } from "./registry/json.js";
-import type { Run, Step, ExecutionBinding, Adjudication, StopRetry, Clock } from "./types.js";
+import type { Run, Step, ExecutionBinding, Adjudication, StopRetry, RecoveryRequest, Clock } from "./types.js";
 
 interface CommonOptions { definitions: readonly unknown[]; rules?: readonly GraphRule[] }
 export interface DraftOptions extends CommonOptions { mode?: "draft"; executors?: never; storage?: { kind: "sqlite"; path: string } }
@@ -28,6 +29,7 @@ export function createStagedWrite(options: DraftOptions | ExecutableOptions): Dr
 /** Graph engine with explicit draft-only or executable assembly. Both entries share ExecutionRuntime. */
 function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
   const registry = new DefinitionRegistry(options?.definitions);
+  const recoveryClock = options.mode === "executable" ? options.clock : undefined;
   if (options.mode !== undefined && options.mode !== "draft" && options.mode !== "executable") throw new Error("INVALID_MODE");
   if (options.mode !== "executable" && options.executors !== undefined) throw new Error("EXECUTABLE_MODE_REQUIRED");
   const plans = new Map<string, { certificate: string; plan: Step[]; binding: ExecutionBinding; executor: BoundExecutor }>();
@@ -52,8 +54,9 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
   const boundTo = (executor: BoundExecutor, binding: ExecutionBinding | undefined) => {
     if (!executor || !binding || binding.executorId !== executor.id || binding.executorVersion !== executor.version || binding.target !== executor.target) throw new Error("EXECUTOR_BINDING_MISMATCH");
   };
+  const recovering = new Set<string>();
   const runtimeForRun = (id: string): BoundExecutor => {
-    assertOpen(); const known = runExecutors.get(id); if (known) return known;
+    assertOpen(); if (recovering.has(id)) throw new Error("RUN_BUSY"); const known = runExecutors.get(id); if (known) return known;
     const run = snapshotRun(id);
     const executor = executorFor(executors!, store.get(run.draftId)); boundTo(executor, run.binding);
     executor.runtime.restore(run); runExecutors.set(id, executor); return executor;
@@ -77,7 +80,7 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
       return structuredClone(draft);
     },
     listDraftIds(): string[] { return store.ids(); },
-    close(): void { if (checking.size) throw new Error("CHECK_BUSY"); if ([...(executors?.values() ?? [])].some(e => e.runtime.isBusy())) throw new Error("RUN_BUSY"); store.close(); closed = true; },
+    close(): void { if (recovering.size) throw new Error("RUN_BUSY"); if (checking.size) throw new Error("CHECK_BUSY"); if ([...(executors?.values() ?? [])].some(e => e.runtime.isBusy())) throw new Error("RUN_BUSY"); store.close(); closed = true; },
     getDraft(id: string): GraphDraft { return structuredClone(requireDraft(id)); },
     evaluateEdit,
     preview: evaluateEdit,
@@ -145,6 +148,25 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
   const revisions = new Map<string, string>();
   const continuations = new Map<string, string>();
   const execution = {
+    recover(runId: string, input: RecoveryRequest): Run {
+      assertOpen();
+      if (!(store instanceof SqliteDraftStore)) throw new Error("DURABLE_STORAGE_REQUIRED");
+      if (recovering.has(runId) || runExecutors.get(runId)?.runtime.isBusy()) throw new Error("RUN_BUSY");
+      recovering.add(runId);
+      try {
+        const command = validateRecovery(input);
+        const snapshot = store.getRun(runId);
+        const draft = requireDraft(snapshot.draftId);
+        const executor = executorFor(executors!, draft);
+        boundTo(executor, snapshot.binding);
+        if (snapshot.binding?.rulesDigest !== preflight.rulesDigest(draft) || snapshot.binding.definitionDigest !== draft.definitionDigest) throw new Error("RECOVERY_BINDING_MISMATCH");
+        const recovered = store.recover(runId, command, (run, prior, owner) =>
+          prepareRecovery(run, store.getPlan(run.draftId), command, prior, owner, recoveryClock));
+        executor.runtime.acceptRecovery(recovered);
+        runExecutors.set(runId, executor);
+        return structuredClone(recovered);
+      } finally { recovering.delete(runId); }
+    },
     listRunIds(): string[] { assertOpen(); return store instanceof SqliteDraftStore ? store.runIds() : [...runExecutors.keys()].sort(); },
     stopRetry(runId: string, command: StopRetry): Run {
       const executor = runtimeForRun(runId);

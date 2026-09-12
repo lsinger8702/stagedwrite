@@ -37,7 +37,7 @@ test("durable sealing prevents a second instance and draft mode from redispatchi
   const second = open(path); const observer = createStagedWrite({ definitions: [definition], storage: { kind: "sqlite", path } });
   const observed = await second.publish(id, check.certificate!);
   assert.equal(observed.steps[0]?.status, "dispatching"); assert.ok(observed.steps[0]?.resolvedPayload);
-  await assert.rejects(second.resume(observed.id), /RESTART_RECOVERY_NOT_ENABLED/);
+  await assert.rejects(second.resume(observed.id), /RECOVERY_REQUIRED/);
   assert.throws(() => observer.edit(id, 1, [{ op: "node.remove", id: "b" }]), /DRAFT_SEALED/);
   assert.throws(() => observer.preflight(id), /DRAFT_SEALED/);
   assert.throws(() => first.close(), /RUN_BUSY/);
@@ -122,7 +122,7 @@ test("schema version one upgrades without losing draft data and future versions 
   const memory = createStagedWrite({ definitions: [definition] }); const original = memory.create(selector); memory.close();
   db.prepare("INSERT INTO sw_drafts (id,version,body) VALUES (?,?,?)").run(original.id, original.version, JSON.stringify(original));
   db.close(); const engine = open(path); assert.deepEqual(engine.getDraft(original.id), original); const { id } = ready(engine); engine.close();
-  const inspect = new DatabaseSync(path); assert.equal(inspect.prepare("SELECT value FROM sw_meta WHERE key='schema'").get()?.value, "2");
+  const inspect = new DatabaseSync(path); assert.equal(inspect.prepare("SELECT value FROM sw_meta WHERE key='schema'").get()?.value, "3");
   inspect.exec("UPDATE sw_meta SET value='99' WHERE key='schema'"); inspect.close();
   assert.throws(() => open(path), /STORAGE_VERSION_UNSUPPORTED/);
   const restore = new DatabaseSync(path); restore.exec("UPDATE sw_meta SET value='2' WHERE key='schema'"); restore.close();
