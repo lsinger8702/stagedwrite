@@ -1,4 +1,4 @@
-import type { Field, Value, ReusedReceipt } from "../types.js";
+import type { Field, Value, ReusedReceipt, ImportConfirmedRequest } from "../types.js";
 import type { DefinitionSelector } from "../registry/types.js";
 
 export interface GraphNode { id: string; nodeType: string; fields: Record<string, Field> }
@@ -7,10 +7,12 @@ export interface GraphDraft extends DefinitionSelector {
   id: string;
   version: number;
   definitionDigest: string;
-  /** Source failed run for a revision or partial continuation. */
+  /** Source run for a revision, partial continuation or confirmed-object import. */
   sourceRunId?: string;
   /** Engine-owned receipts; graph edits cannot supply or alter these. */
   continuation?: { sourceRunId: string; receipts: Record<string, ReusedReceipt> };
+  /** Confirmed source receipts for independent work; supplied only by the engine. */
+  imported?: { sourceRunId: string; receipts: Record<string, ReusedReceipt>; command: ImportConfirmedRequest };
   nodes: Record<string, GraphNode>;
   edges: Record<string, GraphEdge>;
   tombstones: { nodes: string[]; edges: string[] };

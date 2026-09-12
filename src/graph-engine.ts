@@ -1,3 +1,4 @@
+import { confirmedDraft, validateImportConfirmed } from "./execution/import-confirmed.js";
 import { prepareRecovery, validateRecovery } from "./execution/recovery.js";
 import { continuationReceipts, validateContinuation } from "./execution/continuation.js";
 import { MemoryDraftStore } from "./storage/drafts.js";
@@ -12,7 +13,7 @@ import { GraphPreflight } from "./preflight/check.js";
 import type { GraphRule, GraphCheck } from "./preflight/types.js";
 import { assembleExecutors, executorFor, fixedPlan, type GraphExecutor, type BoundExecutor } from "./execution/graph.js";
 import { definitionDigest, type Json } from "./registry/json.js";
-import type { Run, Step, ExecutionBinding, Adjudication, StopRetry, RecoveryRequest, Clock } from "./types.js";
+import type { Run, Step, ExecutionBinding, Adjudication, StopRetry, RecoveryRequest, ImportConfirmedRequest, Clock } from "./types.js";
 
 interface CommonOptions { definitions: readonly unknown[]; rules?: readonly GraphRule[] }
 export interface DraftOptions extends CommonOptions { mode?: "draft"; executors?: never; storage?: { kind: "sqlite"; path: string } }
@@ -108,8 +109,9 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
             const executor = executorFor(executors, draft);
             try {
               const plan = fixedPlan(executor, draft);
-              if (draft.continuation) {
-                const source = snapshotRun(draft.continuation.sourceRunId);
+              const reuse = draft.continuation ?? draft.imported;
+              if (reuse) {
+                const source = snapshotRun(reuse.sourceRunId);
                 if (source.binding?.executorId !== executor.id || source.binding.executorVersion !== executor.version ||
                     source.binding.target !== executor.target || source.binding.definitionDigest !== draft.definitionDigest) throw new Error("CONTINUATION_BINDING_MISMATCH");
                 validateContinuation(plan, draft, source, requireDraft(source.draftId));
@@ -117,6 +119,7 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
               const binding: ExecutionBinding = { checkId: result.checkId, definitionDigest: result.definitionDigest,
                 rulesDigest: result.rulesDigest, executorId: executor.id, executorVersion: executor.version,
                 target: executor.target, planDigest: definitionDigest(plan as unknown as Json) };
+              if (draft.imported) binding.importDigest = definitionDigest(draft.imported as unknown as Json);
               if (draft.continuation) binding.continuationDigest = definitionDigest(draft.continuation as unknown as Json);
               result.certificate = randomUUID();
               result.execution = binding;
@@ -147,7 +150,27 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
   };
   const revisions = new Map<string, string>();
   const continuations = new Map<string, string>();
+  const imports = new Map<string, { command: ImportConfirmedRequest; draftId: string }>();
   const execution = {
+    importConfirmed(runId: string, input: ImportConfirmedRequest): GraphDraft {
+      assertOpen();
+      const command = validateImportConfirmed(input);
+      const source = snapshotRun(runId);
+      const original = requireDraft(source.draftId);
+      const executor = executorFor(executors!, original);
+      boundTo(executor, source.binding);
+      const key = JSON.stringify([runId, command.requestId]);
+      const prior = imports.get(key);
+      if (prior) {
+        if (definitionDigest(prior.command as unknown as Json) !== definitionDigest(command as unknown as Json)) throw new Error("IMPORT_CONFLICT");
+        return base.getDraft(prior.draftId);
+      }
+      const create = () => confirmedDraft(source, original, command);
+      if (store instanceof SqliteDraftStore) return store.importConfirmed(runId, command, create);
+      const draft = create(); store.create(draft);
+      imports.set(key, { command, draftId: draft.id });
+      return structuredClone(draft);
+    },
     recover(runId: string, input: RecoveryRequest): Run {
       assertOpen();
       if (!(store instanceof SqliteDraftStore)) throw new Error("DURABLE_STORAGE_REQUIRED");
@@ -179,7 +202,8 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
       const receipts = continuationReceipts(run, original);
       const existing = continuations.get(runId);
       if (existing) return base.getDraft(existing);
-      const draft: GraphDraft = { ...structuredClone(original), id: randomUUID(), version: 0,
+      const { imported: _imported, ...continued } = structuredClone(original);
+      const draft: GraphDraft = { ...continued, id: randomUUID(), version: 0,
         sourceRunId: runId, continuation: { sourceRunId: runId, receipts } };
       if (store instanceof SqliteDraftStore) return structuredClone(store.derive(draft, runId, "continue"));
       store.create(draft);
@@ -217,7 +241,7 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
       let run: Run;
       checking.add(id);
       try {
-        run = checked.executor.runtime.create(id, draft.version, checked.plan, checked.binding, draft.continuation?.receipts);
+        run = checked.executor.runtime.create(id, draft.version, checked.plan, checked.binding, draft.continuation?.receipts ?? draft.imported?.receipts);
         if (store instanceof SqliteDraftStore) {
           const actualId = store.publishRun(run, certificate);
           if (actualId !== run.id) return store.getRun(actualId);

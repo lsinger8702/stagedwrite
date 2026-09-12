@@ -10,7 +10,7 @@
 | 草稿和墓碑 | 永久保留；派生保留原墓碑 | 保持已使用 ID 不复用；不悄悄改变派生身份语义 |
 | 检查与固定计划 | 仅当前检查／计划；编辑或新预检撤销旧资格 | 历史检查查询未实现，执行绑定保留在 run 中 |
 | run、事件、回执 | 永久保留，包括 published/failed/closed | run 同时承担发布封存、效果证据和恢复记录 |
-| 派生关系 | 永久保留 | 保持幂等派生和逐跳来源追踪 |
+| 派生关系和接入命令 | 永久保留 | 保持幂等派生和逐跳来源追踪 |
 | 当前被 run 引用的 session | 保留，包括终态 run 的 owner | 保留归属证据，当前不按状态做进一步裁剪 |
 | released=1 且未被 run 引用的 session | 自动删除 | 已关闭且不承担当前接管依据 |
 | 未释放且未被引用的 session | 保留 | 可能属于仍存活连接；崩溃孤儿回收未实现 |
@@ -19,7 +19,7 @@
 接管只有在原 owner 的最后一条 run 转移后才允许删除其已释放 session。
 旧 owner 的标识仍保存在 recovery_claimed 事件中；未复制会话行的 PID/host 历史，不承诺完整主机取证日志。
 清理失败回滚整个操作；关闭失败时连接仍打开，接管失败时旧归属和事件保持不变。
-sw_runs.owner 上建立索引支持引用检查。schema 仍为 3；这是兼容索引和生命周期行为变更。
+sw_runs.owner 上建立索引支持引用检查。会话清理本身是兼容索引和生命周期行为变更；当前 schema=4 由确认回执接入引入，见 015。
 
 ## 容量边界
 
@@ -34,7 +34,7 @@ DELETE 也不保证立即缩小 SQLite 文件；文件压缩、备份和文件�
 
 ## 后续归档要求
 
-通用 GC 必须考虑 sw_derivations、draft.sourceRunId、continuation.receipts、step.reusedFrom 和恢复事件的来源链。
+通用 GC 必须考虑 sw_derivations、sw_imports、draft.imported、draft.sourceRunId、continuation.receipts、step.reusedFrom 和恢复事件的来源链。
 不能只删除终态 run：这会丢失发布封存、幂等派生及已生效证据。
 墓碑压缩须保留身份不可复用的保证，或引入明确的新身份命名空间；不能悄悄清空继承列表。
 任何归档接口需先定义查询语义、恢复依赖、备份和删除确认；本轮不新增删除 API。

@@ -104,7 +104,7 @@ export function evaluateGraphEdit(registry: DefinitionRegistry, draft: GraphDraf
     }
   }
   if (issues.length) throw new GraphEditError("INVALID_GRAPH", undefined, undefined, issues);
-  for (const receipt of Object.values(draft.continuation?.receipts ?? {})) {
+  for (const receipt of Object.values(draft.continuation?.receipts ?? draft.imported?.receipts ?? {})) {
     if (!candidate.nodes[receipt.nodeId] || definitionDigest(candidate.nodes[receipt.nodeId] as unknown as Json) !==
         definitionDigest(draft.nodes[receipt.nodeId] as unknown as Json)) throw new GraphEditError("REUSED_NODE_IMMUTABLE");
   }

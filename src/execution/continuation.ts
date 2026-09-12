@@ -26,13 +26,13 @@ export function continuationReceipts(run: Run, draft: GraphDraft): Record<string
 }
 export function validateContinuation(plan: Step[], draft: GraphDraft, source: Run, original: GraphDraft): void {
   requireCreateMapping(plan, draft);
-  for (const [id, receipt] of Object.entries(draft.continuation!.receipts)) {
+  for (const [id, receipt] of Object.entries((draft.continuation ?? draft.imported)!.receipts)) {
     const old = source.steps.find(s => s.id === id)!;
     const next = plan.find(s => s.id === id);
     if (!next || digest(intent(old)) !== digest(intent(next)) ||
         digest(original.nodes[old.effect!.nodeId]) !== digest(draft.nodes[old.effect!.nodeId])) throw new Error("REUSED_INTENT_CHANGED");
     // Every dependency of a reused step must itself be reused, with the same result.
-    if ((next.dependsOn ?? []).some(dep => !Object.hasOwn(draft.continuation!.receipts, dep))) throw new Error("REUSED_DEPENDENCY_CHANGED");
+    if ((next.dependsOn ?? []).some(dep => !Object.hasOwn((draft.continuation ?? draft.imported)!.receipts, dep))) throw new Error("REUSED_DEPENDENCY_CHANGED");
     if (receipt.remoteRef !== old.remoteRef) throw new Error("RECEIPT_MISMATCH");
   }
 }

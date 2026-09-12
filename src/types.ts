@@ -93,6 +93,15 @@ export interface StopRetry {
 }
 /** Explicit ownership transfer; does not authorize a new remote effect. */
 export interface RecoveryRequest extends StopRetry {}
+/** Trusted caller confirms this is independent work, not a retry of unresolved effects. */
+export interface ImportConfirmedRequest {
+  requestId: string;
+  expectedSequence: number;
+  actor: string;
+  evidence: string;
+  purpose: string;
+  independentWork: true;
+}
 export interface Event {
   sequence: number;
   stepId: string;
@@ -114,6 +123,7 @@ export interface ExecutionBinding {
   target: string;
   planDigest: string;
   continuationDigest?: string;
+  importDigest?: string;
 }
 export interface Run {
   binding?: ExecutionBinding;

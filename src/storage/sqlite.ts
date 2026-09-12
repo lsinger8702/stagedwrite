@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import { definitionDigest, type Json } from "../registry/json.js";
-import type { RecoveryRequest, Run } from "../types.js";
+import type { RecoveryRequest, ImportConfirmedRequest, Run } from "../types.js";
 import { createRequire } from "node:module";
 import type { DatabaseSync as Database } from "node:sqlite";
 import type { GraphDraft } from "../graph/types.js";
@@ -25,7 +25,7 @@ export class SqliteDraftStore implements DraftStore {
       this.transaction(() => {
         this.#db.exec("CREATE TABLE IF NOT EXISTS sw_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;");
         const version = this.#db.prepare("SELECT value FROM sw_meta WHERE key = 'schema'").get();
-        if (version && !["1", "2", "3"].includes(version.value as string)) throw new Error("STORAGE_VERSION_UNSUPPORTED");
+        if (version && !["1", "2", "3", "4"].includes(version.value as string)) throw new Error("STORAGE_VERSION_UNSUPPORTED");
         this.#db.exec(`CREATE TABLE IF NOT EXISTS sw_definitions (
           type TEXT NOT NULL, version TEXT NOT NULL, digest TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(type, version)) STRICT;
           CREATE TABLE IF NOT EXISTS sw_drafts (
@@ -33,11 +33,12 @@ export class SqliteDraftStore implements DraftStore {
         this.#db.exec(`CREATE TABLE IF NOT EXISTS sw_plans (draft_id TEXT PRIMARY KEY, body TEXT NOT NULL) STRICT;
           CREATE TABLE IF NOT EXISTS sw_runs (id TEXT PRIMARY KEY, draft_id TEXT NOT NULL UNIQUE, owner TEXT NOT NULL, body TEXT NOT NULL) STRICT;
           CREATE TABLE IF NOT EXISTS sw_derivations (source_run TEXT NOT NULL, kind TEXT NOT NULL, draft_id TEXT NOT NULL UNIQUE, PRIMARY KEY(source_run, kind)) STRICT;`);
+        this.#db.exec("CREATE TABLE IF NOT EXISTS sw_imports (source_run TEXT NOT NULL, request_id TEXT NOT NULL, command TEXT NOT NULL, draft_id TEXT NOT NULL UNIQUE, PRIMARY KEY(source_run, request_id)) STRICT;");
         this.#db.exec("CREATE TABLE IF NOT EXISTS sw_sessions (owner TEXT PRIMARY KEY, pid INTEGER NOT NULL, host TEXT NOT NULL, released INTEGER NOT NULL) STRICT;");
         this.#db.exec("CREATE INDEX IF NOT EXISTS sw_runs_owner ON sw_runs(owner);");
         this.pruneReleasedSessions();
         this.#db.prepare("INSERT INTO sw_sessions VALUES (?, ?, ?, 0)").run(this.#owner, process.pid, hostname());
-        this.#db.prepare("INSERT OR REPLACE INTO sw_meta VALUES ('schema', '3')").run();
+        this.#db.prepare("INSERT OR REPLACE INTO sw_meta VALUES ('schema', '4')").run();
         for (const selector of registry.selectors()) {
           const { definition, digest } = registry.getDefinition(selector);
           const prior = this.#db.prepare("SELECT digest FROM sw_definitions WHERE type = ? AND version = ?").get(selector.type, selector.typeVersion);
@@ -151,6 +152,19 @@ export class SqliteDraftStore implements DraftStore {
       .run(this.#owner, JSON.stringify(recovered), run.id, prior);
     this.pruneReleasedSessions();
     return recovered;
+  }
+  importConfirmed(sourceRun: string, command: ImportConfirmedRequest, create: () => GraphDraft): GraphDraft {
+    return this.transaction(() => {
+      const prior = this.#db.prepare("SELECT command, draft_id FROM sw_imports WHERE source_run=? AND request_id=?").get(sourceRun, command.requestId);
+      if (prior) {
+        if (definitionDigest(JSON.parse(prior.command as string) as Json) !== definitionDigest(command as unknown as Json)) throw new Error("IMPORT_CONFLICT");
+        return this.get(prior.draft_id as string);
+      }
+      const draft = create();
+      this.create(draft);
+      this.#db.prepare("INSERT INTO sw_imports VALUES (?, ?, ?, ?)").run(sourceRun, command.requestId, JSON.stringify(command), draft.id);
+      return draft;
+    });
   }
   derive(draft: GraphDraft, sourceRun: string, kind: "revise" | "continue"): GraphDraft {
     return this.transaction(() => {

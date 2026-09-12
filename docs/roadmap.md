@@ -27,7 +27,7 @@
 
 ## 当前下一步：M7 外部试用与发布准备
 
-M1–M6 已完成，共 134 项测试。SQLite 保存图、检查、固定计划、执行记录和派生关系；同主机在旧实例关闭或进程退出后，通过 recover 显式接管，再核对并继续。详见 [012](design/012-restart-recovery.md)。运行 `npm run demo:registry`、`npm run demo:graph`、`npm run demo:preflight`。
+M1–M6 已完成，共 144 项测试。SQLite 保存图、检查、固定计划、执行记录和派生关系；同主机在旧实例关闭或进程退出后，通过 recover 显式接管，再核对并继续。详见 [012](design/012-restart-recovery.md)。运行 `npm run demo:registry`、`npm run demo:graph`、`npm run demo:preflight`。
 图执行桥已完成：显式执行器装配、固定图计划、发布和进程内恢复；默认草稿模式仍无发布资格。执行持久化已完成，同主机跨进程恢复已通过故障注入；跨主机接管不在当前范围。
 
 Stripe test Customer 实验已实现，[005](design/005-stripe-adapter-experiment.md) 记录契约和运行方法。离线测试通过，当前未配置测试密钥，真实账号验证仍未完成。M4 草稿存储已完成，不能把该实验标成已经通过真实联调。
@@ -71,7 +71,8 @@ F4 墓碑容量、F5 性能基准和 S6 内部异常恢复仍待处理；F6 保�
 - [x] [保留政策](design/014-retention.md)：执行证据和来源链保留，仅清理无引用且已释放的会话。
 - [x] 会话清理覆盖多 run 转移、关闭及接管事务回滚，共新增 3 项测试。
 - [x] [已有对象接入的设计边界](design/015-existing-objects.md)。
-- [ ] 已有对象接入的完整数据模型、接口及实现；当前提案不代表能力已交付。
+- [x] 首批 importConfirmed：确认回执接入独立工作，持久化幂等、字段锁定、未知节点排除、schema=4。
+- [ ] 任意外部对象导入、当前存在性核验与跨草稿意图去重。
 - [ ] 容量／预检性能基准与适用规模声明。
 - [ ] 发布前旧兼容入口去留决定。
 

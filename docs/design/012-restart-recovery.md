@@ -1,6 +1,6 @@
 # M6：同主机显式执行恢复
 
-状态：已实现。SQLite schema=3。`recover(runId, { requestId, expectedSequence, actor, reason })` 同步接管，不调用执行器；调用方随后显式 `resume`、`adjudicate` 或 `stopRetry`。
+状态：已实现。本文记录 schema=3 的恢复设计；当前 schema=4 增加确认回执接入，见 [015](015-existing-objects.md)。`recover(runId, { requestId, expectedSequence, actor, reason })` 同步接管，不调用执行器；调用方随后显式 `resume`、`adjudicate` 或 `stopRetry`。
 
 ## 归属转移
 

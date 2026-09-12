@@ -80,8 +80,8 @@ Adapters must establish that a request cannot still complete before reporting `n
 Without a successful claim, a new engine returns `RECOVERY_REQUIRED` for nonterminal mutations. Terminal runs remain
 readable, and failed runs can derive revisions/continuations under their usual evidence checks.
 A checkpoint failure stops local advancement (`RUN_STORAGE_FAILED`); close and reopen before recovery.
-`close()` refuses while a check, recovery or adapter call is active. Schema versions 1/2 upgrade transactionally to 3;
-legacy runs without owner-session evidence remain read-only (`OWNER_EVIDENCE_REQUIRED`). Old binaries reject schema 3.
+`close()` refuses while a check, recovery or adapter call is active. Schema versions 1/2/3 upgrade transactionally to 4;
+legacy runs without owner-session evidence remain read-only (`OWNER_EVIDENCE_REQUIRED`). Old binaries reject schema 4.
 The database is trusted internal state, not an import format for arbitrary run JSON.
 
 Run `npm run demo:durable` for stored plans and partial continuation, or `npm run demo:recovery` for a real child-process
@@ -95,7 +95,28 @@ Only released sessions with no current run ownership are pruned, during open, su
 Sessions referenced by any run, live sessions and unreleased orphan sessions remain. Cleanup preserves the
 owner identifiers in recovery events and rolls back with its enclosing transaction on failure.
 See [retention policy](docs/design/014-retention.md) and [review decisions](docs/design/013-review-decisions.md).
-Existing-object import remains a [design proposal](docs/design/015-existing-objects.md), not an available API.
+## Reuse confirmed objects in independent work
+
+`importConfirmed` creates a new draft from confirmed `applied/reused` receipts in a terminal source run,
+including a `closed` run. It copies only confirmed nodes and edges between them. Excluded IDs remain reserved.
+
+```ts
+const source = engine.getRun(sourceRunId);
+const draft = engine.importConfirmed(source.id, {
+  requestId: "follow-up-1", expectedSequence: source.events.length,
+  actor: "operator", evidence: "receipt-reference",
+  purpose: "Independent follow-up work", independentWork: true
+});
+// Add new nodes, preflight, then publish. Imported objects are reused without apply.
+```
+
+Imported nodes are immutable; the planner must preserve their original mapped create intent. Target and executor
+identity must match. The command and source receipts survive reopening; repeating the same request returns the same draft.
+The original unknown steps remain unresolved and are never copied as new work. **The caller must ensure new work is
+independent:** the library cannot detect the same unknown intent disguised under another node ID or request ID.
+This reads stored evidence without contacting the remote service; it does not verify that an object still exists.
+Arbitrary external references and semantic deduplication across drafts are unsupported.
+See [the interface contract](docs/design/015-existing-objects.md) and run `npm run demo:import`.
 
 ## Define and edit a graph
 
@@ -296,7 +317,7 @@ Proven Customer request refusals stop as failed. A documented limiter response c
 
 - Default mode is in memory. SQLite supports explicit same-host recovery; remote outcomes still depend on adapter evidence and idempotency.
 - Trusted in-process code, one engine instance. No multi-worker fencing, tenant isolation or approval enforcement.
-- Scalar graph fields; no nested JSON, arrays, inheritance, restore/import or automatic topology constraints.
+- Scalar graph fields; no nested JSON, arrays, inheritance, arbitrary graph restore/import or automatic topology constraints.
 - Rules and plans are pure/synchronous by contract; their code is not hashed. Implementers must version changed behavior.
 - No durable retry limit, compensation, production billing integration or MCP server.
 - Stripe recovery now requires version-2 context metadata; old attempt-only objects are not automatically claimed.

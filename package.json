@@ -31,7 +31,8 @@
     "demo:execution": "npm run build && node dist/examples/graph-execution.js",
     "demo:storage": "npm run build && node dist/examples/storage.js",
     "demo:durable": "npm run build && node dist/examples/durable-execution.js",
-    "demo:recovery": "npm run build && node dist/examples/restart-recovery.js"
+    "demo:recovery": "npm run build && node dist/examples/restart-recovery.js",
+    "demo:import": "npm run build && node dist/examples/import-confirmed.js"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
