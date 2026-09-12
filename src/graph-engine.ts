@@ -8,7 +8,7 @@ import { GraphPreflight } from "./preflight/check.js";
 import type { GraphRule, GraphCheck } from "./preflight/types.js";
 import { assembleExecutors, executorFor, fixedPlan, type GraphExecutor, type BoundExecutor } from "./execution/graph.js";
 import { definitionDigest, type Json } from "./registry/json.js";
-import type { Run, Step, ExecutionBinding } from "./types.js";
+import type { Run, Step, ExecutionBinding, Adjudication } from "./types.js";
 
 interface CommonOptions { definitions: readonly unknown[]; rules?: readonly GraphRule[] }
 export interface DraftOptions extends CommonOptions { mode?: "draft"; executors?: never }
@@ -109,6 +109,11 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
   };
   const revisions = new Map<string, string>();
   const execution = {
+    adjudicate(runId: string, stepId: string, command: Adjudication): Run {
+      const executor = runExecutors.get(runId);
+      if (!executor) throw new Error("RUN_NOT_FOUND");
+      return executor.runtime.adjudicate(runId, stepId, command);
+    },
     /** Copy intent after a terminal, proven zero-effect failure; retain the sealed source. */
     revise(runId: string): GraphDraft {
       const executor = runExecutors.get(runId);

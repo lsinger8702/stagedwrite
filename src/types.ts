@@ -55,10 +55,27 @@ export interface ExecutionStep extends Step {
   resolvedPayload?: Record<string, Value>;
   remoteRef?: string;
 }
+/** Caller-verified evidence, not evidence independently verified by this library. */
+export type ManualDecision = { kind: "applied"; remoteRef: string }
+  | { kind: "no_effect"; next: "retry" | "stop" }
+  | { kind: "close_unresolved" };
+export interface Adjudication {
+  /** Unique command identity within this run, for safe resubmission. */
+  requestId: string;
+  /** Last observed event sequence (not the draft version). */
+  expectedSequence: number;
+  actor: string;
+  /** Reference to externally retained verification evidence. */
+  evidence: string;
+  note: string;
+  decision: ManualDecision;
+}
 export interface Event {
   sequence: number;
   stepId: string;
-  kind: "dispatching" | "applied" | "unknown" | "not_applied" | "no_effect" | "reconciling" | "skipped";
+  kind: "dispatching" | "applied" | "unknown" | "not_applied" | "no_effect" | "reconciling" | "skipped" | "adjudicated";
+  adjudication?: Adjudication;
+  recordedAt?: string;
   reason?: string;
   retryable?: boolean;
 }
@@ -76,7 +93,7 @@ export interface Run {
   id: string;
   draftId: string;
   version: number;
-  state: "running" | "unknown" | "blocked" | "failed" | "published";
+  state: "running" | "unknown" | "blocked" | "failed" | "published" | "closed";
   steps: ExecutionStep[];
   events: Event[];
 }

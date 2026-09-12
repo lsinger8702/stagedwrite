@@ -115,6 +115,39 @@ The legacy `StagedWrite` class is deprecated; use `createStagedWrite` for new in
 
 Callers own retry budgets, backoff and scheduling. The engine cannot make a remote honor idempotency keys. No exactly-once claim.
 
+## Manual reconciliation
+
+When automatic recovery cannot establish an outcome, a trusted host can call:
+
+```ts
+const observed = engine.getRun(runId);
+engine.adjudicate(runId, stepId, {
+  requestId: "review-123",
+  expectedSequence: observed.events.length,
+  actor: "operator-id",
+  evidence: "case-123/verified-receipt",
+  note: "Verified this exact request and target",
+  decision: { kind: "applied", remoteRef: "remote-object-id" }
+});
+await engine.resume(runId); // Separate, explicit dispatch permission from the caller.
+```
+
+`applied` records the receipt and pauses as `blocked`; resume skips that effect and resolves dependent inputs.
+`no_effect` requires proof that the original request did nothing **and cannot later complete**. Choose
+`next: "retry"` to pause for an explicit same-key retry, or `next: "stop"` to end as failed. Only a fully
+zero-effect failure permits `revise`. An empty search alone is not proof.
+`close_unresolved` ends the run as `closed`, retains the unknown step and prevents further execution or zero-effect revision.
+
+Adjudication never calls the adapter. Only the current unknown step is eligible, and an in-flight run rejects it.
+The expected event sequence rejects stale decisions. Repeating the same request ID and command returns the current run;
+reusing the ID with different content fails. Independent `adjudicated` events retain the actor, evidence, note, decision and timestamp.
+The host must authenticate/authorize the actor and verify evidence against the original request and executor target;
+these strings are audit assertions, not authentication or automatic proof. Run snapshots expose payloads and evidence:
+keep secrets out of them and enforce access control in the host. Storage is still in memory.
+
+Run `npm run demo:manual` for an offline unsupported-recovery → manual receipt → explicit resume example.
+Partial-success draft derivation remains pending; adjudication does not revise a failed step's business intent.
+
 ## Stripe test Customer experiment
 
 `StripeTestCustomerAdapter({secretKey,accountId}).graphExecutor(selector)` connects a single customer graph to Stripe. `npm run demo:stripe` now uses the graph engine. It verifies the credential's account, creates only a test Customer with synthetic description/metadata, and does not request payments.

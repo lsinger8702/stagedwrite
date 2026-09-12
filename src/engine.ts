@@ -2,7 +2,7 @@ import { validatePlan } from "./execution/plan.js";
 import { randomUUID } from "node:crypto";
 import { edited } from "./draft.js";
 import { ExecutionRuntime } from "./execution/runtime.js";
-import type { Adapter, Check, Draft, Op, Rule, Run, Step } from "./types.js";
+import type { Adapter, Check, Draft, Op, Rule, Run, Step, Adjudication } from "./types.js";
 
 /** @deprecated Use createStagedWrite for graph drafts.
  * In-memory, single-process prototype. No crash durability or external authorization. */
@@ -63,6 +63,9 @@ export class StagedWrite {
     return this.execution.resume(run.id);
   }
 
+  adjudicate(runId: string, stepId: string, command: Adjudication): Run {
+    return this.execution.adjudicate(runId, stepId, command);
+  }
   async resume(runId: string): Promise<Run> { return this.execution.resume(runId); }
   getRun(id: string): Run { return this.execution.getRun(id); }
 

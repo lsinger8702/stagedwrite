@@ -1,6 +1,8 @@
+import { validateAdjudication } from "./adjudication.js";
+import { definitionDigest, type Json } from "../registry/json.js";
 import { validatePlan } from "./plan.js";
 import { randomUUID } from "node:crypto";
-import type { Adapter, ApplyOutcome, ReconcileOutcome, Event, Run, Step } from "../types.js";
+import type { Adapter, ApplyOutcome, ReconcileOutcome, Event, Run, Step, Adjudication } from "../types.js";
 
 /** Shared in-memory execution state machine for legacy and graph entry points. */
 export class ExecutionRuntime {
@@ -17,9 +19,40 @@ export class ExecutionRuntime {
   }
   getRun(id: string): Run { return structuredClone(this.requireRun(id)); }
   resume(id: string): Promise<Run> { return this.advance(this.requireRun(id)); }
+  /** Records a trusted caller's decision without making any adapter call. */
+  adjudicate(id: string, stepId: string, input: Adjudication): Run {
+    const run = this.requireRun(id);
+    if (this.busy.has(id)) throw new Error("RUN_BUSY");
+    const command = validateAdjudication(input);
+    const previous = run.events.find(e => e.adjudication?.requestId === command.requestId);
+    if (previous) {
+      if (previous.stepId !== stepId || definitionDigest(previous.adjudication as unknown as Json) !== definitionDigest(command as unknown as Json)) throw new Error("ADJUDICATION_CONFLICT");
+      return structuredClone(run);
+    }
+    if (command.expectedSequence !== run.events.length) throw new Error("STALE_RUN");
+    const step = run.steps.find(s => s.id === stepId);
+    if (run.state !== "unknown" || step?.status !== "unknown") throw new Error("UNRESOLVED_STEP_REQUIRED");
+    // No await/callback between CAS, event append and state transition.
+    run.events.push({ sequence: run.events.length + 1, stepId, kind: "adjudicated", adjudication: command, recordedAt: new Date().toISOString() });
+    const decision = command.decision;
+    if (decision.kind === "applied") {
+      step.status = "applied";
+      step.remoteRef = decision.remoteRef;
+      run.state = "blocked";
+    } else if (decision.kind === "no_effect") {
+      step.status = decision.next === "retry" ? "ready" : "failed";
+      run.state = decision.next === "retry" ? "blocked" : "failed";
+      if (decision.next === "stop") this.stopRemaining(run, step.id);
+    } else {
+      // Administrative closure is not evidence of no effects. Keep the step unknown.
+      run.state = "closed";
+      this.stopRemaining(run, step.id, false);
+    }
+    return structuredClone(run);
+  }
   private async advance(run: Run): Promise<Run> {
     if (this.busy.has(run.id)) throw new Error("RUN_BUSY");
-    if (run.state === "published" || run.state === "failed") return structuredClone(run);
+    if (run.state === "published" || run.state === "failed" || run.state === "closed") return structuredClone(run);
     this.busy.add(run.id);
     run.state = "running";
     try {
@@ -105,8 +138,8 @@ export class ExecutionRuntime {
     }
   }
 
-  private stopRemaining(run: Run, failedId: string): void {
-    const unreachable = new Set([failedId]);
+  private stopRemaining(run: Run, failedId: string, dependencyFailed = true): void {
+    const unreachable = new Set(dependencyFailed ? [failedId] : []);
     for (const step of run.steps) {
       if (step.status !== "ready") continue;
       const dependency = step.dependsOn?.find(id => unreachable.has(id));

@@ -32,3 +32,5 @@ StagedWrite 的主体是可嵌入业务程序的 TypeScript 库。开发者提�
 Stripe 实验：[005：测试 Customer 与恢复验证](design/005-stripe-adapter-experiment.md)，代码/离线契约完成，真实账号联调待验证。
 
 图执行桥：[006：固定计划、发布与恢复](design/006-graph-execution.md)，已实现进程内闭环。
+
+- [人工核对与不确定执行的关闭](design/007-manual-reconciliation.md)
