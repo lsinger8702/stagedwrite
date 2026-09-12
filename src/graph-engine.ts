@@ -9,11 +9,11 @@ import { GraphPreflight } from "./preflight/check.js";
 import type { GraphRule, GraphCheck } from "./preflight/types.js";
 import { assembleExecutors, executorFor, fixedPlan, type GraphExecutor, type BoundExecutor } from "./execution/graph.js";
 import { definitionDigest, type Json } from "./registry/json.js";
-import type { Run, Step, ExecutionBinding, Adjudication } from "./types.js";
+import type { Run, Step, ExecutionBinding, Adjudication, StopRetry, Clock } from "./types.js";
 
 interface CommonOptions { definitions: readonly unknown[]; rules?: readonly GraphRule[] }
 export interface DraftOptions extends CommonOptions { mode?: "draft"; executors?: never }
-export interface ExecutableOptions extends CommonOptions { mode: "executable"; executors: readonly GraphExecutor[] }
+export interface ExecutableOptions extends CommonOptions { mode: "executable"; executors: readonly GraphExecutor[]; clock?: Clock }
 export type DraftEngine = ReturnType<typeof assembleGraphEngine>["base"];
 export type ExecutableGraphEngine = DraftEngine & ReturnType<typeof assembleGraphEngine>["execution"];
 export function createStagedWrite(options: DraftOptions): DraftEngine;
@@ -28,7 +28,7 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
   const registry = new DefinitionRegistry(options?.definitions);
   if (options.mode !== undefined && options.mode !== "draft" && options.mode !== "executable") throw new Error("INVALID_MODE");
   if (options.mode !== "executable" && options.executors !== undefined) throw new Error("EXECUTABLE_MODE_REQUIRED");
-  const executors = options.mode === "executable" ? assembleExecutors(registry, options.executors) : undefined;
+  const executors = options.mode === "executable" ? assembleExecutors(registry, options.executors, options.clock) : undefined;
   const plans = new Map<string, { certificate: string; plan: Step[]; binding: ExecutionBinding; executor: BoundExecutor }>();
   const runByDraft = new Map<string, string>();
   const runExecutors = new Map<string, BoundExecutor>();
@@ -118,6 +118,11 @@ function assembleGraphEngine(options: DraftOptions | ExecutableOptions) {
   const revisions = new Map<string, string>();
   const continuations = new Map<string, string>();
   const execution = {
+    stopRetry(runId: string, command: StopRetry): Run {
+      const executor = runExecutors.get(runId);
+      if (!executor) throw new Error("RUN_NOT_FOUND");
+      return executor.runtime.stopRetry(runId, command);
+    },
     /** Continue a terminal partial failure with mapped, immutable successful creates. */
     continueFrom(runId: string): GraphDraft {
       const executor = runExecutors.get(runId);

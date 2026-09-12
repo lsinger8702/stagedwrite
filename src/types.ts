@@ -80,13 +80,22 @@ export interface Adjudication {
   note: string;
   decision: ManualDecision;
 }
+/** Trusted synchronous epoch-millisecond clock; sequence remains the ordering authority. */
+export type Clock = () => number;
+export interface StopRetry {
+  requestId: string;
+  expectedSequence: number;
+  actor: string;
+  reason: string;
+}
 export interface Event {
   sequence: number;
   stepId: string;
-  kind: "dispatching" | "applied" | "unknown" | "not_applied" | "no_effect" | "reconciling" | "skipped" | "adjudicated" | "reused";
+  kind: "dispatching" | "applied" | "unknown" | "not_applied" | "no_effect" | "reconciling" | "skipped" | "adjudicated" | "reused" | "retry_stopped";
+  stopRetry?: StopRetry;
   reusedFrom?: ReusedReceipt;
   adjudication?: Adjudication;
-  recordedAt?: string;
+  recordedAt: string;
   reason?: string;
   retryable?: boolean;
 }

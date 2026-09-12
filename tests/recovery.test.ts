@@ -5,7 +5,7 @@ import type { Adapter, ApplyOutcome, ReconcileOutcome, Step } from "../src/index
 import { subscriptionRule } from "../src/adapters/mock.js";
 
 function ready(adapter: Adapter) {
-  const engine = new StagedWrite(adapter, [subscriptionRule]);
+  const engine = new StagedWrite(adapter, [subscriptionRule], { clock: () => 0 });
   let draft = engine.create();
   draft = engine.edit(draft.id, 0, [
     { op: "set", path: "/seats", value: 2 },
@@ -34,7 +34,7 @@ test("a retryable refusal leaves the run resumable under the original key", asyn
 
   const blocked = await engine.publish(draft.id, certificate);
   assert.equal(blocked.state, "blocked");
-  assert.deepEqual(blocked.events.at(-1), { sequence: 4, stepId: "second", kind: "not_applied", reason: "429 rate limited", retryable: true });
+  assert.deepEqual(blocked.events.at(-1), { recordedAt: "1970-01-01T00:00:00.000Z", sequence: 4, stepId: "second", kind: "not_applied", reason: "429 rate limited", retryable: true });
   assert.equal((await engine.publish(draft.id, certificate)).state, "blocked");
   assert.equal(keys.length, 1);
   assert.deepEqual(blocked.steps.map(s => s.status), ["applied", "ready"]);

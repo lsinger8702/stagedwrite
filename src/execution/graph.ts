@@ -1,7 +1,7 @@
 import type { GraphDraft } from "../graph/types.js";
 import type { DefinitionSelector } from "../registry/types.js";
 import type { DefinitionRegistry } from "../registry/registry.js";
-import type { Step, Adapter } from "../types.js";
+import type { Step, Adapter, Clock } from "../types.js";
 import { deepFreeze } from "../registry/json.js";
 import { validatePlan } from "./plan.js";
 import { ExecutionRuntime } from "./runtime.js";
@@ -21,7 +21,7 @@ export interface BoundExecutor {
   runtime: ExecutionRuntime;
 }
 const key = (selector: DefinitionSelector) => JSON.stringify([selector.type, selector.typeVersion]);
-export function assembleExecutors(registry: DefinitionRegistry, input: readonly GraphExecutor[]): Map<string, BoundExecutor> {
+export function assembleExecutors(registry: DefinitionRegistry, input: readonly GraphExecutor[], clock?: Clock): Map<string, BoundExecutor> {
   if (!Array.isArray(input)) throw new Error("INVALID_EXECUTOR");
   const entries = new Map<string, BoundExecutor>();
   for (const executor of input) {
@@ -37,7 +37,7 @@ export function assembleExecutors(registry: DefinitionRegistry, input: readonly 
       reconcile = async () => ({ kind: "unknown", reason: `Recovery unsupported: ${reason}` });
     } else throw new Error("RECOVERY_CAPABILITY_REQUIRED");
     entries.set(key(executor), Object.freeze({ id: executor.id, version: executor.version, target: executor.target,
-      plan: executor.plan.bind(executor), runtime: new ExecutionRuntime({ apply: executor.apply.bind(executor), reconcile }) }));
+      plan: executor.plan.bind(executor), runtime: new ExecutionRuntime({ apply: executor.apply.bind(executor), reconcile }, clock) }));
   }
   for (const selector of registry.selectors()) if (!entries.has(key(selector))) throw new Error("EXECUTOR_REQUIRED");
   return entries;

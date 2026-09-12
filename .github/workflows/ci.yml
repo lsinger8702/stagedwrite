@@ -21,3 +21,4 @@ jobs:
       - run: npm run demo:dependencies
       - run: npm run demo:manual
       - run: npm run demo:continuation
+      - run: npm run demo:stop

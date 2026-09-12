@@ -24,6 +24,7 @@
     "demo:graph": "npm run build && node dist/examples/graph.js",
     "demo:preflight": "npm run build && node dist/examples/preflight.js",
     "demo:stripe": "npm run build && node dist/examples/stripe-test.js",
+    "demo:stop": "npm run build && node dist/examples/stop-retry.js",
     "demo:continuation": "npm run build && node dist/examples/continuation.js",
     "demo:manual": "npm run build && node dist/examples/manual-recovery.js",
     "demo:dependencies": "npm run build && node dist/examples/dependencies.js",

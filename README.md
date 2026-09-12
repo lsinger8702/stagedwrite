@@ -115,6 +115,33 @@ The legacy `StagedWrite` class is deprecated; use `createStagedWrite` for new in
 
 Callers own retry budgets, backoff and scheduling. The engine cannot make a remote honor idempotency keys. No exactly-once claim.
 
+## Stop retrying
+
+A caller can end a paused retry sequence without sending another request:
+
+```ts
+const observed = engine.getRun(runId);
+engine.stopRetry(runId, {
+  requestId: "stop-budget-1",
+  expectedSequence: observed.events.length,
+  actor: "operator-id",
+  reason: "Retry budget exhausted"
+});
+```
+
+Only an idle `blocked` run with pending steps is eligible. The engine checks dispatch history and authoritative
+no-effect evidence; absence of a remote reference is not proof. The next pending step becomes `failed`, remaining
+pending steps become `skipped/run_stopped`, and a distinct `retry_stopped` event records the command. Existing receipts
+remain intact. The old run cannot dispatch again: a zero-effect failure can use `revise`, while mapped partial success
+can use `continueFrom`. Unknown runs require reconciliation or `close_unresolved`, not this operation.
+Same command resubmissions are idempotent; stale event sequences and conflicting reuse of a stop request ID fail.
+Run `npm run demo:stop` for repeated quota refusal → stop → new revision.
+
+Every execution event now has an ISO `recordedAt`. Executable engines accept `clock: () => epochMilliseconds`
+(and the legacy constructor accepts `{ clock }` as its third argument) for deterministic tests. Event `sequence`
+remains authoritative for ordering and CAS; wall clocks can repeat or move backwards. An invalid/throwing clock falls
+back to system time so it cannot discard a remote outcome. Clocks are trusted, synchronous diagnostics, not authorization.
+
 ## Manual reconciliation
 
 When automatic recovery cannot establish an outcome, a trusted host can call:

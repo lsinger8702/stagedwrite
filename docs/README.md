@@ -35,3 +35,4 @@ Stripe 实验：[005：测试 Customer 与恢复验证](design/005-stripe-adapte
 
 - [人工核对与不确定执行的关闭](design/007-manual-reconciliation.md)
 - [部分创建成功后的派生](design/008-partial-continuation.md)
+- [停止重试与事件时间](design/009-stop-retry-and-event-time.md)

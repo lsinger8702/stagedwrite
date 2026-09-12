@@ -1,14 +1,17 @@
+import { requireSafeStop, validateStopRetry } from "./stop-retry.js";
 import { validateAdjudication } from "./adjudication.js";
 import { definitionDigest, type Json } from "../registry/json.js";
 import { validatePlan } from "./plan.js";
 import { randomUUID } from "node:crypto";
-import type { Adapter, ApplyOutcome, ReconcileOutcome, Event, Run, Step, Adjudication, ReusedReceipt } from "../types.js";
+import type { Adapter, ApplyOutcome, ReconcileOutcome, Event, Run, Step, Adjudication, ReusedReceipt, StopRetry, Clock } from "../types.js";
 
 /** Shared in-memory execution state machine for legacy and graph entry points. */
 export class ExecutionRuntime {
   private runs = new Map<string, Run>();
   private busy = new Set<string>();
-  constructor(private readonly adapter: Pick<Adapter, "apply" | "reconcile">) {}
+  constructor(private readonly adapter: Pick<Adapter, "apply" | "reconcile">, private readonly clock: Clock = Date.now) {
+    if (typeof clock !== "function") throw new Error("INVALID_CLOCK");
+  }
   create(draftId: string, version: number, plan: Step[], binding?: Run["binding"], receipts: Record<string, ReusedReceipt> = {}): Run {
     const id = randomUUID();
     const run: Run = { id, draftId, version, state: "running", events: [],
@@ -20,7 +23,7 @@ export class ExecutionRuntime {
       step.remoteRef = receipt.remoteRef;
       step.resolvedPayload = structuredClone(receipt.resolvedPayload);
       step.reusedFrom = receipt;
-      run.events.push({ sequence: run.events.length + 1, stepId: step.id, kind: "reused", reusedFrom: structuredClone(receipt) });
+      this.record(run, step.id, "reused", { reusedFrom: structuredClone(receipt) });
     }
     this.runs.set(id, run);
     return structuredClone(run);
@@ -31,32 +34,57 @@ export class ExecutionRuntime {
   adjudicate(id: string, stepId: string, input: Adjudication): Run {
     const run = this.requireRun(id);
     if (this.busy.has(id)) throw new Error("RUN_BUSY");
-    const command = validateAdjudication(input);
-    const previous = run.events.find(e => e.adjudication?.requestId === command.requestId);
-    if (previous) {
-      if (previous.stepId !== stepId || definitionDigest(previous.adjudication as unknown as Json) !== definitionDigest(command as unknown as Json)) throw new Error("ADJUDICATION_CONFLICT");
+    this.busy.add(id);
+    try {
+      const command = validateAdjudication(input);
+      const previous = run.events.find(e => e.adjudication?.requestId === command.requestId);
+      if (previous) {
+        if (previous.stepId !== stepId || definitionDigest(previous.adjudication as unknown as Json) !== definitionDigest(command as unknown as Json)) throw new Error("ADJUDICATION_CONFLICT");
+        return structuredClone(run);
+      }
+      if (command.expectedSequence !== run.events.length) throw new Error("STALE_RUN");
+      const step = run.steps.find(s => s.id === stepId);
+      if (run.state !== "unknown" || step?.status !== "unknown") throw new Error("UNRESOLVED_STEP_REQUIRED");
+      // The busy guard covers CAS, clock callback, event append and state transition.
+      this.record(run, stepId, "adjudicated", { adjudication: command });
+      const decision = command.decision;
+      if (decision.kind === "applied") {
+        step.status = "applied";
+        step.remoteRef = decision.remoteRef;
+        run.state = "blocked";
+      } else if (decision.kind === "no_effect") {
+        step.status = decision.next === "retry" ? "ready" : "failed";
+        run.state = decision.next === "retry" ? "blocked" : "failed";
+        if (decision.next === "stop") this.stopRemaining(run, step.id);
+      } else {
+        // Administrative closure is not evidence of no effects. Keep the step unknown.
+        run.state = "closed";
+        this.stopRemaining(run, step.id, false);
+      }
       return structuredClone(run);
-    }
-    if (command.expectedSequence !== run.events.length) throw new Error("STALE_RUN");
-    const step = run.steps.find(s => s.id === stepId);
-    if (run.state !== "unknown" || step?.status !== "unknown") throw new Error("UNRESOLVED_STEP_REQUIRED");
-    // No await/callback between CAS, event append and state transition.
-    run.events.push({ sequence: run.events.length + 1, stepId, kind: "adjudicated", adjudication: command, recordedAt: new Date().toISOString() });
-    const decision = command.decision;
-    if (decision.kind === "applied") {
-      step.status = "applied";
-      step.remoteRef = decision.remoteRef;
-      run.state = "blocked";
-    } else if (decision.kind === "no_effect") {
-      step.status = decision.next === "retry" ? "ready" : "failed";
-      run.state = decision.next === "retry" ? "blocked" : "failed";
-      if (decision.next === "stop") this.stopRemaining(run, step.id);
-    } else {
-      // Administrative closure is not evidence of no effects. Keep the step unknown.
-      run.state = "closed";
-      this.stopRemaining(run, step.id, false);
-    }
-    return structuredClone(run);
+    } finally { this.busy.delete(id); }
+  }
+  stopRetry(id: string, input: StopRetry): Run {
+    const run = this.requireRun(id);
+    if (this.busy.has(id)) throw new Error("RUN_BUSY");
+    this.busy.add(id);
+    try {
+      const command = validateStopRetry(input);
+      const previous = run.events.find(e => e.stopRetry?.requestId === command.requestId);
+      if (previous) {
+        if (definitionDigest(previous.stopRetry as unknown as Json) !== definitionDigest(command as unknown as Json)) throw new Error("STOP_RETRY_CONFLICT");
+        return structuredClone(run);
+      }
+      if (command.expectedSequence !== run.events.length) throw new Error("STALE_RUN");
+      requireSafeStop(run);
+      const pending = run.steps.find(s => s.status === "ready");
+      if (!pending) throw new Error("NO_PENDING_STEPS");
+      this.record(run, pending.id, "retry_stopped", { stopRetry: command, reason: command.reason });
+      pending.status = "failed";
+      run.state = "failed";
+      this.stopRemaining(run, pending.id, false);
+      return structuredClone(run);
+    } finally { this.busy.delete(id); }
   }
   private async advance(run: Run): Promise<Run> {
     if (this.busy.has(run.id)) throw new Error("RUN_BUSY");
@@ -158,8 +186,12 @@ export class ExecutionRuntime {
       this.record(run, step.id, "skipped", { reason: `${step.skipReason}: ${step.blockedBy}` });
     }
   }
-  private record(run: Run, stepId: string, kind: Event["kind"], detail: Pick<Event, "reason" | "retryable"> = {}): void {
-    run.events.push({ sequence: run.events.length + 1, stepId, kind, ...detail });
+  private record(run: Run, stepId: string, kind: Event["kind"], detail: Pick<Event, "reason" | "retryable" | "adjudication" | "reusedFrom" | "stopRetry"> = {}): void {
+    // A broken diagnostic clock must not discard an adapter receipt or stop recovery.
+    let recordedAt: string;
+    try { const value = this.clock(); if (typeof value !== "number" || !Number.isFinite(value)) throw new Error("INVALID_CLOCK"); recordedAt = new Date(value).toISOString(); }
+    catch { recordedAt = new Date().toISOString(); }
+    run.events.push({ sequence: run.events.length + 1, stepId, kind, ...detail, recordedAt });
   }
   private requireRun(id: string): Run {
     const run = this.runs.get(id);
