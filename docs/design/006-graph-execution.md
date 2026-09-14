@@ -1,4 +1,98 @@
-# 006：图预检到执行的连接
+# 006：Publish / Resume 语义与执行设计
+
+**置顶原则：新一次逻辑 publish 表达新执行意图，产生独立 Run；未全部成功时继续该次执行用 resume，不以进程故障或重启为前提。resume 只继续已有 Run。相同 Draft / 内容不等于相同执行意图。Draft 不保存执行进度，旧 Run 不跟随最新 Draft 或最新预检变化。**
+
+**原则冲突必须先与项目所有者讨论并取得明确同意，再改方案。统一原则见 [000](000-project-principles.md)。**
+
+状态：2026-09-14，按项目所有者“先做，做完看真实输入输出”的要求，实现本轮可评阅版本。以下参数选择是本轮实现方案，不冒充此前逐项确认的长期原则。通用 Store 注册、MID、startAt、rollback、发布后 edit 仍未扩展。
+
+## 当前修复续作方案（2026-09-15，覆盖下方历史阶段限制）
+
+**publish/resume 返回图预览、执行步骤事实和可选诊断。接入方可在 apply/reconcile 结果附 code、message、diagnostics；消息映射由接入方完成，库不猜测远端字段路径。只有基础错误说明也可驱动 resume。**
+
+1. 未全部成功的 Run 可以修复 Draft。成功步骤及对应节点不可改；当前最小实现保持执行步骤 ID、顺序、依赖关系和效果映射稳定，允许修改未完成节点的字段。
+2. resume(runId) 检测 Draft 新版本，先查证旧 unknown 请求，不发送修复后的请求。未知仍未解决时返回原事实；确认成功则保护成功输入，确认未生效才允许替换。
+3. 对修复版本重新 preflight（包含异步规则）。未通过则返回该次检查的 preview/diagnostics/check，不发送请求；通过后将新输入与计划作为同一 Run 的执行修订保存。
+4. 每次修订保留上一版步骤/绑定/版本；原始提交身份仍单独保留。内容变化的已尝试请求使用新 key；未改变的请求与已成功步骤保留 key。新计划和修订历史随 Run 原子落库，再发送。
+5. 明确远端拒绝造成的 failed 在修复版本后可以重新进入执行；用户显式停止、关闭和已全部成功不自动重开。不移除原有未知结果与所有权保护。
+6. 不要求新增 public API；edit 仍接收原子 OP，resume 仍接收 runId。不是新 publish，也不要求创建派生 Draft。
+
+以下为历史阶段记录；与上面冲突的永久封存及完全固定输入描述已由本次用户明确要求替代。
+
+## 本轮接口
+
+```ts
+const draft = engine.create({ type: "example", typeVersion: "1" });
+// edit + preflight
+const check = engine.preflight(draft.id);
+const first = await engine.publish(draft.id, check.certificate!, { runId: "intent-1" });
+const observed = await engine.publish(draft.id, check.certificate!, { runId: "intent-1" });
+const continued = await engine.resume(first.id);
+const second = await engine.publish(draft.id, check.certificate!, { runId: "intent-2" });
+const input = engine.getRunInput(first.id);
+```
+
+上例假设草稿已填写且通过执行预检。完整可执行代码与实测见 [输入输出记录](../examples/publish-resume-walkthrough.md)。
+
+| 调用 | 行为 |
+|---|---|
+| publish(D, C, {runId:A})，A 不存在 | 校验当前 C，固定 Run A 的输入，提交后立即推进执行 |
+| 相同 D、C、A 再次提交 | 返回 A 的当前快照，不调用 apply/reconcile；即使当前 Draft 检查已变化也可以找回原提交 |
+| A 已存在，但 D 或 C 不同 | RUN_ID_CONFLICT，不静默重新绑定或新建 |
+| publish(D, C, {runId:B}) | B 不存在且 C 当前有效时，新建独立 Run B；相同内容不去重 |
+| publish(D, C)，省略 options | 每次生成新 UUID，表达新意图；需要提交重传时建议显式提供 runId |
+| resume(A) | 根据 A 的事实继续；成功跳过，未知先查证，未决时停止 |
+| getRun(A) / getRunInput(A) | 分别读取执行事实与固定输入，返回独立快照 |
+
+runId 在同一个引擎/存储内全局唯一。显式 runId 长度 1–128，使用 ASCII 字母、数字、点、下划线、连字符，首字符为字母或数字；不允许冒号，避免与步骤关联键分隔符冲突。当前步骤 key 为 `${runId}:${stepId}`；新 Run 的请求关联空间独立。
+
+这里以 runId 同时作为一次逻辑提交的身份，暂不增加另一层 publish requestId。此选择不定义 MID，也不把旧的 recover/adjudicate 命令 requestId 合并进来。
+
+## 当前进度在哪里
+
+Run 已记录 steps、原 key、状态、resolvedPayload、remoteRef 和按序事件。getRunInput 返回 `{draft, certificate, plan, binding}`，保存的是本次发布的图快照和计划，不依赖后来更新的预检缓存。
+
+调用方选择使用当前内存实现或 SQLite 实现。库据这些事实计算下一步；没有新增外部检查点导入、startAt 或通用存储注册接口。单个 runId 没有对应记录时返回 RUN_NOT_FOUND，不凭 ID 猜进度。
+
+同一 Run 内并发 resume 返回 RUN_BUSY。不同 Run 可以独立并发，包括来源相同的 Draft；它们表达不同的上游意图。旧 Run 的结果不会自动作为新 Run 的成功步骤，除非通过已有明确的回执复用流程声明。
+
+## 持久化与迁移
+
+SQLite schema 5：
+
+- sw_runs 取消 draft_id 唯一约束，保留 id 主键，新增普通 draft_id 索引。
+- sw_run_inputs 按 run_id 保存固定 Draft、计划、检查绑定和原提交凭据。
+- 当前 Draft 预检仍使用 sw_plans；它是新发布的资格缓存，不能作为旧 Run 的恢复来源。
+- 新 Run 与固定输入在同一 BEGIN IMMEDIATE 事务提交。事务中再次校验当前凭据/版本/计划；同 ID 竞争只承认一个提交。
+- 成功持久化后才把 Run 登记为可推进，第一次远端调用之前已有可查询的执行身份。输入落库失败不会留下可运行孤儿，原 ID 可重新提交。
+
+schema 1–4 在事务内升级到 5。旧 Run 的草稿之前封存，其 sw_plans 与草稿快照回填到 sw_run_inputs；原 Run ID、key、事件、回执、owner 均保留。不根据空搜索补造事实，不给 schema 2 的缺失 session 伪造接管证明。迁移缺必要列/输入则失败，不推进版本；旧版本二进制拒绝 schema 5。
+
+recover 仍负责同主机接管，resume 才实际继续；已关闭旧引擎或确认旧进程退出后才可接管。恢复使用该 Run 的独立输入，因此新的预检、失败的计划生成或另一个 Run 均不能改写它。
+
+## 保留的边界
+
+发布后 edit 暂时仍报 DRAFT_SEALED，这是本轮延期实现的边界；preflight 可再次执行，同一份内容可独立再次发布。不得仅删除 edit 保护来假装已经实现远端编辑或 drift。
+
+内存模式不提供进程退出后的恢复。SQLite 仍限定可信本地主机，不新增跨主机接管或自动 force。适配器负责真实请求映射、执行及查证；新 Run 并不保证业务上一定创建新资源，外部效果由请求语义决定。
+
+旧标量 StagedWrite 是弃用兼容入口，本轮保持旧 publish 行为；这份多 Run 契约属于 createStagedWrite 图入口。rollback、MID、外部 Store 和指定恢复起点保持未决/延期，不冒充已实现。
+
+## 验收结果
+
+- [x] 相同 Draft / 内容独立发布，产生不同 Run 和步骤 key。
+- [x] 同 ID 同提交重传无新增远端调用；同 ID 不同参数冲突。
+- [x] 旧提交在新预检后仍可查询，新意图不能使用过期资格。
+- [x] 同一 Run 并发推进拒绝，不同 Run 独立并发。
+- [x] 两个 Run 在新预检替换/删除当前计划后，重开仍分别按原输入恢复。
+- [x] Run 与输入原子保存，事务失败后同 ID 可再次提交。
+- [x] schema 2/3/4 真实旧布局升级，保留原效果证据，支持同 Draft 新 Run。
+- [x] Node 22 和 Node 24 下 158 项测试通过；实际运行示例输出另存 JSON/Markdown。
+
+## 以下为旧实现与阶段验收记录
+
+**下面保留的是历史实现资料，用于理解现有代码。其中“重复 publish 只观察同一个 Run”“永久封存”等描述不再是目标语义；“内存/持久化尚未实现”等状态仅适用于对应历史阶段。冲突时先按置顶原则识别差异，不能将历史测试当成撤销新目标的理由。**
+
 
 状态：已实现，内存执行；持久化与跨进程 run 恢复仍待 M4–M6。2026-09-12。
 
@@ -90,3 +184,10 @@ blockedBy 记录直接不可达依赖或停止源步骤，事件保存原因。u
 验收：新增 5 项回归测试覆盖两个入口的坏计划、父结果恢复后供子步骤使用、子步骤限流/丢响应时输入稳定、
 终态全部跳过与原因分类、零效果修订及部分成功/不确定拒绝；原有终态状态断言同步更新。
 `npm run demo:dependencies` 另验收真实图关系投影、修订和两次模拟创建，无真实外部写入。
+
+
+## Resume 是常规续作入口
+
+正常存活的引擎中，publish 可以因为临时拒绝或远端结果暂不明确而未全部完成。调用方继续同一次执行时直接 resume(runId)，跳过已成功步骤并沿用原步骤身份。对于结果未知的步骤先查证，再决定是否发送。recover 只负责引擎重开后的执行归属接管，不是常规 resume 的前置步骤。
+
+主示例现展示 project 成功、task-1 明确临时拒绝后，同引擎直接 resume 完成 task-1/task-2。重启接管仍由独立测试覆盖。当前永久拒绝的 failed 与显式终止仍按已有终态保护处理，不因本次示例修正而自动转成可重试。

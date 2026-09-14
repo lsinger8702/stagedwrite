@@ -39,8 +39,8 @@ export class StagedWrite {
     const draft = this.requireDraft(id);
     this.checks.delete(id);
     const diagnostics = this.rules.flatMap(rule => rule(structuredClone(draft)));
-    const check: Check = { draftId: id, version: draft.version, diagnostics };
-    if (diagnostics.length === 0) {
+    const check: Check = { draftId: id, version: draft.version, preview: structuredClone(draft), diagnostics };
+    if (!diagnostics.some(d => d.severity !== "warning")) {
       const plan = validatePlan(this.adapter.plan(structuredClone(draft)));
       const certificate = randomUUID();
       this.checks.set(id, { version: draft.version, certificate, plan });

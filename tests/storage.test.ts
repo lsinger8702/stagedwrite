@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { DatabaseSync } from "node:sqlite";
 import { createStagedWrite } from "../src/index.js";
 import type { DraftOptions, GraphRule } from "../src/index.js";
 const definition = { id: "stored", version: "1", nodeTypes: { item: { valueSchema: { type: "object", properties: { name: { type: "string" } }, additionalProperties: false }, requiredAtPublish: ["name"] } }, relationTypes: { uses: { from: ["item"], to: ["item"] } } };
@@ -76,4 +77,22 @@ test("draft SQLite mode has no publishing capability and invalid storage is reje
   const path = file(t); const engine = create(path); assert.equal("publish" in engine, false); engine.close();
   assert.throws(() => engine.listDraftIds(), /STORE_CLOSED/);
   assert.throws(() => createStagedWrite({ definitions: [], storage: { kind: "invalid", path } } as unknown as DraftOptions), /INVALID_STORAGE/);
+});
+
+
+test("legacy checks without preview are invalidated without changing execution rule identity", t => {
+  const path = file(t); const engine = create(path); const draft = engine.create(selector);
+  const check = engine.preflight(draft.id); engine.close();
+  // A pre-upgrade persisted check has no response format version or draft preview.
+  const { preview: _preview, formatVersion: _format, ...legacy } = check;
+  const db = new DatabaseSync(path);
+  db.prepare("UPDATE sw_drafts SET check_body = ? WHERE id = ?").run(JSON.stringify(legacy), draft.id);
+  db.close();
+  const reopened = create(path); t.after(() => reopened.close());
+  assert.throws(() => reopened.getCheck(draft.id, check.checkId), /CHECK_NOT_CURRENT/);
+  assert.deepEqual(reopened.getDraft(draft.id), draft);
+  const fresh = reopened.preflight(draft.id);
+  assert.equal(fresh.formatVersion, 2);
+  assert.equal(fresh.rulesDigest, check.rulesDigest);
+  assert.equal(fresh.preview.id, draft.id);
 });

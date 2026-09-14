@@ -29,8 +29,8 @@ test("graph preflight fixes a plan and binds execution identity before dispatch"
   assert.equal(run.state, "published"); assert.equal(seen, "original"); assert.equal(planning, 1);
   assert.deepEqual(run.binding, check.execution);
   assert.throws(() => engine.edit(draft.id, 1, [{ op: "reset", nodeId: "one", path: "/name" }]), /DRAFT_SEALED/);
-  assert.throws(() => engine.preflight(draft.id), /DRAFT_SEALED/);
-  assert.deepEqual(await engine.publish(draft.id, check.certificate!), run);
+  assert.equal(engine.getRunInput(run.id).draft.id, draft.id);
+  assert.deepEqual(await engine.publish(draft.id, check.certificate!, { runId: run.id }), run);
 });
 
 test("graph unknown recovery skips earlier effects and reuses the shared state machine", async () => {
@@ -42,7 +42,7 @@ test("graph unknown recovery skips earlier effects and reuses the shared state m
   const check = engine.preflight(draft.id);
   const run = await engine.publish(draft.id, check.certificate!);
   assert.equal(run.state, "unknown");
-  assert.equal((await engine.publish(draft.id, check.certificate!)).state, "unknown");
+  assert.equal((await engine.publish(draft.id, check.certificate!, { runId: run.id })).state, "unknown");
   const completed = await engine.resume(run.id);
   assert.equal(completed.state, "published"); assert.equal(calls, 2); assert.equal(reconciles, 1);
   assert.deepEqual(completed.steps.map(s => s.remoteRef), ["a", "b"]);
@@ -71,6 +71,8 @@ test("blocked checks, old certificates and malformed plans cannot dispatch", asy
     const bad = setup(binding({ plan: () => plan as Step[] }));
     const check = bad.engine.preflight(bad.draft.id);
     assert.equal(check.status, "incomplete"); assert.equal(check.certificate, undefined);
+    assert.deepEqual(check.preview, bad.draft);
+    assert.equal(check.diagnostics[0]?.code, "plan.error");
   }
 });
 
@@ -78,8 +80,8 @@ test("concurrent graph publish discovers the same run; concurrent resume is reje
   let finish!: (outcome: ApplyOutcome) => void;
   const { engine, draft } = setup(binding({ apply: () => new Promise(resolve => { finish = resolve; }) }));
   const check = engine.preflight(draft.id);
-  const pending = engine.publish(draft.id, check.certificate!);
-  const observing = await engine.publish(draft.id, check.certificate!);
+  const pending = engine.publish(draft.id, check.certificate!, { runId: "same-submission" });
+  const observing = await engine.publish(draft.id, check.certificate!, { runId: "same-submission" });
   assert.equal(observing.state, "running");
   await assert.rejects(engine.resume(observing.id), /RUN_BUSY/);
   finish({ kind: "applied", remoteRef: "one" });
@@ -168,7 +170,7 @@ test("terminal failure marks all remaining steps skipped with distinct reasons",
   assert.deepEqual(await engine.resume(run.id), run);
 });
 
-test("zero-effect revision keeps source sealed, preserves history and requires a new certificate", async () => {
+test("legacy zero-effect revision preserves source history and requires a new certificate", async () => {
   let refused = true;
   const { engine, draft } = setup(binding({ apply: async () => refused ? { kind: "not_applied", reason: "name rejected" } : { kind: "applied", remoteRef: "created" } }));
   const check = engine.preflight(draft.id);
@@ -177,14 +179,14 @@ test("zero-effect revision keeps source sealed, preserves history and requires a
   assert.notEqual(revised.id, draft.id); assert.equal(revised.version, 0); assert.equal(revised.sourceRunId, run.id);
   assert.deepEqual(revised.nodes, draft.nodes);
   assert.equal(engine.revise(run.id).id, revised.id);
-  assert.throws(() => engine.edit(draft.id, draft.version, []), /DRAFT_SEALED/);
+  assert.throws(() => engine.edit(draft.id, draft.version, []), /EMPTY_OP_BATCH/);
   await assert.rejects(engine.publish(revised.id, check.certificate!), /PREFLIGHT_REQUIRED/);
   engine.edit(revised.id, 0, [{ op: "set", nodeId: "one", path: "/name", value: "fixed" }]);
   refused = false;
   const next = await engine.publish(revised.id, engine.preflight(revised.id).certificate!);
   assert.equal(next.state, "published"); assert.notEqual(next.steps[0]?.key, run.steps[0]?.key);
   assert.deepEqual(engine.getRun(run.id), run);
-  assert.deepEqual(await engine.publish(draft.id, check.certificate!), run);
+  assert.deepEqual(await engine.publish(draft.id, check.certificate!, { runId: run.id }), run);
   assert.equal(engine.getDraft(draft.id).nodes.one?.fields.name?.kind, "value");
 });
 
@@ -201,4 +203,23 @@ test("revision rejects uncertain, retryable, successful and partially applied ru
   const partial = await engine.publish(draft.id, engine.preflight(draft.id).certificate!);
   assert.equal(partial.state, "failed");
   assert.throws(() => engine.revise(partial.id), /ZERO_EFFECT_FAILURE_REQUIRED/);
+});
+
+
+test("warning diagnostics retain draft context and do not prevent execution planning", () => {
+  let plans = 0, calls = 0;
+  const engine = createStagedWrite({ definitions: [definition], mode: "executable", executors: [binding({
+    plan: () => { plans++; return [{ id: "one", payload: {} }]; },
+    apply: async () => { calls++; return { kind: "applied", remoteRef: "one" }; }
+  })], rules: [{ ...selector, id: "advisory", version: "1", check: () => [{
+    code: "name.review", path: "/nodes/one/fields/name", severity: "warning", message: "Review the current name before publishing."
+  }] }] });
+  const draft = engine.create(selector);
+  engine.edit(draft.id, 0, [{ op: "node.add", id: "one", nodeType: "item" }, { op: "set", nodeId: "one", path: "/name", value: "current" }]);
+  const check = engine.preflight(draft.id);
+  assert.equal(check.status, "passed");
+  assert.ok(check.certificate);
+  assert.deepEqual(check.preview.nodes.one?.fields.name, { kind: "value", value: "current" });
+  assert.equal(plans, 1);
+  assert.equal(calls, 0);
 });

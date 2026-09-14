@@ -1,5 +1,7 @@
 # 预检与派生容量基准
 
+此报告记录旧版强制修复建议契约。2026-09-14 起脚本改测诊断与完整图预览，输出 `diagnosticsPerRule`；旧数据保留作历史记录，不代表当前实现性能。
+
 环境：Apple M4 Pro，darwin/arm64，Node v22.23.2。记录时间（UTC）：2026-09-12T20:46:03.608Z。
 
 运行 `npm run bench` 测小矩阵，`npm run bench -- --full` 测完整矩阵。原始结果见 [baseline.json](baseline.json)。

@@ -7,7 +7,8 @@ import type { DatabaseSync as Database } from "node:sqlite";
 import type { GraphDraft } from "../graph/types.js";
 import type { GraphCheck } from "../preflight/types.js";
 import type { DefinitionRegistry } from "../registry/registry.js";
-import type { DraftStore, StoredPlan } from "./drafts.js";
+import { requireSameSubmission } from "../execution/publication.js";
+import type { DraftStore, StoredPlan, RunInput } from "./drafts.js";
 
 /** SQLite snapshots and atomic publication ownership; explicit local-process ownership transfer. */
 export class SqliteDraftStore implements DraftStore {
@@ -25,9 +26,9 @@ export class SqliteDraftStore implements DraftStore {
       this.transaction(() => {
         this.#db.exec("CREATE TABLE IF NOT EXISTS sw_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;");
         const version = this.#db.prepare("SELECT value FROM sw_meta WHERE key = 'schema'").get();
-        if (version && !["1", "2", "3", "4"].includes(version.value as string)) throw new Error("STORAGE_VERSION_UNSUPPORTED");
-        // Versions 1–4 only add tables/indexes. A future column change needs an explicit
-        // migration before advancing schema, plus fixtures for every supported old layout.
+        if (version && !["1", "2", "3", "4", "5"].includes(version.value as string)) throw new Error("STORAGE_VERSION_UNSUPPORTED");
+        // Schema 5 removes the one-Run-per-Draft constraint and snapshots each Run input.
+        // Validate historical columns before rebuilding; the entire migration is atomic.
         this.#db.exec(`CREATE TABLE IF NOT EXISTS sw_definitions (
           type TEXT NOT NULL, version TEXT NOT NULL, digest TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(type, version)) STRICT;
           CREATE TABLE IF NOT EXISTS sw_drafts (
@@ -49,10 +50,29 @@ export class SqliteDraftStore implements DraftStore {
           const columns = new Set(this.#db.prepare(`PRAGMA table_info(${table})`).all().map(row => row.name));
           if (required.some(column => !columns.has(column))) throw new Error("STORAGE_SCHEMA_MISMATCH");
         }
+        this.#db.exec("CREATE TABLE IF NOT EXISTS sw_run_inputs (run_id TEXT PRIMARY KEY, body TEXT NOT NULL) STRICT;");
+        const inputColumns = new Set(this.#db.prepare("PRAGMA table_info(sw_run_inputs)").all().map(row => row.name));
+        if (!["run_id", "body"].every(c => inputColumns.has(c))) throw new Error("STORAGE_SCHEMA_MISMATCH");
+        if (version?.value !== "5") {
+          // Old drafts were sealed: their saved graph and plan are the original Run input.
+          for (const row of this.#db.prepare("SELECT id, draft_id FROM sw_runs").all()) {
+            if (this.#db.prepare("SELECT 1 FROM sw_run_inputs WHERE run_id=?").get(row.id!)) continue;
+            const draft = this.get(row.draft_id as string);
+            const plan = this.getPlan(row.draft_id as string);
+            const run = this.getRun(row.id as string);
+            if (!plan || draft.version !== run.version || definitionDigest(plan.binding as unknown as Json) !== definitionDigest(run.binding as unknown as Json)) throw new Error("STORED_RUN_INPUT_MISSING");
+            this.#db.prepare("INSERT INTO sw_run_inputs VALUES (?,?)").run(row.id!, JSON.stringify({ ...plan, draft }));
+          }
+          this.#db.exec(`CREATE TABLE sw_runs_v5 (id TEXT PRIMARY KEY, draft_id TEXT NOT NULL, owner TEXT NOT NULL, body TEXT NOT NULL) STRICT;
+            INSERT INTO sw_runs_v5 SELECT id, draft_id, owner, body FROM sw_runs;
+            DROP TABLE sw_runs;
+            ALTER TABLE sw_runs_v5 RENAME TO sw_runs;`);
+        }
+        this.#db.exec("CREATE INDEX IF NOT EXISTS sw_runs_draft ON sw_runs(draft_id);");
         this.#db.exec("CREATE INDEX IF NOT EXISTS sw_runs_owner ON sw_runs(owner);");
         this.pruneReleasedSessions();
         this.#db.prepare("INSERT INTO sw_sessions VALUES (?, ?, ?, 0)").run(this.#owner, process.pid, hostname());
-        this.#db.prepare("INSERT OR REPLACE INTO sw_meta VALUES ('schema', '4')").run();
+        this.#db.prepare("INSERT OR REPLACE INTO sw_meta VALUES ('schema', '5')").run();
         for (const selector of registry.selectors()) {
           const { definition, digest } = registry.getDefinition(selector);
           const prior = this.#db.prepare("SELECT digest FROM sw_definitions WHERE type = ? AND version = ?").get(selector.type, selector.typeVersion);
@@ -79,16 +99,17 @@ export class SqliteDraftStore implements DraftStore {
     return draft;
   }
   ids(): string[] { this.open(); return this.#db.prepare("SELECT id FROM sw_drafts ORDER BY id").all().map(r => r.id as string); }
-  edit(candidate: GraphDraft, expectedVersion: number): void {
-    this.open();
-    if (this.runForDraft(candidate.id)) throw new Error("DRAFT_SEALED");
-    const result = this.#db.prepare("UPDATE sw_drafts SET version = ?, body = ?, check_body = NULL WHERE id = ? AND version = ? AND NOT EXISTS (SELECT 1 FROM sw_runs WHERE draft_id = sw_drafts.id)")
-      .run(candidate.version, JSON.stringify(candidate), candidate.id, expectedVersion);
-    if (result.changes !== 1) throw new Error("STALE_VERSION");
+  edit(candidate: GraphDraft, expectedVersion: number, validate?: () => void): void {
+    this.transaction(() => {
+      if (validate) validate(); else if (this.runForDraft(candidate.id)) throw new Error("DRAFT_SEALED");
+      const result = this.#db.prepare("UPDATE sw_drafts SET version = ?, body = ?, check_body = NULL WHERE id = ? AND version = ?")
+        .run(candidate.version, JSON.stringify(candidate), candidate.id, expectedVersion);
+      if (result.changes !== 1) throw new Error("STALE_VERSION");
+      this.#db.prepare("DELETE FROM sw_plans WHERE draft_id = ?").run(candidate.id);
+    });
   }
   beginCheck(id: string, expectedVersion: number): number {
     return this.transaction(() => {
-      if (this.runForDraft(id)) throw new Error("DRAFT_SEALED");
       const result = this.#db.prepare("UPDATE sw_drafts SET check_epoch = check_epoch + 1, check_body = NULL WHERE id = ? AND version = ? AND check_epoch < 9007199254740991").run(id, expectedVersion);
       if (result.changes !== 1) throw new Error("STALE_VERSION_OR_CHECK_EXHAUSTED");
       return this.#db.prepare("SELECT check_epoch FROM sw_drafts WHERE id = ?").get(id)!.check_epoch as number;
@@ -96,7 +117,7 @@ export class SqliteDraftStore implements DraftStore {
   }
   saveCheck(check: GraphCheck, epoch: number, plan?: StoredPlan): void {
     this.transaction(() => {
-      const result = this.#db.prepare("UPDATE sw_drafts SET check_body = ? WHERE id = ? AND version = ? AND check_epoch = ? AND NOT EXISTS (SELECT 1 FROM sw_runs WHERE draft_id = sw_drafts.id)")
+      const result = this.#db.prepare("UPDATE sw_drafts SET check_body = ? WHERE id = ? AND version = ? AND check_epoch = ?")
         .run(JSON.stringify(check), check.draftId, check.version, epoch);
       if (result.changes !== 1) throw new Error("STALE_CHECK");
       this.#db.prepare("DELETE FROM sw_plans WHERE draft_id = ?").run(check.draftId);
@@ -115,22 +136,40 @@ export class SqliteDraftStore implements DraftStore {
     if (!row) throw new Error("RUN_NOT_FOUND"); return JSON.parse(row.body as string) as Run;
   }
   runIds(): string[] { this.open(); return this.#db.prepare("SELECT id FROM sw_runs ORDER BY id").all().map(r => r.id as string); }
-  /** Check/plan validation, first run and permanent seal share one write transaction. */
-  publishRun(run: Run, certificate: string): string {
+  hasRun(id: string): boolean { this.open(); return !!this.#db.prepare("SELECT 1 FROM sw_runs WHERE id=?").get(id); }
+  getRunInput(id: string): RunInput {
+    this.open(); const row = this.#db.prepare("SELECT body FROM sw_run_inputs WHERE run_id=?").get(id);
+    if (!row) throw new Error("RUN_NOT_FOUND");
+    return JSON.parse(row.body as string) as RunInput;
+  }
+  /** Submission identity, current qualification, Run and fixed input commit atomically. */
+  publishRun(run: Run, input: RunInput): boolean {
     return this.transaction(() => {
-      const previous = this.runForDraft(run.draftId);
+      if (this.hasRun(run.id)) {
+        requireSameSubmission(this.getRunInput(run.id), run.draftId, input.certificate);
+        return false;
+      }
       const check = this.getCheck(run.draftId);
       const plan = this.getPlan(run.draftId);
-      if (!check || check.certificate !== certificate || check.status !== "passed" || check.scope !== "execution" ||
-          !plan || plan.certificate !== certificate || check.version !== run.version || this.get(run.draftId).version !== run.version) throw new Error("PREFLIGHT_REQUIRED");
-      if (previous) return previous;
+      if (!check || check.formatVersion !== 2 || check.certificate !== input.certificate || check.status !== "passed" || check.scope !== "execution" ||
+          !plan || definitionDigest(plan as unknown as Json) !== definitionDigest({ certificate: input.certificate, plan: input.plan, binding: input.binding } as unknown as Json) ||
+          check.version !== run.version || this.get(run.draftId).version !== run.version) throw new Error("PREFLIGHT_REQUIRED");
       this.#db.prepare("INSERT INTO sw_runs VALUES (?, ?, ?, ?)").run(run.id, run.draftId, this.#owner, JSON.stringify(run));
-      return run.id;
+      this.#db.prepare("INSERT INTO sw_run_inputs VALUES (?, ?)").run(run.id, JSON.stringify(input));
+      return true;
     });
   }
   saveRun(run: Run): void {
-    this.open(); const result = this.#db.prepare("UPDATE sw_runs SET body = ? WHERE id = ? AND owner = ?").run(JSON.stringify(run), run.id, this.#owner);
-    if (result.changes !== 1) throw new Error("RUN_OWNER_MISMATCH");
+    this.transaction(() => {
+      const before = this.getRun(run.id);
+      if ((run.repairs?.length ?? 0) !== (before.repairs?.length ?? 0)) {
+        const input = run.repairInput, check = this.getCheck(run.draftId), plan = this.getPlan(run.draftId);
+        if (!input || !check || !plan || check.status !== "passed" || check.certificate !== input.certificate || check.version !== run.version || this.get(run.draftId).version !== run.version ||
+          definitionDigest(plan as unknown as Json) !== definitionDigest({ certificate: input.certificate, plan: input.plan, binding: input.binding } as unknown as Json)) throw new Error("STALE_CHECK");
+      }
+      const result = this.#db.prepare("UPDATE sw_runs SET body = ? WHERE id = ? AND owner = ?").run(JSON.stringify(run), run.id, this.#owner);
+      if (result.changes !== 1) throw new Error("RUN_OWNER_MISMATCH");
+    });
   }
   /** The liveness check, sequence check, state conversion and owner write are atomic. */
   recover(id: string, command: RecoveryRequest, prepare: (run: Run, previousOwner: string, owner: string) => Run): Run {
@@ -145,7 +184,7 @@ export class SqliteDraftStore implements DraftStore {
         return run;
       }
       if (command.expectedSequence !== run.events.length) throw new Error("STALE_RUN");
-      if (["published", "failed", "closed"].includes(run.state)) throw new Error("RECOVERABLE_RUN_REQUIRED");
+      if ((["published", "closed"].includes(run.state) || (run.state === "failed" && (!run.steps.some(s => s.failureReason === "remote_refusal") || run.steps.some(s => s.failureReason === "retry_stopped"))))) throw new Error("RECOVERABLE_RUN_REQUIRED");
       const session = this.#db.prepare("SELECT pid, host, released FROM sw_sessions WHERE owner = ?").get(row.owner!);
       if (!session) throw new Error("OWNER_EVIDENCE_REQUIRED");
       if (session.released !== 1) {

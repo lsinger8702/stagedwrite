@@ -15,7 +15,7 @@ export function prepareRecovery(run: Run, fixed: StoredPlan | undefined, command
   previousOwner: string, owner: string, clock: Clock = Date.now): Run {
   if (!fixed || !run.binding || digest(fixed.binding) !== digest(run.binding) ||
       digest(validatePlan(fixed.plan)) !== run.binding.planDigest || run.steps.length !== fixed.plan.length ||
-      !["running", "blocked", "unknown"].includes(run.state) ||
+      !["running", "blocked", "unknown", "failed"].includes(run.state) ||
       run.events.some((event, i) => event.sequence !== i + 1)) throw new Error("STORED_RUN_CORRUPT");
   let pending = false;
   for (let i = 0; i < run.steps.length; i++) {
@@ -24,13 +24,13 @@ export function prepareRecovery(run: Run, fixed: StoredPlan | undefined, command
       ...(step.dependsOn ? { dependsOn: step.dependsOn } : {}),
       ...(step.inputRefs ? { inputRefs: step.inputRefs } : {}),
       ...(step.effect ? { effect: step.effect } : {}) };
-    if (digest(original) !== digest(fixed.plan[i]) || step.key !== `${run.id}:${step.id}` ||
-        !["ready", "dispatching", "unknown", "applied", "reused"].includes(step.status)) throw new Error("STORED_RUN_CORRUPT");
+    if (digest(original) !== digest(fixed.plan[i]) || step.key !== (step.requestRevision ? JSON.stringify([run.id, step.id, step.requestRevision]) : `${run.id}:${step.id}`) ||
+        !["ready", "dispatching", "unknown", "applied", "reused", "failed", "skipped"].includes(step.status)) throw new Error("STORED_RUN_CORRUPT");
     if (step.status === "applied" && pending) throw new Error("STORED_RUN_CORRUPT");
     if (["dispatching", "unknown"].includes(step.status) && pending) throw new Error("STORED_RUN_CORRUPT");
     if (!["applied", "reused"].includes(step.status)) pending = true;
     if (["applied", "reused"].includes(step.status) && (typeof step.remoteRef !== "string" || !step.remoteRef.length)) throw new Error("STORED_RUN_CORRUPT");
-    if (step.status !== "ready" && !step.resolvedPayload) throw new Error("STORED_RUN_CORRUPT");
+    if (!["ready", "skipped"].includes(step.status) && !step.resolvedPayload) throw new Error("STORED_RUN_CORRUPT");
     if (step.resolvedPayload) {
       const expected = structuredClone(step.payload);
       for (const id of step.dependsOn ?? []) {
@@ -39,16 +39,19 @@ export function prepareRecovery(run: Run, fixed: StoredPlan | undefined, command
       for (const [field, id] of Object.entries(step.inputRefs ?? {})) expected[field] = run.steps.find(s => s.id === id)!.remoteRef!;
       if (digest(expected) !== digest(step.resolvedPayload)) throw new Error("STORED_RUN_CORRUPT");
     }
+    if (step.requestRevision !== undefined && (!Number.isSafeInteger(step.requestRevision) || step.requestRevision < 1 || step.requestRevision > (run.repairs?.length ?? 0))) throw new Error("STORED_RUN_CORRUPT");
+    if (step.status === "failed" && (step.failureReason !== "remote_refusal" || run.events.filter(e => e.stepId === step.id && e.kind !== "recovery_claimed").at(-1)?.kind !== "not_applied")) throw new Error("STORED_RUN_CORRUPT");
     if (step.status === "ready") {
       const events = run.events.filter(e => e.stepId === step.id && e.kind !== "recovery_claimed");
       const last = events.at(-1);
       if (events.some(e => e.kind === "dispatching") &&
+          !(last?.kind === "plan_repaired") && !(last?.kind === "no_effect") &&
           !(last?.kind === "not_applied" && last.retryable === true) &&
           !(last?.kind === "adjudicated" && last.adjudication?.decision.kind === "no_effect" && last.adjudication.decision.next === "retry")) throw new Error("STORED_RUN_CORRUPT");
     }
   }
   for (const step of run.steps) if (step.status === "dispatching") step.status = "unknown";
-  run.state = run.steps.some(s => s.status === "unknown") ? "unknown" : "blocked";
+  run.state = run.steps.some(s => s.status === "unknown") ? "unknown" : run.steps.some(s => s.status === "failed") ? "failed" : "blocked";
   let recordedAt: string;
   try { const now = clock(); if (typeof now !== "number" || !Number.isFinite(now)) throw new Error("INVALID_CLOCK"); recordedAt = new Date(now).toISOString(); }
   catch { recordedAt = new Date().toISOString(); }

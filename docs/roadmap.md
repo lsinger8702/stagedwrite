@@ -1,12 +1,14 @@
 # 开发任务与进度
 
-日期：2026-09-12。这里是本地任务清单，还没有同步为 GitHub Issues。
+**置顶约束：遵循 [项目原则](design/000-project-principles.md)；原则冲突必须先与项目所有者讨论并取得明确同意。publish/resume 本轮多 Run 接口已实现供评阅，长期扩展仍有未决项，详见 [006](design/006-graph-execution.md)。旧阶段完成记录不代表新目标已完成。**
+
+日期：2026-09-14（保留此前阶段记录）。这里是本地任务清单，还没有同步为 GitHub Issues。
 
 ## 已完成：探索原型
 
 - [x] 单包 TypeScript、README、许可证、CI 配置。
 - [x] 顶层字段 set/remove/reset 与版本检查。
-- [x] 同步规则、修复建议、预检凭据。
+- [x] 同步规则、具体诊断与当前图预览、调用方生成 OP、预检凭据。
 - [x] 内存执行、UNKNOWN 查证恢复和模拟远端。
 - [x] 16 项执行原型测试：包含可重试拒绝、最终一致性查证、错误 adapter 重复副作用和空批次拒绝。
 - [x] 执行与查证结果分型，保留拒绝原因；重试次数上限由调用方控制。
@@ -25,7 +27,16 @@
 
 在 M1 完成后、M4 存储工作开始前，安排一个范围受限的 Stripe test-mode adapter 实验，验证真实远端接缝；不扩大核心 MVP 承诺。完整 Stripe 接入与 MCP 外壳仍是后续能力。
 
-## 当前下一步：M7 外部试用与发布准备
+## 当前下一步：评阅 Publish / Resume 实际闭环
+
+- [x] 将已明确原则置顶，并加入原则冲突须经项目所有者讨论确认的开发约束。
+- [x] Preflight 改为当前图 preview + 具体诊断；152 项测试及示例/包验证通过。
+- [ ] 由项目所有者评阅本轮 runId/提交接口；执行记录外部接入、MID 与恢复起点继续未决。
+- [x] 按“先做后看”的要求实现可选 runId、每 Run 输入快照、schema 5 迁移；158 项测试在 Node 22/24 通过。
+- [x] 记录 create → edit → preflight → publish → recover → resume → 独立再次 publish 的真实库 I/O，见 [演示记录](examples/publish-resume-walkthrough.md)。
+- [ ] 新主线对齐后，再继续 M7 外部试用与发布。
+
+## 之前的 M7 发布准备记录（不代表新主线已完成）
 
 M1–M6 已完成，共 147 项测试。SQLite 保存图、检查、固定计划、执行记录和派生关系；同主机在旧实例关闭或进程退出后，通过 recover 显式接管，再核对并继续。详见 [012](design/012-restart-recovery.md)。运行 `npm run demo:registry`、`npm run demo:graph`、`npm run demo:preflight`。
 图执行桥已完成：显式执行器装配、固定图计划、发布和进程内恢复；默认草稿模式仍无发布资格。执行持久化已完成，同主机跨进程恢复已通过故障注入；跨主机接管不在当前范围。

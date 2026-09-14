@@ -12,7 +12,7 @@ function setup(overrides: Partial<GraphExecutor> = {}) {
   const draft = engine.create(selector);
   engine.edit(draft.id, 0, [{ op: "node.add", id: "one", nodeType: "item" }]);
   const certificate = engine.preflight(draft.id).certificate!;
-  const publish = () => engine.publish(draft.id, certificate);
+  const publish = () => engine.publish(draft.id, certificate, { runId: "fixture-submission" });
   return { engine, draft, publish, certificate };
 }
 const command = (run: Run, decision: Adjudication["decision"], requestId = "review-1"): Adjudication => ({

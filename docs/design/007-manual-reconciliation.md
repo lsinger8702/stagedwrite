@@ -1,5 +1,7 @@
 # 人工核对与不确定执行的关闭
 
+**设计约束：遵循 [000 项目原则](000-project-principles.md)；原则冲突须先与项目所有者讨论并取得明确同意。本文中的阶段实现记录不覆盖主线，publish/resume 目标及当前差异以 [006](006-graph-execution.md) 为准。**
+
 状态：已实现，内存原型。对应第四轮 H1。H2 的 create-only 派生现见 [008](008-partial-continuation.md)；H3/F6 补丁未合入。
 
 ## 接口与边界

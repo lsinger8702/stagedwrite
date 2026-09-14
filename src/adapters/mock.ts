@@ -5,16 +5,16 @@ export const subscriptionRule: Rule = draft => {
   const seats = draft.fields.seats;
   if (seats?.kind !== "value" || typeof seats.value !== "number" || !Number.isSafeInteger(seats.value) || seats.value < 1) {
     return [{ code: "seats.required", path: "/seats", message: "Specify a positive integer seat count.",
-      resolution: { kind: "blocked", reason: "human_intent" } }];
+      hint: "Use the user’s intended configuration; ask if it is unknown." }];
   }
   if (draft.fields.timing?.kind !== "value" || !["now", "next_cycle"].includes(String(draft.fields.timing.value))) {
     return [{ code: "timing.required", path: "/timing", message: "Choose when the change takes effect.",
-      resolution: { kind: "blocked", reason: "human_intent" } }];
+      hint: "Use the user’s intended configuration; ask if it is unknown." }];
   }
   if (draft.fields.timing.value === "now" && seats.value * 50 > 1000) {
     return [{ code: "policy.immediate_limit", path: "/timing",
       message: "Mock immediate charge exceeds the configured $1,000 limit. Deferral requires user agreement.",
-      resolution: { kind: "ops", ops: [{ op: "set", path: "/timing", value: "next_cycle" }] } }];
+      hint: "Consider fewer seats or deferring to the next cycle, according to user intent." }];
   }
   return [];
 };

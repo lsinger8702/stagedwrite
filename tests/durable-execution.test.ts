@@ -26,20 +26,20 @@ test("fixed plans survive reopening and are not recompiled before first publicat
   const run = await second.publish(id, check.certificate!); assert.equal(run.state, "published"); assert.equal(planned, 0); assert.equal(applied, 2); second.close();
   const third = open(path); t.after(() => third.close());
   assert.deepEqual(third.listRunIds(), [run.id]); assert.deepEqual(third.getRun(run.id), run);
-  assert.deepEqual(await third.publish(id, check.certificate!), run);
-  assert.throws(() => third.preflight(id), /DRAFT_SEALED/);
+  assert.deepEqual(await third.publish(id, check.certificate!, { runId: run.id }), run);
+  assert.equal(third.preflight(id).status, "passed");
 });
 
 test("durable sealing prevents a second instance and draft mode from redispatching or editing", async t => {
   const path = file(t); let finish!: (o: ApplyOutcome) => void, calls = 0;
   const first = open(path, { apply: async s => { calls++; if (s.id === "a") return new Promise(resolve => { finish = resolve; }); return { kind: "applied", remoteRef: "b" }; } });
-  const { id, check } = ready(first); const pending = first.publish(id, check.certificate!);
+  const { id, check } = ready(first); const pending = first.publish(id, check.certificate!, { runId: "shared-submit" });
   const second = open(path); const observer = createStagedWrite({ definitions: [definition], storage: { kind: "sqlite", path } });
-  const observed = await second.publish(id, check.certificate!);
+  const observed = await second.publish(id, check.certificate!, { runId: "shared-submit" });
   assert.equal(observed.steps[0]?.status, "dispatching"); assert.ok(observed.steps[0]?.resolvedPayload);
   await assert.rejects(second.resume(observed.id), /RECOVERY_REQUIRED/);
   assert.throws(() => observer.edit(id, 1, [{ op: "node.remove", id: "b" }]), /DRAFT_SEALED/);
-  assert.throws(() => observer.preflight(id), /DRAFT_SEALED/);
+  assert.equal(observer.preflight(id).status, "passed"); // Does not modify the active Run input.
   assert.throws(() => first.close(), /RUN_BUSY/);
   finish({ kind: "applied", remoteRef: "a" }); const completed = await pending;
   assert.deepEqual(second.getRun(observed.id), completed); assert.equal(calls, 2);
@@ -95,7 +95,7 @@ test("process exit inside an adapter leaves durable dispatch intent and a sealed
   assert.equal(result.status, 19, result.stderr);
   const engine = open(path); t.after(() => engine.close()); const run = engine.getRun(engine.listRunIds()[0]!);
   assert.equal(run.state, "running"); assert.equal(run.steps[0]?.status, "dispatching"); assert.deepEqual(run.steps[0]?.resolvedPayload, { value: 1 });
-  assert.equal(run.events.at(-1)?.kind, "dispatching"); assert.throws(() => engine.preflight(run.draftId), /DRAFT_SEALED/);
+  assert.equal(run.events.at(-1)?.kind, "dispatching"); assert.equal(engine.getRunInput(run.id).draft.id, run.draftId);
 });
 
 test("changed executor identity cannot publish a stored plan", async t => {
@@ -122,7 +122,7 @@ test("schema version one upgrades without losing draft data and future versions 
   const memory = createStagedWrite({ definitions: [definition] }); const original = memory.create(selector); memory.close();
   db.prepare("INSERT INTO sw_drafts (id,version,body) VALUES (?,?,?)").run(original.id, original.version, JSON.stringify(original));
   db.close(); const engine = open(path); assert.deepEqual(engine.getDraft(original.id), original); const { id } = ready(engine); engine.close();
-  const inspect = new DatabaseSync(path); assert.equal(inspect.prepare("SELECT value FROM sw_meta WHERE key='schema'").get()?.value, "4");
+  const inspect = new DatabaseSync(path); assert.equal(inspect.prepare("SELECT value FROM sw_meta WHERE key='schema'").get()?.value, "5");
   inspect.exec("UPDATE sw_meta SET value='99' WHERE key='schema'"); inspect.close();
   assert.throws(() => open(path), /STORAGE_VERSION_UNSUPPORTED/);
   const restore = new DatabaseSync(path); restore.exec("UPDATE sw_meta SET value='2' WHERE key='schema'"); restore.close();

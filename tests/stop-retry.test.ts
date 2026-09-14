@@ -14,7 +14,7 @@ function setup(overrides: Partial<GraphExecutor> = {}, clock: Clock = () => 0) {
   const draft = engine.create(selector);
   engine.edit(draft.id, 0, [{ op: "node.add", id: "a", nodeType: "item" }, { op: "node.add", id: "b", nodeType: "item" }]);
   const certificate = engine.preflight(draft.id).certificate!;
-  return { engine, draft, calls, publish: () => engine.publish(draft.id, certificate) };
+  return { engine, draft, calls, publish: () => engine.publish(draft.id, certificate, { runId: "fixture-submission" }) };
 }
 const command = (r: Run, requestId = "stop-1"): StopRetry => ({ requestId, expectedSequence: r.events.length, actor: "operator", reason: "Retry limit exhausted" });
 

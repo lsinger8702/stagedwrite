@@ -1,6 +1,8 @@
+import { declaration, same, validateRepair } from "./repair.js";
+import type { RunInput } from "../storage/drafts.js";
 import { requireSafeStop, validateStopRetry } from "./stop-retry.js";
 import { validateAdjudication } from "./adjudication.js";
-import { definitionDigest, type Json } from "../registry/json.js";
+import { definitionDigest, jsonSnapshot, isObject, type Json } from "../registry/json.js";
 import { validatePlan } from "./plan.js";
 import { randomUUID } from "node:crypto";
 import type { Adapter, ApplyOutcome, ReconcileOutcome, Event, Run, Step, Adjudication, ReusedReceipt, StopRetry, Clock } from "../types.js";
@@ -16,7 +18,12 @@ export class ExecutionRuntime {
     if (typeof clock !== "function") throw new Error("INVALID_CLOCK");
   }
   create(draftId: string, version: number, plan: Step[], binding?: Run["binding"], receipts: Record<string, ReusedReceipt> = {}): Run {
-    const id = randomUUID();
+    const run = this.prepare(draftId, version, plan, binding, receipts);
+    this.register(run);
+    return structuredClone(run);
+  }
+  /** Construct before durable insertion; failed publication must not leave a runnable orphan. */
+  prepare(draftId: string, version: number, plan: Step[], binding?: Run["binding"], receipts: Record<string, ReusedReceipt> = {}, id: string = randomUUID()): Run {
     const run: Run = { id, draftId, version, state: "running", events: [],
       ...(binding ? { binding: structuredClone(binding) } : {}),
       steps: validatePlan(plan).map(step => ({ ...structuredClone(step), key: `${id}:${step.id}`, status: "ready" })) };
@@ -28,9 +35,12 @@ export class ExecutionRuntime {
       step.reusedFrom = receipt;
       this.record(run, step.id, "reused", { reusedFrom: structuredClone(receipt) });
     }
-    this.runs.set(id, run);
-    this.committed.set(id, structuredClone(run));
     return structuredClone(run);
+  }
+  register(run: Run): void {
+    if (this.runs.has(run.id)) throw new Error("RUN_ID_CONFLICT");
+    this.runs.set(run.id, structuredClone(run));
+    this.committed.set(run.id, structuredClone(run));
   }
   restore(run: Run): void { if (!this.runs.has(run.id)) { this.runs.set(run.id, structuredClone(run)); this.restored.add(run.id); } }
   acceptRecovery(run: Run): void {
@@ -52,6 +62,53 @@ export class ExecutionRuntime {
   }
   getRun(id: string): Run { return structuredClone(this.requireRun(id)); }
   resume(id: string): Promise<Run> { return this.advance(this.requireRun(id)); }
+  /** Reconcile original unknown requests without dispatching any new work. */
+  async reconcileForRepair(id: string): Promise<Run> {
+    const run = this.requireRun(id);
+    if (this.busy.has(id)) throw new Error("RUN_BUSY");
+    this.writable(id); this.busy.add(id);
+    try {
+      for (const step of run.steps) if (step.status === "unknown") {
+        this.record(run, step.id, "reconciling"); this.checkpoint(run);
+        const result = await this.observe("reconcile", () => this.adapter.reconcile({ ...structuredClone(step), payload: structuredClone(step.resolvedPayload!) }, step.key));
+        this.feedback(step, result);
+        if (result.kind === "applied") { step.status = "applied"; step.remoteRef = result.remoteRef; this.record(run, step.id, "applied"); }
+        else if (result.kind === "no_effect") { step.status = "ready"; this.record(run, step.id, "no_effect", { reason: result.reason }); }
+        else { this.record(run, step.id, "unknown", { reason: result.reason }); this.checkpoint(run); return structuredClone(run); }
+        this.checkpoint(run);
+      }
+      run.state = "blocked"; this.checkpoint(run); return structuredClone(run);
+    } finally { this.busy.delete(id); }
+  }
+  repair(id: string, previous: RunInput, input: RunInput): Run {
+    const run = this.requireRun(id);
+    if (this.busy.has(id)) throw new Error("RUN_BUSY");
+    this.writable(id);
+    validateRepair(run, previous.draft, input.draft, input.plan);
+    if (run.steps.some(s => s.status === "unknown" || s.status === "dispatching")) throw new Error("UNRESOLVED_EXECUTION");
+    const next = structuredClone(run);
+    next.repairs ??= [];
+    next.repairs.push({ previousVersion: run.version, ...(run.binding ? { previousBinding: structuredClone(run.binding) } : {}),
+      previousSteps: structuredClone(run.steps), ...(run.repairInput ? { previousInput: structuredClone(run.repairInput) } : {}) });
+    const revision = next.repairs.length;
+    next.steps = input.plan.map((plan, i) => {
+      const old = structuredClone(run.steps[i]!);
+      if (["applied", "reused"].includes(old.status)) return old;
+      const changed = !same(declaration(old), plan);
+      const attempted = run.events.some(e => e.stepId === old.id && e.kind === "dispatching");
+      const key = changed && attempted ? JSON.stringify([id, old.id, revision]) : old.key;
+      return { ...structuredClone(plan), key, status: "ready" as const,
+        ...(changed && attempted ? { requestRevision: revision } : old.requestRevision ? { requestRevision: old.requestRevision } : {}),
+        ...(!changed && old.resolvedPayload ? { resolvedPayload: old.resolvedPayload } : {}) };
+    });
+    next.version = input.draft.version; next.binding = structuredClone(input.binding); next.repairInput = structuredClone(input); next.state = "blocked";
+    for (const step of next.steps) if (step.status === "ready") this.record(next, step.id, "plan_repaired");
+    this.checkpoint(next); this.runs.set(id, next); return structuredClone(next);
+  }
+  private feedback(step: import("../types.js").ExecutionStep, result: ApplyOutcome | ReconcileOutcome): void {
+    const { code, message, diagnostics } = result;
+    step.feedback = { ...(code ? { code } : {}), ...(message ? { message } : {}), ...(diagnostics ? { diagnostics: structuredClone(diagnostics) } : {}), ...("reason" in result ? { reason: result.reason } : {}) };
+  }
   /** Records a trusted caller's decision without making any adapter call. */
   adjudicate(id: string, stepId: string, input: Adjudication): Run {
     const run = this.requireRun(id);
@@ -143,6 +200,7 @@ export class ExecutionRuntime {
           this.record(run, step.id, "reconciling");
           this.checkpoint(run);
           const result = await this.observe("reconcile", () => this.adapter.reconcile({ ...structuredClone(step), payload: structuredClone(step.resolvedPayload!) }, step.key));
+          this.feedback(step, result);
           if (result.kind === "applied") {
             step.status = "applied";
             step.remoteRef = result.remoteRef;
@@ -163,6 +221,7 @@ export class ExecutionRuntime {
         this.record(run, step.id, "dispatching");
         this.checkpoint(run);
         const result = await this.observe("apply", () => this.adapter.apply({ ...structuredClone(step), payload: structuredClone(step.resolvedPayload!) }, step.key));
+        this.feedback(step, result);
         if (result.kind === "applied") {
           step.status = "applied";
           step.remoteRef = result.remoteRef;
@@ -199,16 +258,27 @@ export class ExecutionRuntime {
   private async observe(phase: "apply" | "reconcile", call: () => Promise<ApplyOutcome | ReconcileOutcome>): Promise<ApplyOutcome | ReconcileOutcome> {
     try {
       const result = await call();
+      const extras: import("../types.js").ExecutionFeedback = {};
+      try { if (result && typeof result === "object") {
+        if (typeof result.code === "string" && result.code.trim()) extras.code = result.code;
+        if (typeof result.message === "string" && result.message.trim()) extras.message = result.message;
+        if (result.diagnostics !== undefined) {
+          const failures: string[] = [];
+          const copied = jsonSnapshot(result.diagnostics, (_, message) => failures.push(message));
+          if (!failures.length && Array.isArray(copied) && copied.every(d => isObject(d) && typeof d.code === "string" && typeof d.path === "string" && typeof d.message === "string")) extras.diagnostics = copied as unknown as import("../preflight/types.js").GraphDiagnostic[];
+        }
+      }
+      } catch { /* Optional feedback cannot invalidate a confirmed effect receipt. */ }
       // Copy validated primitives: adapter-owned objects never enter execution records.
       if (result?.kind === "applied" && typeof result.remoteRef === "string" && result.remoteRef.length) {
-        return { kind: "applied", remoteRef: result.remoteRef };
+        return { kind: "applied", remoteRef: result.remoteRef, ...extras };
       }
       if (result && "reason" in result && typeof result.reason === "string") {
-        if (result.kind === "unknown") return { kind: "unknown", reason: result.reason };
-        if (phase === "reconcile" && result.kind === "no_effect") return { kind: "no_effect", reason: result.reason };
+        if (result.kind === "unknown") return { kind: "unknown", reason: result.reason, ...extras };
+        if (phase === "reconcile" && result.kind === "no_effect") return { kind: "no_effect", reason: result.reason, ...extras };
         if (phase === "apply" && result.kind === "not_applied" &&
             (result.retryable === undefined || typeof result.retryable === "boolean")) {
-          return { kind: "not_applied", reason: result.reason, retryable: result.retryable === true };
+          return { kind: "not_applied", reason: result.reason, retryable: result.retryable === true, ...extras };
         }
       }
       return { kind: "unknown", reason: "Invalid adapter outcome" };

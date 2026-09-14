@@ -1,5 +1,7 @@
 # StagedWrite 实现路线
 
+**置顶约束：遵循 [项目原则](design/000-project-principles.md)；原则冲突必须先与项目所有者讨论并取得明确同意。publish/resume 本轮多 Run 接口已实现供评阅，长期扩展仍有未决项，详见 [006](design/006-graph-execution.md)。旧阶段完成记录不代表新目标已完成。**
+
 ## 先理解当前版本
 
 这是一个单包 TypeScript 项目。没有前端、服务部署和 monorepo。现在的目标是让接口和一条完整链路可以运行。

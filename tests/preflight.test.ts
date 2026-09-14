@@ -24,7 +24,9 @@ function fill(engine: DraftEngine, id: string) {
 }
 const suggestion: GraphDiagnostic = {
   code: "capacity.limit", path: "/nodes/c~11/fields/capacity", message: "Capacity exceeds the example limit.",
-  resolution: { kind: "ops", ops: [{ op: "set", nodeId: "c/1", path: "/capacity", value: 10 }] }
+  hint: "Choose a capacity within the limit according to user intent.",
+  candidates: [{ value: 8, message: "An example option, not a required choice." }],
+  related: ["/nodes/c~11/fields/note"]
 };
 
 test("empty graphs and missing required values block, with escaped graph paths", () => {
@@ -36,7 +38,8 @@ test("empty graphs and missing required values block, with escaped graph paths",
   const check = engine.preflight(draft.id);
   assert.equal(check.status, "blocked");
   assert.deepEqual(check.diagnostics.map(d => d.path), ["/nodes/c~11/fields/capacity", "/nodes/c~11/fields/note"]);
-  assert.ok(check.diagnostics.every(d => d.resolution.kind === "blocked" && d.resolution.reason === "human_intent"));
+  assert.ok(check.diagnostics.every(d => d.severity === "error" && d.message.includes("undeclared")));
+  assert.deepEqual(check.preview.nodes["c/1"]?.fields, { capacity: { kind: "undeclared" }, note: { kind: "undeclared" } });
   assert.equal(engine.getDraft(draft.id).version, 1);
 });
 
@@ -51,7 +54,7 @@ test("schema-allowed null is explicit value; clear and reset both block required
   }
 });
 
-test("rule repair is validated but only explicit edit applies it, then preflight must rerun", () => {
+test("caller chooses edits from diagnostics and preview, then preflight must rerun", () => {
   const { engine, draft } = setup([rule(d => {
     const capacity = d.nodes["c/1"]?.fields.capacity;
     return capacity?.kind === "value" && Number(capacity.value) > 10 ? [suggestion] : [];
@@ -60,10 +63,13 @@ test("rule repair is validated but only explicit edit applies it, then preflight
   const check = engine.preflight(draft.id);
   assert.equal(check.status, "blocked");
   assert.deepEqual(engine.getDraft(draft.id), before);
-  const resolution = check.diagnostics[0]!.resolution;
-  assert.equal(resolution.kind, "ops");
-  if (resolution.kind !== "ops") assert.fail();
-  engine.edit(draft.id, check.version, resolution.ops);
+  assert.equal(check.preview.version, check.version);
+  assert.deepEqual(check.preview.nodes["c/1"]?.fields.capacity, { kind: "value", value: 20 });
+  assert.deepEqual(check.diagnostics[0]?.candidates, suggestion.candidates);
+  assert.equal("resolution" in check.diagnostics[0]!, false);
+  // The caller chooses 7, independently of the optional candidate 8.
+  engine.edit(draft.id, check.version, [{ op: "set", nodeId: "c/1", path: "/capacity", value: 7 }]);
+  assert.throws(() => engine.edit(draft.id, check.version, [{ op: "set", nodeId: "c/1", path: "/capacity", value: 9 }]), /STALE_VERSION/);
   assert.throws(() => engine.getCheck(draft.id, check.checkId), /CHECK_NOT_CURRENT/);
   const passed = engine.preflight(draft.id);
   assert.equal(passed.status, "passed");
@@ -97,28 +103,36 @@ test("preview and rejected edits keep the last check usable", () => {
   assert.deepEqual(engine.getCheck(draft.id, check.checkId), check);
 });
 
-test("throwing, async, malformed and impossible repair rules yield incomplete checks", async () => {
+test("throwing, async and malformed diagnostic rules yield incomplete checks with previews", async () => {
   const badChecks: GraphRule["check"][] = [
     () => { throw new Error("provider detail should not leak"); },
     (async () => { throw new Error("async unsupported"); }) as unknown as GraphRule["check"],
     (() => [{ code: "bad", path: "not-a-pointer" }]) as unknown as GraphRule["check"],
-    () => [{ ...suggestion, resolution: { kind: "ops", ops: [] } }],
-    () => [{ ...suggestion, resolution: { kind: "ops", ops: [{ op: "set", nodeId: "missing", path: "/capacity", value: 1 }] } }],
-    () => [{ ...suggestion, resolution: { kind: "ops", ops: [{ op: "set", nodeId: "c/1", path: "/capacity", value: -1 }] } }]
+    (() => [{ ...suggestion, severity: ["warning"] }]) as unknown as GraphRule["check"],
+    (() => [{ ...suggestion, severity: "fatal" }]) as unknown as GraphRule["check"],
+    (() => [{ ...suggestion, message: " " }]) as unknown as GraphRule["check"],
+    (() => [{ ...suggestion, hint: 1 }]) as unknown as GraphRule["check"],
+    (() => [{ ...suggestion, related: ["not-a-pointer"] }]) as unknown as GraphRule["check"],
+    (() => [{ ...suggestion, candidates: [{ message: "missing value" }] }]) as unknown as GraphRule["check"],
+    (() => [{ ...suggestion, candidates: [{ value: {} }] }]) as unknown as GraphRule["check"],
+    (() => [{ ...suggestion, candidates: [{ value: Infinity }] }]) as unknown as GraphRule["check"],
+    (() => [{ ...suggestion, resolution: { kind: "ops", ops: [] } }]) as unknown as GraphRule["check"]
   ];
   for (const check of badChecks) {
     const { engine, draft } = setup([rule(check)]); const before = fill(engine, draft.id);
     const result = engine.preflight(draft.id);
     assert.equal(result.status, "incomplete");
     assert.equal(result.diagnostics[0]?.code, "rule.error");
+    assert.deepEqual(result.preview, before); // All schema fields in this fixture already have explicit values.
+    assert.ok(!JSON.stringify(result).includes("provider detail should not leak"));
     assert.deepEqual(engine.getDraft(draft.id), before);
     assert.deepEqual(engine.getCheck(draft.id, result.checkId), result);
   }
   await new Promise(resolve => setImmediate(resolve));
 });
 
-test("one invalid diagnostic discards all suggestions from that rule", () => {
-  const { engine, draft } = setup([rule(() => [suggestion, { ...suggestion, resolution: { kind: "ops", ops: [] } }])]);
+test("one invalid diagnostic discards all output from that rule", () => {
+  const { engine, draft } = setup([rule(() => [suggestion, { ...suggestion, message: "" }])]);
   fill(engine, draft.id);
   assert.deepEqual(engine.preflight(draft.id).diagnostics.map(d => d.code), ["rule.error"]);
 });
@@ -174,26 +188,87 @@ test("same-draft callback reentry is blocked and the check lock is always releas
   assert.equal(engine.edit(draftId, 1, [{ op: "reset", nodeId: "c/1", path: "/note" }]).version, 2);
 });
 
-test("a graph rule can propose a node-and-edge repair without reserving identities", () => {
+test("a graph relationship diagnostic leaves node and edge choices to the caller", () => {
   const graphDefinition = { ...definition, relationTypes: { related: { from: ["project"], to: ["project"] } } };
   const graphRule = rule(d => Object.keys(d.edges).length ? [] : [{
-    code: "graph.related", path: "/edges", message: "The example requires a related project.",
-    resolution: { kind: "ops", ops: [
-      { op: "node.add", id: "related", nodeType: "project" },
-      { op: "set", nodeId: "related", path: "/capacity", value: 0 },
-      { op: "set", nodeId: "related", path: "/note", value: null },
-      { op: "edge.add", id: "relation", relationType: "related", from: "c/1", to: "related" }
-    ] }
+    code: "graph.related", path: "/edges", message: "Project c/1 has no related project.",
+    hint: "Connect another project or create one according to user intent.", related: ["/nodes/c~11"]
   }]);
   const engine = createStagedWrite({ definitions: [graphDefinition], rules: [graphRule] });
   const draft = engine.create(selector); fill(engine, draft.id);
   const check = engine.preflight(draft.id);
-  const repair = check.diagnostics[0]!.resolution;
   assert.equal(check.status, "blocked");
-  assert.deepEqual(engine.getDraft(draft.id).edges, {});
-  assert.equal(Object.hasOwn(engine.getDraft(draft.id).nodes, "related"), false);
-  if (repair.kind !== "ops") assert.fail();
-  engine.edit(draft.id, check.version, repair.ops);
-  assert.equal(engine.preflight(draft.id).status, "passed");
-  assert.equal(engine.getDraft(draft.id).edges.relation?.to, "related");
+  assert.deepEqual(check.preview.edges, {});
+  assert.equal(Object.hasOwn(check.preview.nodes, "related"), false);
+  engine.edit(draft.id, check.version, [
+    { op: "node.add", id: "related", nodeType: "project" },
+    { op: "set", nodeId: "related", path: "/capacity", value: 0 },
+    { op: "set", nodeId: "related", path: "/note", value: null },
+    { op: "edge.add", id: "relation", relationType: "related", from: "c/1", to: "related" }
+  ]);
+  const passed = engine.preflight(draft.id);
+  assert.equal(passed.status, "passed");
+  assert.equal(passed.preview.edges.relation?.to, "related");
+  assert.deepEqual(check.preview.edges, {}); // Old snapshots cannot change after an edit.
+});
+
+test("preview distinguishes explicit null, clear and undeclared without mutating the draft", () => {
+  const { engine, draft } = setup();
+  fill(engine, draft.id);
+  const valued = engine.preflight(draft.id);
+  assert.deepEqual(valued.preview.nodes["c/1"]?.fields.note, { kind: "value", value: null });
+  let current = engine.edit(draft.id, valued.version, [{ op: "remove", nodeId: "c/1", path: "/note" }]);
+  const cleared = engine.preflight(draft.id);
+  assert.deepEqual(cleared.preview.nodes["c/1"]?.fields.note, { kind: "clear" });
+  assert.match(cleared.diagnostics[0]!.message, /current intent is clear/);
+  current = engine.edit(draft.id, current.version, [{ op: "reset", nodeId: "c/1", path: "/note" }]);
+  const reset = engine.preflight(draft.id);
+  assert.deepEqual(reset.preview.nodes["c/1"]?.fields.note, { kind: "undeclared" });
+  assert.match(reset.diagnostics[0]!.message, /current intent is undeclared/);
+  assert.equal(Object.hasOwn(current.nodes["c/1"]!.fields, "note"), false);
+  reset.preview.nodes["c/1"]!.fields.note = { kind: "value", value: "caller mutation" };
+  reset.preview.tombstones.nodes.push("c/1");
+  assert.deepEqual(engine.getDraft(draft.id), current);
+  const stored = engine.getCheck(draft.id, reset.checkId);
+  assert.deepEqual(stored.preview.nodes["c/1"]?.fields.note, { kind: "undeclared" });
+  assert.deepEqual(stored.preview.tombstones.nodes, []);
+});
+
+test("message-only rules work, unmatched rules stay absent, and warnings do not block", () => {
+  const { engine, draft } = setup([
+    rule(() => [{ code: "note.review", path: "/nodes/c~11/fields/note", message: "The note is explicitly null; review if a note is useful.", severity: "warning" }]),
+    { ...rule(() => []), id: "unmatched" }
+  ]);
+  fill(engine, draft.id);
+  const check = engine.preflight(draft.id);
+  assert.equal(check.status, "passed");
+  assert.equal(check.diagnostics.length, 1);
+  assert.equal(check.diagnostics[0]?.source.kind, "rule");
+  assert.equal("hint" in check.diagnostics[0]!, false);
+  assert.deepEqual(check.preview.nodes["c/1"]?.fields.note, { kind: "value", value: null });
+  const blocking = setup([rule(() => [{ code: "business.error", path: "", message: "This draft conflicts with the current policy." }])]);
+  fill(blocking.engine, blocking.draft.id);
+  assert.equal(blocking.engine.preflight(blocking.draft.id).status, "blocked");
+});
+
+test("preview includes undeclared optional escaped field names, graph edges and retired identities", () => {
+  const special = defineDraftType({ id: "escaped", version: "1", nodeTypes: { item: {
+    valueSchema: { type: "object", properties: { "a/b~c": { type: "string" } }, additionalProperties: false }
+  } }, relationTypes: { uses: { from: ["item"], to: ["item"] } } });
+  const engine = createStagedWrite({ definitions: [special] });
+  const draft = engine.create({ type: "escaped", typeVersion: "1" });
+  engine.edit(draft.id, 0, [
+    { op: "node.add", id: "a", nodeType: "item" }, { op: "node.add", id: "b", nodeType: "item" },
+    { op: "set", nodeId: "b", path: "/a~1b~0c", value: "known" },
+    { op: "edge.add", id: "a/b", relationType: "uses", from: "a", to: "b" },
+    { op: "node.add", id: "retired", nodeType: "item" }, { op: "node.remove", id: "retired" }
+  ]);
+  const check = engine.preflight(draft.id);
+  assert.equal(check.status, "passed");
+  assert.deepEqual(check.preview.nodes.a?.fields["a/b~c"], { kind: "undeclared" });
+  assert.deepEqual(check.preview.nodes.b?.fields["a/b~c"], { kind: "value", value: "known" });
+  assert.equal(check.preview.edges["a/b"]?.to, "b");
+  assert.deepEqual(check.preview.tombstones.nodes, ["retired"]);
+  assert.equal(check.preview.id, check.draftId);
+  assert.equal(check.preview.definitionDigest, check.definitionDigest);
 });

@@ -10,7 +10,7 @@ const selector = { type: "migration", typeVersion: "1" };
 const definition = { id: selector.type, version: "1", nodeTypes: { item: { valueSchema: { type: "object", properties: {}, additionalProperties: false } } }, relationTypes: {} };
 const executor: GraphExecutor = { ...selector, id: "fixture", version: "1", target: "mock", plan: () => [{ id: "one", payload: {} }], apply: async () => ({ kind: "unknown", reason: "lost" }), reconcile: async () => ({ kind: "applied", remoteRef: "remote-one" }) };
 function file(t: { after(fn: () => void): void }) { const dir = mkdtempSync(join(tmpdir(), "sw-migrate-")); t.after(() => rmSync(dir, { recursive: true, force: true })); return join(dir, "data.sqlite"); }
-for (const version of [2, 3]) test(`real schema ${version} layout upgrades with sealed plans and run evidence intact`, async t => {
+for (const version of [2, 3, 4]) test(`real schema ${version} layout upgrades with sealed plans and run evidence intact`, async t => {
   const path = file(t);
   const memory = createStagedWrite({ definitions: [definition], mode: "executable", executors: [executor] });
   const d = memory.create(selector); const draft = memory.edit(d.id, 0, [{ op: "node.add", id: "one", nodeType: "item" }]);
@@ -28,20 +28,26 @@ for (const version of [2, 3]) test(`real schema ${version} layout upgrades with 
   db.prepare("INSERT INTO sw_drafts VALUES (?,?,?,?,?)").run(d.id, draft.version, JSON.stringify(draft), 1, JSON.stringify(check));
   db.prepare("INSERT INTO sw_plans VALUES (?,?)").run(d.id, JSON.stringify({ certificate: check.certificate, binding: run.binding, plan: executor.plan(draft) }));
   db.prepare("INSERT INTO sw_runs VALUES (?,?,?,?)").run(run.id, d.id, "old-owner", JSON.stringify(run));
-  if (version === 3) {
+  if (version >= 3) {
     db.exec("CREATE TABLE sw_sessions (owner TEXT PRIMARY KEY, pid INTEGER NOT NULL, host TEXT NOT NULL, released INTEGER NOT NULL) STRICT;");
     db.prepare("INSERT INTO sw_sessions VALUES (?,?,?,1)").run("old-owner", process.pid, hostname());
   }
+  if (version === 4) db.exec("CREATE TABLE sw_imports (source_run TEXT NOT NULL, request_id TEXT NOT NULL, command TEXT NOT NULL, draft_id TEXT NOT NULL UNIQUE, PRIMARY KEY(source_run, request_id)) STRICT;");
   db.close();
   const next = createStagedWrite({ definitions: [definition], mode: "executable", executors: [executor], storage: { kind: "sqlite", path } });
   assert.deepEqual(next.getDraft(d.id), draft); assert.deepEqual(next.getRun(run.id), run);
-  assert.deepEqual(await next.publish(d.id, check.certificate!), run);
-  assert.throws(() => next.edit(d.id, draft.version, [{ op: "node.remove", id: "one" }]), /DRAFT_SEALED/);
+  assert.deepEqual(await next.publish(d.id, check.certificate!, { runId: run.id }), run);
+  assert.throws(() => next.edit(d.id, draft.version, [{ op: "node.remove", id: "one" }]), /REPAIR_TOPOLOGY_CHANGED/);
   const command = { requestId: "recover", expectedSequence: run.events.length, actor: "operator", reason: "migrated" };
   if (version === 2) assert.throws(() => next.recover(run.id, command), /OWNER_EVIDENCE_REQUIRED/);
   else { next.recover(run.id, command); assert.equal((await next.resume(run.id)).state, "published"); }
+  const fresh = next.preflight(d.id);
+  const independent = await next.publish(d.id, fresh.certificate!, { runId: "post-migration" });
+  assert.notEqual(independent.id, run.id);
+  assert.equal(next.listRunIds().length, 2);
+  assert.equal(next.getRunInput(run.id).certificate, check.certificate);
   next.close();
-  const inspect = new DatabaseSync(path); assert.equal(inspect.prepare("SELECT value FROM sw_meta WHERE key='schema'").get()?.value, "4"); inspect.close();
+  const inspect = new DatabaseSync(path); assert.equal(inspect.prepare("SELECT value FROM sw_meta WHERE key='schema'").get()?.value, "5"); inspect.close();
 });
 test("missing historical columns reject startup without advancing the schema version", t => {
   const path = file(t); const db = new DatabaseSync(path);

@@ -1,5 +1,7 @@
 # M6：同主机显式执行恢复
 
+**设计约束：遵循 [000 项目原则](000-project-principles.md)；原则冲突须先与项目所有者讨论并取得明确同意。本文中的阶段实现记录不覆盖主线，publish/resume 目标及当前差异以 [006](006-graph-execution.md) 为准。**
+
 状态：已实现。本文记录 schema=3 的恢复设计；当前 schema=4 增加确认回执接入，见 [015](015-existing-objects.md)。`recover(runId, { requestId, expectedSequence, actor, reason })` 同步接管，不调用执行器；调用方随后显式 `resume`、`adjudicate` 或 `stopRetry`。
 
 ## 归属转移

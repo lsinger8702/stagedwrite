@@ -11,11 +11,9 @@ draft = engine.edit(draft.id, draft.version, [
 ]);
 let check = engine.preflight(draft.id);
 console.log("1. Preflight blocks:", check.diagnostics[0]?.message);
-const repair = check.diagnostics[0]?.resolution;
-assert.equal(repair?.kind, "ops");
-if (repair?.kind !== "ops") throw new Error("Expected repair");
-console.log("2. Demo user explicitly chooses deferral; apply suggested ops.");
-draft = engine.edit(draft.id, draft.version, repair.ops);
+console.log("Current draft:", check.preview);
+console.log("2. Demo user chooses deferral after reviewing the diagnostic and draft.");
+draft = engine.edit(draft.id, check.version, [{ op: "set", path: "/timing", value: "next_cycle" }]);
 check = engine.preflight(draft.id);
 assert.ok(check.certificate);
 let run = await engine.publish(draft.id, check.certificate);

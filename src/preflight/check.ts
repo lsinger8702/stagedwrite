@@ -1,15 +1,16 @@
+import { validDiagnostic } from "./diagnostic.js";
 import { randomUUID } from "node:crypto";
 import type { DefinitionRegistry } from "../registry/registry.js";
-import { deepFreeze, definitionDigest, isObject, jsonSnapshot, pointer } from "../registry/json.js";
-import { evaluateGraphEdit } from "../graph/edit.js";
-import type { GraphDraft, GraphOp } from "../graph/types.js";
+import { deepFreeze, definitionDigest, jsonSnapshot, pointer } from "../registry/json.js";
+import { previewDraft } from "./preview.js";
+import type { GraphDraft } from "../graph/types.js";
 import type { GraphRule, GraphDiagnostic, GraphCheck, SourcedGraphDiagnostic } from "./types.js";
 
 const builtinVersion = "graph-completeness-v1";
 const bindingKey = (type: string, version: string) => JSON.stringify([type, version]);
 const text = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
 const exactKeys = (v: Record<string, unknown>, allowed: string[]) => Object.keys(v).every(k => allowed.includes(k));
-const validPointer = (v: unknown): v is string => typeof v === "string" && (v === "" || v.startsWith("/")) && !/~(?![01])/.test(v);
+
 
 export class GraphPreflight {
   #rules = new Map<string, readonly GraphRule[]>();
@@ -38,13 +39,14 @@ export class GraphPreflight {
     if (digest !== draft.definitionDigest) throw new Error("DEFINITION_MISMATCH");
     const diagnostics: SourcedGraphDiagnostic[] = [];
     const builtin = (code: string, path: string, message: string) => diagnostics.push({
-      code, path, message, resolution: { kind: "blocked", reason: "human_intent" }, source: { kind: "builtin", version: builtinVersion }
+      code, path, message, severity: "error", source: { kind: "builtin", version: builtinVersion }
     });
     if (!Object.keys(draft.nodes).length) builtin("graph.empty", "/nodes", "Add at least one node to express the intended change.");
     for (const id of Object.keys(draft.nodes).sort()) {
       const node = draft.nodes[id]!;
       for (const field of definition.nodeTypes[node.nodeType]!.requiredAtPublish ?? []) {
-        if (node.fields[field]?.kind !== "value") builtin("field.required", `/nodes/${pointer(id)}/fields/${pointer(field)}`, `Supply an explicit value for ${field}.`);
+        if (node.fields[field]?.kind !== "value") builtin("field.required", `/nodes/${pointer(id)}/fields/${pointer(field)}`,
+          `Node ${id} requires an explicit value for ${field}; its current intent is ${node.fields[field]?.kind === "clear" ? "clear" : "undeclared"}.`);
       }
     }
     let incomplete = false;
@@ -59,26 +61,19 @@ export class GraphPreflight {
         if (failures.length || !Array.isArray(copied)) throw new Error("Expected JSON diagnostics");
         const accepted: SourcedGraphDiagnostic[] = [];
         for (const entry of copied) {
-          if (!isObject(entry) || !exactKeys(entry, ["code", "path", "message", "resolution"]) || !text(entry.code) || !validPointer(entry.path) || !text(entry.message) || !isObject(entry.resolution)) throw new Error("Invalid diagnostic");
-          const resolution = entry.resolution;
-          if (resolution.kind === "ops") {
-            if (!exactKeys(resolution, ["kind", "ops"]) || !Array.isArray(resolution.ops)) throw new Error("Invalid repair");
-            // Runtime M2 validation also rejects invalid shapes, stale IDs and invalid final graphs.
-            evaluateGraphEdit(this.registry, draft, draft.version, resolution.ops as unknown as GraphOp[]);
-          } else if (resolution.kind === "blocked") {
-            if (!exactKeys(resolution, ["kind", "reason", "message"]) || !["human_intent", "unsupported"].includes(String(resolution.reason)) ||
-                ("message" in resolution && typeof resolution.message !== "string")) throw new Error("Invalid blocked reason");
-          } else throw new Error("Invalid resolution");
-          accepted.push({ ...(entry as unknown as GraphDiagnostic), source });
+          if (!validDiagnostic(entry, this.registry, draft)) throw new Error("Invalid diagnostic");
+          const diagnostic = entry as unknown as GraphDiagnostic;
+          accepted.push({ ...diagnostic, severity: (diagnostic.severity ?? "error") as "error" | "warning", source });
         }
         diagnostics.push(...accepted);
       } catch {
         incomplete = true;
-        diagnostics.push({ code: "rule.error", path: "", message: `Rule ${rule.id}@${rule.version} did not return valid synchronous diagnostics and repairs.`,
-          resolution: { kind: "blocked", reason: "unsupported", message: "Fix the rule implementation and run preflight again." }, source });
+        diagnostics.push({ code: "rule.error", path: "", message: `Rule ${rule.id}@${rule.version} did not return valid synchronous diagnostics; this check is incomplete.`,
+          severity: "error", hint: "The rule implementation must be corrected before preflight can complete.", source });
       }
     }
-    return { scope: "draft", checkId: randomUUID(), draftId: draft.id, version: draft.version, definitionDigest: draft.definitionDigest,
-      rulesDigest: this.rulesDigest(draft), status: incomplete ? "incomplete" : diagnostics.length ? "blocked" : "passed", diagnostics };
+    return { formatVersion: 2, scope: "draft", checkId: randomUUID(), draftId: draft.id, version: draft.version, definitionDigest: draft.definitionDigest,
+      rulesDigest: this.rulesDigest(draft), preview: previewDraft(draft, definition),
+      status: incomplete ? "incomplete" : diagnostics.some(d => d.severity === "error") ? "blocked" : "passed", diagnostics };
   }
 }

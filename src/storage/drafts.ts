@@ -2,11 +2,12 @@ import type { Step, ExecutionBinding } from "../types.js";
 import type { GraphDraft } from "../graph/types.js";
 import type { GraphCheck } from "../preflight/types.js";
 export interface StoredPlan { certificate: string; plan: Step[]; binding: ExecutionBinding }
+export interface RunInput extends StoredPlan { draft: GraphDraft }
 export interface DraftStore {
   create(draft: GraphDraft): void;
   get(id: string): GraphDraft;
   ids(): string[];
-  edit(candidate: GraphDraft, expectedVersion: number): void;
+  edit(candidate: GraphDraft, expectedVersion: number, validate?: () => void): void;
   beginCheck(id: string, expectedVersion: number): number;
   saveCheck(check: GraphCheck, epoch: number, plan?: StoredPlan): void;
   getCheck(id: string): GraphCheck | undefined;
@@ -21,7 +22,8 @@ export class MemoryDraftStore implements DraftStore {
   create(draft: GraphDraft): void { this.open(); if (this.drafts.has(draft.id)) throw new Error("DRAFT_EXISTS"); this.drafts.set(draft.id, structuredClone(draft)); this.epochs.set(draft.id, 0); }
   get(id: string): GraphDraft { this.open(); const d = this.drafts.get(id); if (!d) throw new Error("DRAFT_NOT_FOUND"); return structuredClone(d); }
   ids(): string[] { this.open(); return [...this.drafts.keys()].sort(); }
-  edit(candidate: GraphDraft, expectedVersion: number): void {
+  edit(candidate: GraphDraft, expectedVersion: number, validate?: () => void): void {
+    validate?.();
     if (this.get(candidate.id).version !== expectedVersion) throw new Error("STALE_VERSION");
     this.drafts.set(candidate.id, structuredClone(candidate)); this.checks.delete(candidate.id);
   }

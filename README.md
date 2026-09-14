@@ -1,5 +1,9 @@
 # StagedWrite
 
+**Design direction: [project principles](docs/design/000-project-principles.md). Any conflicting principle change must be discussed with and explicitly agreed by the project owner first.**
+
+**Graph publish creates an independent Run. Supply `{runId}` to identify one submission: resending that ID observes its Run; `resume(runId)` advances it. Different IDs mean different intents, even for the same Draft. See [the implemented contract](docs/design/006-graph-execution.md) and [actual input/output walkthrough](docs/examples/publish-resume-walkthrough.md).**
+
 An experimental TypeScript library for staged writes from agent tools to external systems.
 
 **Status: early prototype, v0.0.1.** Graph registration, editing, preflight and execution are connected. SQLite persists drafts, fixed plans, run snapshots and receipts. Explicit same-host recovery can reclaim unfinished runs after their owner closes or exits; there is no published npm package yet. The opt-in Stripe test Customer adapter has offline contract coverage; real-account verification is still pending.
@@ -50,8 +54,10 @@ Run `npm run demo:storage` for reopening a SQLite draft and check. Automated tes
 ## Persist execution facts (M5)
 
 Executable mode now also accepts `storage: { kind: "sqlite", path }`. A passing preflight stores its exact plan
-and certificate with the check. First publication atomically validates that check, inserts the run and permanently
-seals the draft. Repeated publication returns the same run; a second engine cannot dispatch it or edit the sealed draft.
+and certificate with the check. Publication atomically validates that check and saves a new Run plus its own
+fixed draft/plan snapshot. Different submission IDs create independent Runs, including concurrently. Resending the
+same ID and original certificate only observes that Run; a second engine must recover ownership before advancing it.
+Unfinished executions support diagnostic-driven edit and resume on the same Run. Successful steps stay immutable; editing after all steps succeed remains deferred (`DRAFT_SEALED`).
 
 Before every adapter call, the engine commits the original key, resolved payload and dispatch/reconciliation intent.
 It commits each observed result before moving to the next step. Manual decisions, stop requests and their resulting
@@ -80,8 +86,8 @@ Adapters must establish that a request cannot still complete before reporting `n
 Without a successful claim, a new engine returns `RECOVERY_REQUIRED` for nonterminal mutations. Terminal runs remain
 readable, and failed runs can derive revisions/continuations under their usual evidence checks.
 A checkpoint failure stops local advancement (`RUN_STORAGE_FAILED`); close and reopen before recovery.
-`close()` refuses while a check, recovery or adapter call is active. Schema versions 1/2/3 upgrade transactionally to 4;
-legacy runs without owner-session evidence remain read-only (`OWNER_EVIDENCE_REQUIRED`). Old binaries reject schema 4.
+`close()` refuses while a check, recovery or adapter call is active. Schema versions 1/2/3/4 upgrade transactionally to 5;
+legacy runs without owner-session evidence remain read-only (`OWNER_EVIDENCE_REQUIRED`). Old binaries reject schema 5.
 The database is trusted internal state, not an import format for arbitrary run JSON.
 
 Run `npm run demo:durable` for stored plans and partial continuation, or `npm run demo:recovery` for a real child-process
@@ -95,7 +101,7 @@ A schema-2 database has no owner-session evidence. After upgrading, its unfinish
 When the original compatible process is still available, finish or resolve its work before upgrading the database.
 If it is gone, keep the database and original request evidence for external reconciliation; do not treat migration
 as proof that the remote request had no effect, or create a replacement request automatically.
-Back up the database consistently before upgrading. Older binaries reject schema 4, so reopening the upgraded
+Back up the database consistently before upgrading. Older binaries reject schema 5, so reopening the upgraded
 file with an older binary is not a rollback procedure. See [the upgrade guide](docs/design/017-upgrade-and-trial.md).
 
 ## Retention and capacity
@@ -150,15 +156,21 @@ const definition = defineDraftType({
   relationTypes: {}
 });
 const engine = createStagedWrite({ definitions: [definition] });
-const draft = engine.create({ type: definition.id, typeVersion: definition.version });
+const draft = engine.create({ type: definition.id, typeVersion: definition.version }, {
+  nodes: {
+    "project-1": { id: "project-1", nodeType: "project", fields: { capacity: { kind: "value", value: 100 } } }
+  },
+  edges: {}
+}); // Initial work content, version 0. Schema does not invent this intent.
 const ops = [
-  { op: "node.add", id: "project-1", nodeType: "project" },
-  { op: "set", nodeId: "project-1", path: "/capacity", value: 100 }
+  { op: "set", nodeId: "project-1", path: "/capacity", value: 120 }
 ] as const;
 const preview = engine.preview(draft.id, draft.version, ops);
 const saved = engine.edit(draft.id, draft.version, ops);
 const check = engine.preflight(saved.id);
 ```
+
+Creation validates the entire initial graph before saving it; malformed input leaves no empty draft. Business-rule failures are diagnosed by preflight. The one-argument empty creation form remains only for compatibility.
 
 The package-name import assumes a local link/build. See [local example imports](examples/registry.ts) for running from this repository.
 
@@ -168,9 +180,54 @@ Graph operations are `node.add`, `node.remove`, `edge.add`, `edge.remove` and fi
 
 Operations run in input order; final field constraints and edge integrity are checked at the end. Invalid batches roll back graph, version and tombstones together. Deleting referenced nodes requires explicit removal of their edges in the batch. Preview and edit share candidate calculation; only successful edit saves once and increments version. Empty batches are rejected.
 
+## Repair an unfinished execution
+
+Graph executor `apply` / `reconcile` outcomes may optionally include `code`, `message`, and
+`diagnostics: GraphDiagnostic[]`, including candidate values and repair OPs. The adapter maps remote errors
+into graph paths. No diagnostic module is required: a basic reason or error code can still guide continuation.
+Optional metadata never overrides the outcome's effect evidence.
+
+```ts
+const result = await engine.publish(draft.id, check.certificate!);
+// Supply result.preview + result.diagnostics + result.steps to the caller/LLM.
+const repaired = engine.edit(draft.id, result.preview.version, chosenRepairOps);
+const continued = await engine.resume(result.id); // Same Run; no second publish.
+```
+
+On a changed Draft, resume reconciles original unknown requests first, then runs preflight on the repair.
+If preflight is pending/blocked/incomplete, the response includes `check`, its `preview` and `diagnostics`,
+and sends no repaired request. Use `preview.version` for the next edit: Run `version` still identifies the last
+qualified execution input until a repair is accepted. Successful steps and nodes cannot change. The initial
+implementation keeps graph/step topology stable and permits field changes on unfinished nodes.
+
+A qualified repair preserves the old steps/keys in `run.repairs` and installs `run.repairInput` atomically before
+dispatch. Changed, previously attempted requests get new keys; successful and unchanged requests retain theirs.
+`getRunInput` returns the latest qualified execution input. Original publication identity remains separately
+persisted, so retransmitting the original runId/certificate observes that same Run after repairs.
+
+There is no requirement for a crash or restart. Normal partial execution, explicit refusal followed by a field
+repair, and uncertain responses all use resume. User-stopped/closed Runs and fully successful Runs are not reopened.
+A timeout alone never proves that repeating a remote write is safe.
+
 ## Check and execute
 
-Default `mode: "draft"` has no publish methods and no certificate. Its `passed` result only means draft checks passed. Register graph rules separately with `{id,version,type,typeVersion,check}`. Rules return diagnostics containing repair ops or blocked reasons; fixes are never applied automatically. Exceptions, asynchronous rules and invalid repairs yield `incomplete`.
+Default `mode: "draft"` has no publish methods and no certificate. Its `passed` result only means draft checks passed. Register graph rules separately with `{id,version,type,typeVersion,check}`. Rules return actual findings with `code`, a graph-root JSON Pointer `path`, and a concrete `message`. Optional `hint`, `related`, `metadata`, `stage`, `constraintIds`, and preflight retry advice (`retryable`, `retryAfterSeconds`) provide context. `candidates` can include `{value,label?,message?,metadata?,repairOps?}`; `excludedCandidates` explain unavailable values separately. `repairs: [{id?,message,ops}]` offers alternative edit batches. `severity` defaults to `error`; warnings do not block. All suggestions are optional. Preflight validates each suggested batch against the checked graph without applying it or claiming that it resolves every business problem. The caller/LLM selects, changes or rejects suggestions, then uses normal version-checked edit and preflight. Exceptions, Promises returned from synchronous rules, and malformed diagnostics yield `incomplete`.
+
+For I/O checks, optionally register `asyncRules` with the same identity fields and
+`check: async (draft, {signal}) => ({status:"complete", diagnostics:[]})` or
+`{status:"pending", message:"Still processing", retryAfterSeconds:2}`. With `asyncRules`, call
+`await engine.preflight(id)`. Each call runs synchronous checks and queries asynchronous rules once;
+pending checks return `pendingRules` alongside existing diagnostics and preview, with no publish certificate.
+The application owns external jobs, progress and deduplication; it calls preflight again later.
+`preflightTimeoutMs` defaults to 5000 for the round's waiting budget. Timeout returns `incomplete`, signals
+cancellation and ignores late results; callbacks must honor the signal and avoid blocking the event loop.
+There is no queue or background polling. See [the async rule contract](docs/design/004-graph-preflight.md).
+
+Every result includes `preview`: the checked draft graph with node identities/types, edges, tombstones and all schema fields, including explicit `{kind:"undeclared"}` entries for absent fields. `{kind:"clear"}` and `{kind:"value",value:null}` remain distinct. Preview is available for `passed`, `blocked`, and `incomplete` results, including planner failures; it is the current intent, not the final remote request or predicted remote state.
+
+Pass the response and user intent to your LLM. It chooses OPs using `preview` and `diagnostics`; apply them with `engine.edit(check.draftId, check.version, ops)` and rerun preflight. The library does not call an LLM. `engine.preview(id,version,ops)` separately evaluates proposed edits without saving. See [the complete diagnostic-to-edit example](examples/preflight.ts).
+
+This experimental API uses `formatVersion: 2`: remove the old `resolution` field from rules and bump changed rule versions. Stored old-format checks must be rerun; graph data is retained. Response format versioning is separate from execution rule identity.
 
 For execution, explicitly configure `mode: "executable"` and `executors: [executor]`. Each definition version requires one `GraphExecutor` with stable id/version/target, pure synchronous `plan`, `apply`, and a `reconcile` function or an explicit unsupported reason. Missing capabilities fail assembly.
 
@@ -181,7 +238,7 @@ const engine = createStagedWrite({
 // Create and edit a graph as above, then:
 const check = engine.preflight(draftId);
 if (check.certificate) {
-  let run = await engine.publish(draftId, check.certificate);
+  let run = await engine.publish(draftId, check.certificate, { runId: "submission-1" });
   if (run.state === "unknown" || run.state === "blocked") {
     run = await engine.resume(run.id); // caller decides retry timing and capacity
   }
@@ -190,7 +247,11 @@ if (check.certificate) {
 
 See [the complete executable graph example](examples/graph-execution.ts). A passing execution check fixes a copied plan and binds draft version, definition/rule digests, executor identity, target and plan digest. Publish executes that plan without rerunning the planner. The certificate is an internal handle, not external authorization.
 
-Successful edits and repeated preflight invalidate old checks/plans. Preview and rejected edits preserve them. `getCheck(draftId,checkId)` rejects obsolete or foreign checks. Publishing seals the draft and establishes its run before dispatch. Repeated publish observes that run; only resume advances it. Both graph and scalar entry points share [ExecutionRuntime](src/execution/runtime.ts).
+Successful edits and repeated preflight invalidate old checks/plans. Preview and rejected edits preserve them. `getCheck(draftId,checkId)` rejects obsolete or foreign checks. Graph publish establishes each Run and its immutable input before dispatch. `publish(id,certificate,{runId})` with the same runId and original arguments observes the existing Run, even after a later preflight. The same ID with a different draft or certificate returns `RUN_ID_CONFLICT`. Omitting options generates a fresh UUID on every call; supply an ID when retrying a submission after a lost response. `resume(runId)` advances the original Run, using its stored input rather than the current draft plan. `getRunInput(runId)` returns an isolated snapshot.
+
+Graph runIds accept 1–128 ASCII letters, digits, dots, underscores or hyphens, starting with a letter or digit. Publication IDs are unique within the engine/store, including across draft types. Already-published drafts remain uneditable in this increment; a new preflight can replace the draft qualification without modifying existing Runs. The deprecated scalar `StagedWrite` prototype retains its old one-run behavior; use `createStagedWrite` for this contract. Both entries share [ExecutionRuntime](src/execution/runtime.ts).
+
+Run `npm run demo:publish-resume` to print real library inputs/outputs with SQLite and a simulated remote. See [the recorded trace](docs/examples/publish-resume-walkthrough.md).
 
 ## Dependencies and failure revisions
 
@@ -203,7 +264,7 @@ Graph relations are mapped by the executor; the library does not infer execution
 Terminal failure marks all unattempted steps `skipped`, with `dependency_failed` or `run_stopped` as the reason.
 For a terminal run proven to have no effects, `engine.revise(runId)` returns an editable copy with a new ID,
 version 0 and `sourceRunId`. It needs a new preflight certificate. Repeated revision calls return the same copy;
-the source remains sealed and its execution history remains available. Unknown, blocked, successful and partially
+the source retains its execution history; direct edit/resume is now also available for unfinished executions. Unknown, blocked, successful and partially
 applied runs cannot be revised this way. For mapped create-only plans, use `continueFrom` for partial-success derivation (below).
 
 Run `npm run demo:dependencies` for a project/task graph: zero-effect refusal → revise → parent result reference → recover a lost child response.

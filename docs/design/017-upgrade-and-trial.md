@@ -1,5 +1,7 @@
 # 升级边界与外部试用
 
+**设计约束：遵循 [000 项目原则](000-project-principles.md)；原则冲突须先与项目所有者讨论并取得明确同意。本文中的阶段实现记录不覆盖主线，publish/resume 目标及当前差异以 [006](006-graph-execution.md) 为准。**
+
 状态：包内名称已确定为 stagedwrite；版本仍为 0.0.1，private=true，尚未发布 npm。
 2026-09-13 查询 https://registry.npmjs.org/stagedwrite 返回 404；这是当时的查询结果，不是名称预留或账号发布授权。
 正式发布前必须再次核查名称、登录身份与权限。项目名称、README 包名导入和隔离消费脚本已同步。
@@ -10,8 +12,9 @@
 |---|---|---|
 | schema 1 | 保留草稿，创建当前表结构 | 旧版本没有执行记录表 |
 | schema 2 | 草稿、计划、run、回执仍可读取；保留发布封存 | 没有 session 证据的未完成 run 不可通过新引擎接管 |
-| schema 3 | 保留会话和执行事实，升级至 4 | 旧 owner 已释放或同主机进程已退出时可显式 recover |
-| schema 4 | 同版本打开，检查必要列 | 按既有 owner 和证据条件恢复 |
+| schema 3 | 保留会话和执行事实，升级至 5 并回填每 Run 输入 | 旧 owner 已释放或同主机进程已退出时可显式 recover |
+| schema 4 | 升至 5，移除单 Draft/单 Run 约束并回填固定输入 | 按既有 owner 和证据条件恢复 |
+| schema 5 | 同版本打开，检查必要列 | 从每 Run 的固定输入恢复，不依赖 Draft 当前检查 |
 
 schema 2 的限制包括 recover、resume、adjudicate、stopRetry，不能靠一个新命令补造旧 owner 证据。
 终态失败仍可按既有条件派生，确认回执可按 importConfirmed 的终态／映射约束接入独立工作。

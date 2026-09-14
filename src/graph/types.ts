@@ -17,6 +17,8 @@ export interface GraphDraft extends DefinitionSelector {
   edges: Record<string, GraphEdge>;
   tombstones: { nodes: string[]; edges: string[] };
 }
+/** Caller-owned initial work content; identity and execution metadata belong to the engine. */
+export type GraphInitialIntent = Pick<GraphDraft, "nodes" | "edges">;
 export type GraphOp = { op: "node.add"; id: string; nodeType: string }
   | { op: "node.remove" | "edge.remove"; id: string }
   | { op: "edge.add"; id: string; relationType: string; from: string; to: string }

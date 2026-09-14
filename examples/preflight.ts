@@ -13,8 +13,8 @@ const capacityRule: GraphRule = {
   check: draft => {
     const capacity = draft.nodes.project?.fields.capacity;
     return capacity?.kind === "value" && Number(capacity.value) > 10 ? [{
-      code: "capacity.limit", path: "/nodes/project/fields/capacity", message: "Example policy caps the capacity at 10.",
-      resolution: { kind: "ops", ops: [{ op: "set", nodeId: "project", path: "/capacity", value: 10 }] }
+      code: "capacity.limit", path: "/nodes/project/fields/capacity", message: `Project capacity is ${capacity.value}, exceeding the allowed maximum of 10.`,
+      hint: "Choose a capacity within the limit that meets the user's requirements; ask if the intent is unclear."
     }] : [];
   }
 };
@@ -24,12 +24,12 @@ draft = engine.edit(draft.id, 0, [{ op: "node.add", id: "project", nodeType: "pr
 console.log("1. Missing intent:", engine.preflight(draft.id).diagnostics);
 draft = engine.edit(draft.id, draft.version, [{ op: "set", nodeId: "project", path: "/capacity", value: 20 }]);
 const blocked = engine.preflight(draft.id);
-console.log("2. Policy diagnostic:", blocked.status, blocked.diagnostics);
-const repair = blocked.diagnostics[0]?.resolution;
-if (repair?.kind === "ops") {
-  console.log("3. Demo author explicitly chooses the lower capacity; the engine did not apply it automatically.");
-  draft = engine.edit(draft.id, blocked.version, repair.ops);
-}
+// The application passes this response plus user intent to its LLM. No rule catalogue or fixed repair is needed.
+console.log("2. LLM context:", JSON.stringify(blocked, null, 2));
+// Illustrative caller decision, not a real model call: the user says eight places are sufficient.
+const chosenOps = [{ op: "set" as const, nodeId: "project", path: "/capacity", value: 8 }];
+console.log("3. Apply the caller's chosen OP after reviewing the current draft and diagnostic.");
+draft = engine.edit(draft.id, blocked.version, chosenOps);
 try { engine.getCheck(draft.id, blocked.checkId); }
 catch (error) { console.log("4. Old check rejected:", (error as Error).message); }
 const passed = engine.preflight(draft.id);

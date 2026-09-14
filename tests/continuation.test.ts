@@ -19,7 +19,7 @@ function setup(overrides: Partial<GraphExecutor> = {}) {
   engine.edit(draft.id, 0, [ { op: "node.add", id: "parent", nodeType: "item" }, { op: "set", nodeId: "parent", path: "/name", value: "parent" },
     { op: "node.add", id: "child", nodeType: "item" }, { op: "set", nodeId: "child", path: "/name", value: "bad" } ]);
   const check = engine.preflight(draft.id);
-  return { engine, draft, calls, check, publish: () => engine.publish(draft.id, check.certificate!) };
+  return { engine, draft, calls, check, publish: () => engine.publish(draft.id, check.certificate!, { runId: "fixture-submission" }) };
 }
 test("partial failure continues only the changed child and retains source receipts and keys", async () => {
   const { engine, calls, publish, check, draft } = setup(); const source = await publish();
@@ -39,7 +39,7 @@ test("partial failure continues only the changed child and retains source receip
   assert.equal(finished.events[0]?.kind, "reused");
   assert.equal(finished.steps[0]?.reusedFrom?.sourceRunId, source.id);
   assert.deepEqual(engine.getRun(source.id), source);
-  assert.deepEqual(await engine.publish(draft.id, check.certificate!), source);
+  assert.deepEqual(await engine.publish(draft.id, check.certificate!, { runId: source.id }), source);
 });
 test("successful node edits and deletion are rejected by both preview and edit", async () => {
   const { engine, publish } = setup(); const source = await publish(); const next = engine.continueFrom(source.id);

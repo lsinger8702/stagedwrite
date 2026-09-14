@@ -1,0 +1,16 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const root=dirname(dirname(fileURLToPath(import.meta.url)));
+const tracePath=join(root,'docs/examples/publish-resume-trace.json');
+const raw=readFileSync(tracePath,'utf8');
+const trace=JSON.parse(raw);
+const source=p=>({path:p,text:readFileSync(join(root,p),'utf8')});
+const bundle={trace,traceSha256:createHash('sha256').update(raw).digest('hex'),sources:{fixture:source('examples/fixtures/project-tasks.ts'),example:source('examples/publish-resume.ts')}};
+const template=readFileSync(join(root,'scripts/walkthrough-template.html'),'utf8');
+if(!template.includes('__BUNDLE__'))throw new Error('Missing data placeholder');
+const html=template.replace('__BUNDLE__',Buffer.from(JSON.stringify(bundle)).toString('base64'));
+const output=join(root,'docs/examples/publish-resume.html');
+writeFileSync(output,html);
+console.log(JSON.stringify({output,recordedAt:trace.recordedAt,calls:trace.steps.length,diagnostics:trace.steps.find(s=>s.output?.status==='blocked').output.diagnostics.length,bytes:Buffer.byteLength(html),traceSha256:bundle.traceSha256}));

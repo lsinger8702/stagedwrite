@@ -9,8 +9,12 @@ export interface Diagnostic {
   code: string;
   path: string;
   message: string;
-  resolution: { kind: "ops"; ops: Op[] }
-    | { kind: "blocked"; reason: "human_intent" | "unsupported" };
+  /** Defaults to error. Warnings do not prevent a passing check. */
+  severity?: "error" | "warning";
+  /** Optional guidance; the caller/LLM chooses edits using the current draft and user intent. */
+  hint?: string;
+  candidates?: readonly { value: Value; message?: string }[];
+  related?: readonly string[];
 }
 export type Rule = (draft: Draft) => Diagnostic[];
 export interface Step {
@@ -27,11 +31,16 @@ type Applied = { kind: "applied"; remoteRef: string };
 type Unknown = { kind: "unknown"; reason: string };
 /** A refusal proves this dispatch produced no effect and cannot later take effect.
  * HTTP status alone is not proof. Omitted retryable means final refusal. */
-export type ApplyOutcome = Applied | Unknown
-  | { kind: "not_applied"; reason: string; retryable?: boolean };
+export interface ExecutionFeedback {
+  code?: string;
+  message?: string;
+  diagnostics?: readonly import("./preflight/types.js").GraphDiagnostic[];
+}
+export type ApplyOutcome = (Applied | Unknown
+  | { kind: "not_applied"; reason: string; retryable?: boolean }) & ExecutionFeedback;
 /** no_effect proves the earlier request has no effect and cannot still complete.
  * An empty search (even after a visibility delay) is not sufficient proof. */
-export type ReconcileOutcome = Applied | Unknown | { kind: "no_effect"; reason: string };
+export type ReconcileOutcome = (Applied | Unknown | { kind: "no_effect"; reason: string }) & ExecutionFeedback;
 /** Compatibility name for apply results. Reconciliation uses ReconcileOutcome. */
 export type Outcome = ApplyOutcome;
 export interface Adapter {
@@ -45,6 +54,7 @@ export interface Adapter {
 export interface Check {
   draftId: string;
   version: number;
+  preview: Draft;
   diagnostics: Diagnostic[];
   certificate?: string;
 }
@@ -56,6 +66,8 @@ export interface ReusedReceipt {
   resolvedPayload: Record<string, Value>;
 }
 export interface ExecutionStep extends Step {
+  feedback?: ExecutionFeedback & { reason?: string };
+  requestRevision?: number;
   reusedFrom?: ReusedReceipt;
   /** Explanation only; eligibility still uses recorded effect evidence. */
   failureReason?: "remote_refusal" | "manual_no_effect" | "retry_stopped";
@@ -105,7 +117,7 @@ export interface ImportConfirmedRequest {
 export interface Event {
   sequence: number;
   stepId: string;
-  kind: "dispatching" | "applied" | "unknown" | "not_applied" | "no_effect" | "reconciling" | "skipped" | "adjudicated" | "reused" | "retry_stopped" | "recovery_claimed";
+  kind: "dispatching" | "applied" | "unknown" | "not_applied" | "no_effect" | "reconciling" | "skipped" | "adjudicated" | "reused" | "retry_stopped" | "recovery_claimed" | "plan_repaired";
   recovery?: { command: RecoveryRequest; previousOwner: string; owner: string };
   stopRetry?: StopRetry;
   reusedFrom?: ReusedReceipt;
@@ -126,6 +138,9 @@ export interface ExecutionBinding {
   importDigest?: string;
 }
 export interface Run {
+  /** Latest qualified repair input; the original submission remains separately persisted. */
+  repairInput?: import("./storage/drafts.js").RunInput;
+  repairs?: { previousVersion: number; previousBinding?: ExecutionBinding; previousSteps: ExecutionStep[]; previousInput?: import("./storage/drafts.js").RunInput }[];
   binding?: ExecutionBinding;
   id: string;
   draftId: string;
