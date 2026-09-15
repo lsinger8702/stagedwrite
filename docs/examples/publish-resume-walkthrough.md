@@ -1,6 +1,6 @@
 # 当前协议的真实输入输出
 
-实际执行库、SQLite 与断言；远端是 Mock，无 HTTP/LLM 调用。运行时间 2026-09-15T03:14:55.865Z。
+实际执行库、SQLite 与断言；远端是 Mock，无 HTTP/LLM 调用。运行时间 2026-09-15T06:38:56.443Z。
 
 [交互 HTML](publish-resume.html) · [完整 JSON](publish-resume-trace.json) · [源码](../../examples/publish-resume.ts)
 
@@ -184,7 +184,7 @@
     }
   },
   "formatVersion": 3,
-  "id": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+  "id": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
   "version": 0,
   "type": "example.project-tasks",
   "typeVersion": "2",
@@ -309,8 +309,8 @@
     "nodes": [],
     "edges": []
   },
-  "createdAt": "2026-09-15T03:14:55.842Z",
-  "updatedAt": "2026-09-15T03:14:55.842Z"
+  "createdAt": "2026-09-15T06:38:56.419Z",
+  "updatedAt": "2026-09-15T06:38:56.419Z"
 }
 ```
 
@@ -328,7 +328,7 @@
 
 ```json
 [
-  "01c933f5-5710-401d-9a2a-357e2c8e862b",
+  "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
   0,
   [
     {
@@ -455,7 +455,7 @@
     }
   },
   "formatVersion": 3,
-  "id": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+  "id": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
   "version": 1,
   "type": "example.project-tasks",
   "typeVersion": "2",
@@ -580,8 +580,8 @@
     "nodes": [],
     "edges": []
   },
-  "createdAt": "2026-09-15T03:14:55.842Z",
-  "updatedAt": "2026-09-15T03:14:55.846Z",
+  "createdAt": "2026-09-15T06:38:56.419Z",
+  "updatedAt": "2026-09-15T06:38:56.422Z",
   "changes": [
     {
       "opIndex": 0,
@@ -615,7 +615,7 @@
 
 ```json
 [
-  "01c933f5-5710-401d-9a2a-357e2c8e862b",
+  "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
   1,
   [
     {
@@ -742,7 +742,7 @@
     }
   },
   "formatVersion": 3,
-  "id": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+  "id": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
   "version": 2,
   "type": "example.project-tasks",
   "typeVersion": "2",
@@ -867,8 +867,8 @@
     "nodes": [],
     "edges": []
   },
-  "createdAt": "2026-09-15T03:14:55.842Z",
-  "updatedAt": "2026-09-15T03:14:55.846Z",
+  "createdAt": "2026-09-15T06:38:56.419Z",
+  "updatedAt": "2026-09-15T06:38:56.423Z",
   "changes": [
     {
       "opIndex": 0,
@@ -902,7 +902,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "01c933f5-5710-401d-9a2a-357e2c8e862b",
+  "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
   2,
   [
     {
@@ -1028,7 +1028,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
     }
   },
   "formatVersion": 3,
-  "id": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+  "id": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
   "version": 3,
   "type": "example.project-tasks",
   "typeVersion": "2",
@@ -1153,8 +1153,8 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
     "nodes": [],
     "edges": []
   },
-  "createdAt": "2026-09-15T03:14:55.842Z",
-  "updatedAt": "2026-09-15T03:14:55.846Z",
+  "createdAt": "2026-09-15T06:38:56.419Z",
+  "updatedAt": "2026-09-15T06:38:56.424Z",
   "changes": [
     {
       "opIndex": 0,
@@ -1188,7 +1188,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "01c933f5-5710-401d-9a2a-357e2c8e862b"
+  "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1"
 ]
 ```
 
@@ -1198,13 +1198,13 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 {
   "formatVersion": 2,
   "scope": "execution",
-  "checkId": "85229eb7-5787-420f-90ed-564b6e16b9a8",
-  "draftId": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+  "checkId": "68b4d1a8-9b6e-4473-94f3-227bc4e73bb0",
+  "draftId": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
   "version": 3,
   "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
   "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
   "preview": {
-    "id": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+    "id": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
     "version": 3,
     "type": "example.project-tasks",
     "typeVersion": "2",
@@ -1488,7 +1488,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "01c933f5-5710-401d-9a2a-357e2c8e862b"
+  "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1"
 ]
 ```
 
@@ -1498,13 +1498,13 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 {
   "formatVersion": 2,
   "scope": "execution",
-  "checkId": "de2107f3-9083-4812-8da1-ced78a7527d6",
-  "draftId": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+  "checkId": "bc744770-6c3f-469a-8a30-14cb9b889089",
+  "draftId": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
   "version": 3,
   "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
   "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
   "preview": {
-    "id": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+    "id": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
     "version": 3,
     "type": "example.project-tasks",
     "typeVersion": "2",
@@ -1781,7 +1781,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "01c933f5-5710-401d-9a2a-357e2c8e862b",
+  "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
   3,
   [
     {
@@ -1926,7 +1926,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
     }
   },
   "formatVersion": 3,
-  "id": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+  "id": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
   "version": 4,
   "type": "example.project-tasks",
   "typeVersion": "2",
@@ -2051,8 +2051,8 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
     "nodes": [],
     "edges": []
   },
-  "createdAt": "2026-09-15T03:14:55.842Z",
-  "updatedAt": "2026-09-15T03:14:55.851Z",
+  "createdAt": "2026-09-15T06:38:56.419Z",
+  "updatedAt": "2026-09-15T06:38:56.428Z",
   "changes": [
     {
       "opIndex": 0,
@@ -2128,7 +2128,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "01c933f5-5710-401d-9a2a-357e2c8e862b"
+  "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1"
 ]
 ```
 
@@ -2138,13 +2138,13 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 {
   "formatVersion": 2,
   "scope": "execution",
-  "checkId": "ccbd2a86-8ef6-43e5-88fe-a935958eb639",
-  "draftId": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+  "checkId": "d688910d-8086-41a2-bdbf-fdcd50955e4f",
+  "draftId": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
   "version": 4,
   "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
   "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
   "preview": {
-    "id": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+    "id": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
     "version": 4,
     "type": "example.project-tasks",
     "typeVersion": "2",
@@ -2243,10 +2243,10 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
   "status": "passed",
   "diagnostics": [],
   "pendingRules": [],
-  "certificate": "bbdfc8f8-4497-4f5a-a2f9-a912218745b2",
-  "artifactId": "bbdfc8f8-4497-4f5a-a2f9-a912218745b2",
+  "certificate": "5e3473ae-5766-424d-ac79-3b7fcb484404",
+  "artifactId": "5e3473ae-5766-424d-ac79-3b7fcb484404",
   "execution": {
-    "checkId": "ccbd2a86-8ef6-43e5-88fe-a935958eb639",
+    "checkId": "d688910d-8086-41a2-bdbf-fdcd50955e4f",
     "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
     "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
     "executorId": "example.project-service",
@@ -2271,8 +2271,8 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "01c933f5-5710-401d-9a2a-357e2c8e862b",
-  "bbdfc8f8-4497-4f5a-a2f9-a912218745b2",
+  "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
+  "5e3473ae-5766-424d-ac79-3b7fcb484404",
   {
     "runId": "demo-run-1"
   }
@@ -2284,13 +2284,13 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 ```json
 {
   "id": "demo-run-1",
-  "draftId": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+  "draftId": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
   "kind": "initial_create",
   "version": 4,
   "state": "blocked",
-  "artifactId": "bbdfc8f8-4497-4f5a-a2f9-a912218745b2",
-  "initialArtifactId": "bbdfc8f8-4497-4f5a-a2f9-a912218745b2",
-  "certificate": "bbdfc8f8-4497-4f5a-a2f9-a912218745b2",
+  "artifactId": "5e3473ae-5766-424d-ac79-3b7fcb484404",
+  "initialArtifactId": "5e3473ae-5766-424d-ac79-3b7fcb484404",
+  "certificate": "5e3473ae-5766-424d-ac79-3b7fcb484404",
   "revision": 0,
   "revisions": [],
   "attempts": [
@@ -2358,25 +2358,25 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
       "sequence": 1,
       "stepId": "project-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T03:14:55.854Z"
+      "recordedAt": "2026-09-15T06:38:56.431Z"
     },
     {
       "sequence": 2,
       "stepId": "project-1",
       "kind": "applied",
-      "recordedAt": "2026-09-15T03:14:55.854Z"
+      "recordedAt": "2026-09-15T06:38:56.432Z"
     },
     {
       "sequence": 3,
       "stepId": "task-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T03:14:55.855Z"
+      "recordedAt": "2026-09-15T06:38:56.432Z"
     },
     {
       "sequence": 4,
       "stepId": "task-1",
       "kind": "not_applied",
-      "recordedAt": "2026-09-15T03:14:55.855Z",
+      "recordedAt": "2026-09-15T06:38:56.432Z",
       "reason": "Owner unavailable; request rejected before creation"
     }
   ],
@@ -2484,7 +2484,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
   ],
   "previewVersion": 4,
   "preview": {
-    "id": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+    "id": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
     "version": 4,
     "type": "example.project-tasks",
     "typeVersion": "2",
@@ -2697,7 +2697,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "01c933f5-5710-401d-9a2a-357e2c8e862b"
+  "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1"
 ]
 ```
 
@@ -2815,7 +2815,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
     }
   },
   "formatVersion": 3,
-  "id": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+  "id": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
   "version": 4,
   "type": "example.project-tasks",
   "typeVersion": "2",
@@ -2940,8 +2940,8 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
     "nodes": [],
     "edges": []
   },
-  "createdAt": "2026-09-15T03:14:55.842Z",
-  "updatedAt": "2026-09-15T03:14:55.851Z"
+  "createdAt": "2026-09-15T06:38:56.419Z",
+  "updatedAt": "2026-09-15T06:38:56.428Z"
 }
 ```
 
@@ -2959,7 +2959,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "01c933f5-5710-401d-9a2a-357e2c8e862b",
+  "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
   4,
   [
     {
@@ -3086,7 +3086,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
     }
   },
   "formatVersion": 3,
-  "id": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+  "id": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
   "version": 5,
   "type": "example.project-tasks",
   "typeVersion": "2",
@@ -3211,8 +3211,8 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
     "nodes": [],
     "edges": []
   },
-  "createdAt": "2026-09-15T03:14:55.842Z",
-  "updatedAt": "2026-09-15T03:14:55.856Z",
+  "createdAt": "2026-09-15T06:38:56.419Z",
+  "updatedAt": "2026-09-15T06:38:56.433Z",
   "changes": [
     {
       "opIndex": 0,
@@ -3255,17 +3255,17 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 ```json
 {
   "id": "demo-run-1",
-  "draftId": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+  "draftId": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
   "kind": "initial_create",
   "version": 5,
   "state": "unknown",
-  "artifactId": "e3d9c131-4424-4312-a6dc-20a60fd48193",
-  "initialArtifactId": "bbdfc8f8-4497-4f5a-a2f9-a912218745b2",
-  "certificate": "e3d9c131-4424-4312-a6dc-20a60fd48193",
+  "artifactId": "32d5b543-3205-41e5-9664-574afcaaca10",
+  "initialArtifactId": "5e3473ae-5766-424d-ac79-3b7fcb484404",
+  "certificate": "32d5b543-3205-41e5-9664-574afcaaca10",
   "revision": 1,
   "revisions": [
     {
-      "artifactId": "bbdfc8f8-4497-4f5a-a2f9-a912218745b2",
+      "artifactId": "5e3473ae-5766-424d-ac79-3b7fcb484404",
       "version": 4,
       "steps": [
         {
@@ -3474,56 +3474,56 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
       "sequence": 1,
       "stepId": "project-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T03:14:55.854Z"
+      "recordedAt": "2026-09-15T06:38:56.431Z"
     },
     {
       "sequence": 2,
       "stepId": "project-1",
       "kind": "applied",
-      "recordedAt": "2026-09-15T03:14:55.854Z"
+      "recordedAt": "2026-09-15T06:38:56.432Z"
     },
     {
       "sequence": 3,
       "stepId": "task-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T03:14:55.855Z"
+      "recordedAt": "2026-09-15T06:38:56.432Z"
     },
     {
       "sequence": 4,
       "stepId": "task-1",
       "kind": "not_applied",
-      "recordedAt": "2026-09-15T03:14:55.855Z",
+      "recordedAt": "2026-09-15T06:38:56.432Z",
       "reason": "Owner unavailable; request rejected before creation"
     },
     {
       "sequence": 5,
       "stepId": "",
       "kind": "plan_repaired",
-      "recordedAt": "2026-09-15T03:14:55.859Z"
+      "recordedAt": "2026-09-15T06:38:56.436Z"
     },
     {
       "sequence": 6,
       "stepId": "task-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T03:14:55.860Z"
+      "recordedAt": "2026-09-15T06:38:56.437Z"
     },
     {
       "sequence": 7,
       "stepId": "task-1",
       "kind": "applied",
-      "recordedAt": "2026-09-15T03:14:55.860Z"
+      "recordedAt": "2026-09-15T06:38:56.437Z"
     },
     {
       "sequence": 8,
       "stepId": "task-2",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T03:14:55.861Z"
+      "recordedAt": "2026-09-15T06:38:56.438Z"
     },
     {
       "sequence": 9,
       "stepId": "task-2",
       "kind": "unknown",
-      "recordedAt": "2026-09-15T03:14:55.861Z",
+      "recordedAt": "2026-09-15T06:38:56.439Z",
       "reason": "Response timed out; creation outcome requires lookup"
     }
   ],
@@ -3620,7 +3620,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
   ],
   "previewVersion": 5,
   "preview": {
-    "id": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+    "id": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
     "version": 5,
     "type": "example.project-tasks",
     "typeVersion": "2",
@@ -3814,17 +3814,17 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 ```json
 {
   "id": "demo-run-1",
-  "draftId": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+  "draftId": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
   "kind": "initial_create",
   "version": 5,
   "state": "published",
-  "artifactId": "e3d9c131-4424-4312-a6dc-20a60fd48193",
-  "initialArtifactId": "bbdfc8f8-4497-4f5a-a2f9-a912218745b2",
-  "certificate": "e3d9c131-4424-4312-a6dc-20a60fd48193",
+  "artifactId": "32d5b543-3205-41e5-9664-574afcaaca10",
+  "initialArtifactId": "5e3473ae-5766-424d-ac79-3b7fcb484404",
+  "certificate": "32d5b543-3205-41e5-9664-574afcaaca10",
   "revision": 1,
   "revisions": [
     {
-      "artifactId": "bbdfc8f8-4497-4f5a-a2f9-a912218745b2",
+      "artifactId": "5e3473ae-5766-424d-ac79-3b7fcb484404",
       "version": 4,
       "steps": [
         {
@@ -4031,69 +4031,69 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
       "sequence": 1,
       "stepId": "project-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T03:14:55.854Z"
+      "recordedAt": "2026-09-15T06:38:56.431Z"
     },
     {
       "sequence": 2,
       "stepId": "project-1",
       "kind": "applied",
-      "recordedAt": "2026-09-15T03:14:55.854Z"
+      "recordedAt": "2026-09-15T06:38:56.432Z"
     },
     {
       "sequence": 3,
       "stepId": "task-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T03:14:55.855Z"
+      "recordedAt": "2026-09-15T06:38:56.432Z"
     },
     {
       "sequence": 4,
       "stepId": "task-1",
       "kind": "not_applied",
-      "recordedAt": "2026-09-15T03:14:55.855Z",
+      "recordedAt": "2026-09-15T06:38:56.432Z",
       "reason": "Owner unavailable; request rejected before creation"
     },
     {
       "sequence": 5,
       "stepId": "",
       "kind": "plan_repaired",
-      "recordedAt": "2026-09-15T03:14:55.859Z"
+      "recordedAt": "2026-09-15T06:38:56.436Z"
     },
     {
       "sequence": 6,
       "stepId": "task-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T03:14:55.860Z"
+      "recordedAt": "2026-09-15T06:38:56.437Z"
     },
     {
       "sequence": 7,
       "stepId": "task-1",
       "kind": "applied",
-      "recordedAt": "2026-09-15T03:14:55.860Z"
+      "recordedAt": "2026-09-15T06:38:56.437Z"
     },
     {
       "sequence": 8,
       "stepId": "task-2",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T03:14:55.861Z"
+      "recordedAt": "2026-09-15T06:38:56.438Z"
     },
     {
       "sequence": 9,
       "stepId": "task-2",
       "kind": "unknown",
-      "recordedAt": "2026-09-15T03:14:55.861Z",
+      "recordedAt": "2026-09-15T06:38:56.439Z",
       "reason": "Response timed out; creation outcome requires lookup"
     },
     {
       "sequence": 10,
       "stepId": "task-2",
       "kind": "reconciling",
-      "recordedAt": "2026-09-15T03:14:55.862Z"
+      "recordedAt": "2026-09-15T06:38:56.440Z"
     },
     {
       "sequence": 11,
       "stepId": "task-2",
       "kind": "applied",
-      "recordedAt": "2026-09-15T03:14:55.863Z"
+      "recordedAt": "2026-09-15T06:38:56.440Z"
     }
   ],
   "steps": [
@@ -4186,7 +4186,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
   ],
   "previewVersion": 5,
   "preview": {
-    "id": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+    "id": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
     "version": 5,
     "type": "example.project-tasks",
     "typeVersion": "2",
@@ -4332,7 +4332,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "01c933f5-5710-401d-9a2a-357e2c8e862b"
+  "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1"
 ]
 ```
 
@@ -4450,7 +4450,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
     }
   },
   "formatVersion": 3,
-  "id": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+  "id": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
   "version": 5,
   "type": "example.project-tasks",
   "typeVersion": "2",
@@ -4569,14 +4569,14 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
       }
     }
   },
-  "publishedArtifactId": "e3d9c131-4424-4312-a6dc-20a60fd48193",
-  "lastPublishedAt": "2026-09-15T03:14:55.864Z",
+  "publishedArtifactId": "32d5b543-3205-41e5-9664-574afcaaca10",
+  "lastPublishedAt": "2026-09-15T06:38:56.442Z",
   "tombstones": {
     "nodes": [],
     "edges": []
   },
-  "createdAt": "2026-09-15T03:14:55.842Z",
-  "updatedAt": "2026-09-15T03:14:55.864Z"
+  "createdAt": "2026-09-15T06:38:56.419Z",
+  "updatedAt": "2026-09-15T06:38:56.442Z"
 }
 ```
 
@@ -4594,7 +4594,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "01c933f5-5710-401d-9a2a-357e2c8e862b"
+  "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1"
 ]
 ```
 
@@ -4675,7 +4675,7 @@ Run 当前采用的意图与计划；旧产物仍可用 revisions 中的 artifac
 
 ```json
 {
-  "id": "e3d9c131-4424-4312-a6dc-20a60fd48193",
+  "id": "32d5b543-3205-41e5-9664-574afcaaca10",
   "intentDigest": "sha256:stagedwrite-json-v1:733962fd9cbccc460c1183cc4a07667ccdcb077d314378610d91408a5756706f",
   "draft": {
     "graph": {
@@ -4788,7 +4788,7 @@ Run 当前采用的意图与计划；旧产物仍可用 revisions 中的 artifac
       }
     },
     "formatVersion": 3,
-    "id": "01c933f5-5710-401d-9a2a-357e2c8e862b",
+    "id": "8eddfa8d-3ee1-40a3-ac32-75f85f1d45e1",
     "version": 5,
     "type": "example.project-tasks",
     "typeVersion": "2",
@@ -4913,8 +4913,8 @@ Run 当前采用的意图与计划；旧产物仍可用 revisions 中的 artifac
       "nodes": [],
       "edges": []
     },
-    "createdAt": "2026-09-15T03:14:55.842Z",
-    "updatedAt": "2026-09-15T03:14:55.856Z"
+    "createdAt": "2026-09-15T06:38:56.419Z",
+    "updatedAt": "2026-09-15T06:38:56.433Z"
   },
   "plan": [
     {
@@ -4971,7 +4971,7 @@ Run 当前采用的意图与计划；旧产物仍可用 revisions 中的 artifac
     }
   ],
   "binding": {
-    "checkId": "af07c3da-82ac-42da-8762-31a938cd442b",
+    "checkId": "b5b93738-435e-461c-8e55-7f1a4a9f45e1",
     "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
     "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
     "executorId": "example.project-service",
