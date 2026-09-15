@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createStagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite } from "../src/index.js";
 import type { GraphExecutor } from "../src/index.js";
 const directory = mkdtempSync(join(tmpdir(), "sw-durable-demo-"));
 const path = join(directory, "data.sqlite");
@@ -18,7 +18,7 @@ const executor: GraphExecutor = { ...selector, id: "mock.durable", version: "1",
     effects.push(step.id); return { kind: "applied", remoteRef: `remote-${step.id}` };
   }, reconcile: { unsupported: "Offline fixture" }
 };
-const open = () => createStagedWrite({ definitions: [definition], mode: "executable", executors: [executor], storage: { kind: "sqlite", path } });
+const open = () => createLegacyStagedWrite({ definitions: [definition], mode: "executable", executors: [executor], storage: { kind: "sqlite", path } });
 let engine = open();
 try {
   const draft = engine.create(selector);

@@ -1,4 +1,4 @@
-import { createStagedWrite, defineDraftType } from "../src/index.js";
+import { createLegacyStagedWrite, defineDraftType } from "../src/index.js";
 
 // Teaching example: projects contain tasks with shared numeric constraints.
 export const projectDefinition = defineDraftType({
@@ -26,7 +26,7 @@ export const projectDefinition = defineDraftType({
   relationTypes: { contains: { from: ["project"], to: ["task"] } }
 });
 
-const engine = createStagedWrite({ definitions: [projectDefinition] });
+const engine = createLegacyStagedWrite({ definitions: [projectDefinition] });
 const selector = { type: "example.project", typeVersion: "1" };
 console.log("1. Create an incomplete empty graph:", engine.create(selector));
 console.log("2. Missing publish fields are allowed here:", engine.validateValues(selector, "project", {}));

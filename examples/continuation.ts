@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createStagedWrite, defineDraftType } from "../src/index.js";
+import { createLegacyStagedWrite, defineDraftType } from "../src/index.js";
 import type { GraphExecutor, Step } from "../src/index.js";
 
 const node = { valueSchema: { type: "object", properties: { name: { type: "string" } }, additionalProperties: false }, requiredAtPublish: ["name"] } as const;
@@ -36,7 +36,7 @@ const executor: GraphExecutor = { ...selector, id: "example.dependencies", versi
     return { kind: "applied", remoteRef: "remote_task" };
   }
 };
-const engine = createStagedWrite({ definitions: [definition], mode: "executable", executors: [executor] });
+const engine = createLegacyStagedWrite({ definitions: [definition], mode: "executable", executors: [executor] });
 const draft = engine.create(selector);
 engine.edit(draft.id, 0, [
   { op: "node.add", id: "project", nodeType: "project" }, { op: "set", nodeId: "project", path: "/name", value: "Rejected name" },

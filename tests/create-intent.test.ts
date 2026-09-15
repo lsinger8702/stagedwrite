@@ -3,7 +3,7 @@ import test from "node:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createStagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite } from "../src/index.js";
 import type { GraphInitialIntent } from "../src/index.js";
 import { definition, selector, initial, rules, chosen } from "../examples/fixtures/project-tasks.js";
 
@@ -11,7 +11,7 @@ for (const mode of ["memory", "sqlite"] as const) {
   test(`${mode}: create stores initial intent atomically; preflight diagnoses it and edit changes it`, t => {
     const dir = mkdtempSync(join(tmpdir(), "stagedwrite-initial-"));
     const storage = mode === "sqlite" ? { kind: "sqlite" as const, path: join(dir, "drafts.sqlite") } : undefined;
-    let engine = createStagedWrite({ definitions: [definition], rules, storage });
+    let engine = createLegacyStagedWrite({ definitions: [definition], rules, storage });
     t.after(() => { engine.close(); rmSync(dir, { recursive: true, force: true }); });
     const input = structuredClone(initial);
     const draft = engine.create(selector, input);
@@ -21,7 +21,7 @@ for (const mode of ["memory", "sqlite"] as const) {
     assert.deepEqual(draft.tombstones, { nodes: [], edges: [] });
     input.nodes["project-1"]!.fields.name = { kind: "value", value: "outside change" };
     draft.nodes["project-1"]!.fields.name = { kind: "clear" };
-    if (mode === "sqlite") { engine.close(); engine = createStagedWrite({ definitions: [definition], rules, storage }); }
+    if (mode === "sqlite") { engine.close(); engine = createLegacyStagedWrite({ definitions: [definition], rules, storage }); }
     assert.deepEqual(engine.getDraft(draft.id).nodes, initial.nodes);
     const check = engine.preflight(draft.id);
     assert.equal(check.status, "blocked"); assert.equal(check.diagnostics.length, 3);
@@ -44,7 +44,7 @@ for (const mode of ["memory", "sqlite"] as const) {
 }
 
 test("initial intent preserves undeclared, clear and explicit null without schema defaults", () => {
-  const engine = createStagedWrite({ definitions: [definition] });
+  const engine = createLegacyStagedWrite({ definitions: [definition] });
   try {
     const input = structuredClone(initial);
     delete input.nodes["project-1"]!.fields.capacityHours;

@@ -3,7 +3,7 @@ import test from "node:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createStagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite } from "../src/index.js";
 import type { ApplyOutcome, GraphExecutor, GraphOp, ReconcileOutcome } from "../src/index.js";
 import { definition, selector, initial, chosen, rules, value } from "../examples/fixtures/project-tasks.js";
 const fix: GraphOp[] = [{ op: "set", nodeId: "task-1", path: "/owner", value: "chen" }];
@@ -22,7 +22,7 @@ for (const durable of [false, true]) test(`publish diagnostics -> edit -> resume
         ? { kind: "not_applied", reason: "Owner unavailable", code: "OWNER_UNAVAILABLE", diagnostics: [diagnostic] }
         : { kind: "applied", remoteRef: `remote-${step.id}` };
     }, reconcile: async () => ({ kind: "unknown", reason: "No evidence" }) };
-  const open = () => createStagedWrite({ definitions: [definition], rules, storage, mode: "executable", executors: [executor] });
+  const open = () => createLegacyStagedWrite({ definitions: [definition], rules, storage, mode: "executable", executors: [executor] });
   let engine = open(); t.after(() => { engine.close(); rmSync(dir, { recursive: true, force: true }); });
   let draft = engine.create(selector, initial); draft = engine.edit(draft.id, 0, chosen);
   const check = engine.preflight(draft.id); const first = await engine.publish(draft.id, check.certificate!);
@@ -49,7 +49,7 @@ for (const evidence of ["unknown", "no_effect", "applied"] as const) test(`edite
   const executor: GraphExecutor = { ...selector, id: "mock", version: "1", target: "test", plan,
     apply: async (step, key) => { sent.push([step.id, key, step.payload.owner]); return step.id === "task-1" && step.payload.owner === "lin" ? { kind: "unknown", reason: "Timed out", code: "TIMEOUT" } : { kind: "applied", remoteRef: step.id }; },
     reconcile: async (step, key): Promise<ReconcileOutcome> => { queried.push([step.payload.owner, key]); return evidence === "applied" ? { kind: "applied", remoteRef: "old-task" } : { kind: evidence, reason: "Evidence" }; } };
-  const engine = createStagedWrite({ definitions: [definition], rules, mode: "executable", executors: [executor] });
+  const engine = createLegacyStagedWrite({ definitions: [definition], rules, mode: "executable", executors: [executor] });
   try {
     let draft = engine.create(selector, initial); draft = engine.edit(draft.id, 0, chosen);
     const first = await engine.publish(draft.id, engine.preflight(draft.id).certificate!);
@@ -73,7 +73,7 @@ test("repair preflight can block and return preview without sending; later edit 
   const executor: GraphExecutor = { ...selector, id: "mock", version: "1", target: "test", plan,
     apply: async step => { calls++; return step.id === "task-1" && step.payload.owner === "lin" ? { kind: "not_applied", reason: "Owner unavailable", diagnostics: [diagnostic] } : { kind: "applied", remoteRef: step.id }; },
     reconcile: async () => ({ kind: "unknown", reason: "unknown" }) };
-  const engine = createStagedWrite({ definitions: [definition], rules, mode: "executable", executors: [executor] });
+  const engine = createLegacyStagedWrite({ definitions: [definition], rules, mode: "executable", executors: [executor] });
   try {
     let draft = engine.create(selector, initial); draft = engine.edit(draft.id, 0, chosen);
     const first = await engine.publish(draft.id, engine.preflight(draft.id).certificate!);
@@ -96,7 +96,7 @@ test("a repaired request with a new key remains recoverable after response loss"
       return step.payload.owner === "lin" ? { kind: "not_applied", reason: "Owner unavailable" } : { kind: "unknown", reason: "Lost repaired request response" };
     },
     reconcile: async (step, key) => { assert.equal(step.payload.owner, "chen"); assert.equal(key, keys.at(-1)); return { kind: "applied", remoteRef: "task-1" }; } };
-  const open = () => createStagedWrite({ definitions: [definition], rules, storage, mode: "executable", executors: [executor] });
+  const open = () => createLegacyStagedWrite({ definitions: [definition], rules, storage, mode: "executable", executors: [executor] });
   let engine = open(); t.after(() => { engine.close(); rmSync(dir, { recursive: true, force: true }); });
   let draft = engine.create(selector, initial); draft = engine.edit(draft.id, 0, chosen);
   const failed = await engine.publish(draft.id, engine.preflight(draft.id).certificate!);
@@ -112,7 +112,7 @@ test("malformed optional diagnostics never discard a confirmed remote receipt", 
   const executor: GraphExecutor = { ...selector, id: "mock", version: "1", target: "test", plan,
     apply: async step => ({ kind: "applied", remoteRef: step.id, get diagnostics(): never { throw new Error("bad optional accessor"); } }),
     reconcile: async () => ({ kind: "unknown", reason: "unknown" }) };
-  const engine = createStagedWrite({ definitions: [definition], rules, mode: "executable", executors: [executor] });
+  const engine = createLegacyStagedWrite({ definitions: [definition], rules, mode: "executable", executors: [executor] });
   try { let draft = engine.create(selector, initial); draft = engine.edit(draft.id, 0, chosen);
     assert.equal((await engine.publish(draft.id, engine.preflight(draft.id).certificate!)).state, "published");
   } finally { engine.close(); }
@@ -120,7 +120,7 @@ test("malformed optional diagnostics never discard a confirmed remote receipt", 
 
 
 test("repair planner reentry cannot mutate the draft being validated", async () => {
-  let engine: ReturnType<typeof createStagedWrite>;
+  let engine: ReturnType<typeof createLegacyStagedWrite>;
   let repairing = false;
   const executor: GraphExecutor = { ...selector, id: "mock", version: "1", target: "test",
     plan: draft => {
@@ -128,7 +128,7 @@ test("repair planner reentry cannot mutate the draft being validated", async () 
       return plan(draft);
     }, apply: async () => ({ kind: "not_applied", reason: "requires edit" }),
     reconcile: async () => ({ kind: "unknown", reason: "unknown" }) };
-  engine = createStagedWrite({ definitions: [definition], rules, mode: "executable", executors: [executor] });
+  engine = createLegacyStagedWrite({ definitions: [definition], rules, mode: "executable", executors: [executor] });
   try { let draft = engine.create(selector, initial); draft = engine.edit(draft.id, 0, chosen);
     await engine.publish(draft.id, engine.preflight(draft.id).certificate!);
     repairing = true;

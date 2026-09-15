@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createStagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite } from "../src/index.js";
 const directory = mkdtempSync(join(tmpdir(), "stagedwrite-demo-"));
 const path = join(directory, "drafts.sqlite");
 const definitions = [{ id: "example.stored", version: "1", nodeTypes: { item: {
   valueSchema: { type: "object", properties: { name: { type: "string" } }, additionalProperties: false }, requiredAtPublish: ["name"] } }, relationTypes: {} }];
-const open = () => createStagedWrite({ definitions, storage: { kind: "sqlite", path } });
+const open = () => createLegacyStagedWrite({ definitions, storage: { kind: "sqlite", path } });
 let engine = open();
 try {
   const draft = engine.create({ type: "example.stored", typeVersion: "1" });

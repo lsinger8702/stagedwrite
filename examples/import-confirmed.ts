@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createStagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite } from "../src/index.js";
 import type { GraphExecutor, Step } from "../src/index.js";
 const dir = mkdtempSync(join(tmpdir(), "sw-import-demo-")), path = join(dir, "state.sqlite");
 const selector = { type: "example.import", typeVersion: "1" };
@@ -15,7 +15,7 @@ const executor: GraphExecutor = { ...selector, id: "mock.import", version: "1", 
     return { kind: "applied", remoteRef: `remote-${step.id}` };
   }, reconcile: { unsupported: "Offline example" }
 };
-const open = () => createStagedWrite({ definitions: [definition], mode: "executable", executors: [executor], storage: { kind: "sqlite", path } });
+const open = () => createLegacyStagedWrite({ definitions: [definition], mode: "executable", executors: [executor], storage: { kind: "sqlite", path } });
 let engine = open();
 try {
   const d = engine.create(selector);

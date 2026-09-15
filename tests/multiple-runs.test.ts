@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { createStagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite } from "../src/index.js";
 import type { GraphExecutor, PublishOptions } from "../src/index.js";
 const selector = { type: "multi", typeVersion: "1" };
 const definition = { id: "multi", version: "1", nodeTypes: { item: {
@@ -20,7 +20,7 @@ function ready(engine: ReturnType<typeof create>) {
   return { id: d.id, certificate: engine.preflight(d.id).certificate! };
 }
 function create(path?: string, ex = executor()) {
-  return createStagedWrite({ definitions: [definition], mode: "executable", executors: [ex], ...(path ? { storage: { kind: "sqlite", path } as const } : {}) });
+  return createLegacyStagedWrite({ definitions: [definition], mode: "executable", executors: [ex], ...(path ? { storage: { kind: "sqlite", path } as const } : {}) });
 }
 for (const durable of [false, true]) test(`independent publish and idempotent submission have distinct identities (${durable ? "SQLite" : "memory"})`, async t => {
   const dir = mkdtempSync(join(tmpdir(), "sw-multi-")); t.after(() => rmSync(dir, { recursive: true, force: true }));

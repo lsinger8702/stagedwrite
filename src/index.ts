@@ -1,6 +1,9 @@
 export { StagedWrite } from "./engine.js";
 export type * from "./types.js";
-export { createStagedWrite } from "./graph-engine.js";
+export { createStagedWrite as createLegacyStagedWrite } from "./graph-engine.js";
+export { createStagedWrite } from "./managed/engine.js";
+export { createMemoryBackend, createSqliteBackend } from "./managed/storage.js";
+export type * from "./managed/types.js";
 export type { DraftEngine } from "./graph-engine.js";
 export { defineDraftType } from "./registry/types.js";
 export { DefinitionAssemblyError } from "./registry/registry.js";

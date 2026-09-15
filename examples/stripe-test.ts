@@ -1,4 +1,4 @@
-import { createStagedWrite, defineDraftType } from "../src/index.js";
+import { createLegacyStagedWrite, defineDraftType } from "../src/index.js";
 import { StripeTestCustomerAdapter } from "../src/adapters/stripe-test.js";
 import type { StripeTransport } from "../src/adapters/stripe-test.js";
 
@@ -30,7 +30,7 @@ if (!secretKey || !accountId) {
       requiredAtPublish: ["description"]
     } }, relationTypes: {} });
     const selector = { type: definition.id, typeVersion: definition.version };
-    const engine = createStagedWrite({ definitions: [definition], mode: "executable", executors: [adapter.graphExecutor(selector)] });
+    const engine = createLegacyStagedWrite({ definitions: [definition], mode: "executable", executors: [adapter.graphExecutor(selector)] });
     let draft = engine.create(selector);
     draft = engine.edit(draft.id, 0, [{ op: "node.add", id: "customer", nodeType: "customer" },
       { op: "set", nodeId: "customer", path: "/description", value: "StagedWrite disposable test customer" }]);

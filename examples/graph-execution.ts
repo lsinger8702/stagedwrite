@@ -1,4 +1,4 @@
-import { createStagedWrite, defineDraftType } from "../src/index.js";
+import { createLegacyStagedWrite, defineDraftType } from "../src/index.js";
 import { MockAdapter } from "../src/adapters/mock.js";
 import type { GraphExecutor, Step } from "../src/index.js";
 
@@ -14,7 +14,7 @@ const executor: GraphExecutor = { ...selector, id: "example.mock", version: "1",
   },
   apply: (step, key) => remote.apply(step, key), reconcile: (step, key) => remote.reconcile(step, key)
 };
-const engine = createStagedWrite({ definitions: [definition], mode: "executable", executors: [executor] });
+const engine = createLegacyStagedWrite({ definitions: [definition], mode: "executable", executors: [executor] });
 let draft = engine.create(selector);
 draft = engine.edit(draft.id, 0, [{ op: "node.add", id: "project", nodeType: "project" }]);
 console.log("1. Graph preflight blocks missing intent:", engine.preflight(draft.id).status);

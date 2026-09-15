@@ -1,418 +1,60 @@
 # StagedWrite
 
-**Design direction: [project principles](docs/design/000-project-principles.md). Any conflicting principle change must be discussed with and explicitly agreed by the project owner first.**
+**A graph intent library for agent tools: create meaningful work, diagnose it, repair it with explicit OPs, and resume unfinished publication without recreating successful resources.**
 
-**Graph publish creates an independent Run. Supply `{runId}` to identify one submission: resending that ID observes its Run; `resume(runId)` advances it. Different IDs mean different intents, even for the same Draft. See [the implemented contract](docs/design/006-graph-execution.md) and [actual input/output walkthrough](docs/examples/publish-resume-walkthrough.md).**
-
-An experimental TypeScript library for staged writes from agent tools to external systems.
-
-**Status: early prototype, v0.0.1.** Graph registration, editing, preflight and execution are connected. SQLite persists drafts, fixed plans, run snapshots and receipts. Explicit same-host recovery can reclaim unfinished runs after their owner closes or exits; there is no published npm package yet. The opt-in Stripe test Customer adapter has offline contract coverage; real-account verification is still pending.
-
-StagedWrite separates author intent, preflight diagnostics, a fixed execution plan and remote effects. An ambiguous remote outcome stops execution until the adapter can reconcile it.
-
-## Run it
-
-Use Node.js 22.13 or newer and npm:
+Early prototype, v0.0.1; no published npm package. The default `createStagedWrite` now uses the managed Draft lifecycle. [Project principles](docs/design/000-project-principles.md) govern development; conflicting changes require the project owner's explicit agreement.
 
 ```sh
 npm ci
 npm test
-npm run demo:execution
+npm run demo:html
 ```
 
-The graph execution demo registers a definition, creates an incomplete graph, fills the missing intent and fixes a plan. A fake remote then commits an effect but loses its response. Resume reconciles it, finishing with **two effects and two apply calls**. This demonstrates in-process recovery against a mock, not a real billing system.
+Requires Node.js 22.13+ with `node:sqlite`. Open [the actual input/output walkthrough](docs/examples/publish-resume.html). It runs the library and SQLite against a fictional remote service: three real rule failures, asynchronous pending, fixed-baseline reset, partial publication, repair, and unknown-outcome reconciliation. No HTTP or LLM calls are made.
 
-Other examples:
-
-- `npm run demo:registry`: schema references and empty graph creation.
-- `npm run demo:graph`: atomic edits and a shared document reference.
-- `npm run demo:preflight`: missing values, explicit repair and stale-check rejection.
-- `npm run demo`: the original scalar prototype, using the same execution state machine.
-
-## Persist drafts and checks (M4)
+## Current API
 
 ```ts
+import { createStagedWrite, createSqliteBackend } from "stagedwrite";
+
+const backend = createSqliteBackend("./work.sqlite");
 const engine = createStagedWrite({
   definitions: [definition],
-  rules: [],
-  storage: { kind: "sqlite", path: "./drafts.sqlite" }
+  rules,                // Pure checks; current preview and specific messages.
+  asyncRules,           // I/O checks return complete or pending; caller polls.
+  executors: [executor],// plan(draft), apply(step, key, context), reconcile(...).
+  ...backend,           // Paired storage and authoritative lease provider.
 });
-const ids = engine.listDraftIds();
-// getCheck(draftId) discovers the current check after restart.
-// getDraft, edit, preflight and getCheck read/write this database.
-engine.close(); // Reopen with the same definitions and rule identities.
-```
-
-SQLite stores graph snapshots, versions, tombstones, definition identities and the current check. Editing uses a
-conditional database update and invalidates the check atomically. Preflight first persists invalidation, then saves
-its result only if both the draft version and check generation still match. Competing connections cannot overwrite
-newer edits or checks. Old definition versions must still be registered; changing a stored definition under the same
-ID/version is rejected. A changed rule digest makes a restored check non-current.
-
-Run `npm run demo:storage` for reopening a SQLite draft and check. Automated tests also verify reads in a separate process.
-
-## Persist execution facts (M5)
-
-Executable mode now also accepts `storage: { kind: "sqlite", path }`. A passing preflight stores its exact plan
-and certificate with the check. Publication atomically validates that check and saves a new Run plus its own
-fixed draft/plan snapshot. Different submission IDs create independent Runs, including concurrently. Resending the
-same ID and original certificate only observes that Run; a second engine must recover ownership before advancing it.
-Unfinished executions support diagnostic-driven edit and resume on the same Run. Successful steps stay immutable; editing after all steps succeed remains deferred (`DRAFT_SEALED`).
-
-Before every adapter call, the engine commits the original key, resolved payload and dispatch/reconciliation intent.
-It commits each observed result before moving to the next step. Manual decisions, stop requests and their resulting
-states are saved together. `revise` and `continueFrom` save their draft and source relationship atomically, so repeated
-derivation after reopening returns the same draft. Use `listRunIds()` and `getRun()` to inspect saved records.
-
-**Restart recovery (M6):** reopening does not automatically dispatch. Inspect the run, explicitly claim ownership,
-then choose whether to resume or record verified manual evidence:
-
-```ts
-const run = engine.getRun(runId);
-const recovered = engine.recover(run.id, {
-  requestId: "recovery-1", expectedSequence: run.events.length,
-  actor: "operator", reason: "Previous process exited"
-}); // No adapter call; interrupted dispatch becomes unknown.
-const result = await engine.resume(recovered.id); // Reconcile unknown before any retry.
-```
-
-The previous owner must have closed, or its PID must be absent on the same host. Live or uncertain owners cannot
-be displaced. Use a local SQLite file on one trusted host and one PID namespace; shared network storage and
-cross-host/container failover are unsupported. PID reuse conservatively blocks recovery. There is no timeout takeover.
-Request IDs make recovery resubmission idempotent for the current owner; sequence checks reject stale commands.
-Original keys, resolved inputs and successful receipts are retained. Empty remote searches remain unknown.
-Adapters must establish that a request cannot still complete before reporting `no_effect`.
-
-Without a successful claim, a new engine returns `RECOVERY_REQUIRED` for nonterminal mutations. Terminal runs remain
-readable, and failed runs can derive revisions/continuations under their usual evidence checks.
-A checkpoint failure stops local advancement (`RUN_STORAGE_FAILED`); close and reopen before recovery.
-`close()` refuses while a check, recovery or adapter call is active. Schema versions 1/2/3/4 upgrade transactionally to 5;
-legacy runs without owner-session evidence remain read-only (`OWNER_EVIDENCE_REQUIRED`). Old binaries reject schema 5.
-The database is trusted internal state, not an import format for arbitrary run JSON.
-
-Run `npm run demo:durable` for stored plans and partial continuation, or `npm run demo:recovery` for a real child-process
-exit followed by explicit recovery using a local simulated receipt ledger. See [M6 design](docs/design/012-restart-recovery.md).
-
-## Upgrading older databases
-
-**Schema migration preserves data; it does not grant recovery rights to old unfinished runs.**
-A schema-2 database has no owner-session evidence. After upgrading, its unfinished runs remain readable but
-`recover`, `resume` and manual mutations cannot advance them through the new engine. There is no force-claim API.
-When the original compatible process is still available, finish or resolve its work before upgrading the database.
-If it is gone, keep the database and original request evidence for external reconciliation; do not treat migration
-as proof that the remote request had no effect, or create a replacement request automatically.
-Back up the database consistently before upgrading. Older binaries reject schema 5, so reopening the upgraded
-file with an older binary is not a rollback procedure. See [the upgrade guide](docs/design/017-upgrade-and-trial.md).
-
-## Retention and capacity
-
-Drafts, tombstones, run snapshots and derivation records have no automatic expiration. This prototype is for
-bounded trials; capacity limits, general garbage collection and archival APIs are not implemented.
-Only released sessions with no current run ownership are pruned, during open, successful recovery and close.
-Sessions referenced by any run, live sessions and unreleased orphan sessions remain. Cleanup preserves the
-owner identifiers in recovery events and rolls back with its enclosing transaction on failure.
-See [retention policy](docs/design/014-retention.md) and [review decisions](docs/design/013-review-decisions.md).
-## Reuse confirmed objects in independent work
-
-`importConfirmed` creates a new draft from confirmed `applied/reused` receipts in a terminal source run,
-including a `closed` run. It copies only confirmed nodes and edges between them. Excluded IDs remain reserved.
-
-```ts
-const source = engine.getRun(sourceRunId);
-const draft = engine.importConfirmed(source.id, {
-  requestId: "follow-up-1", expectedSequence: source.events.length,
-  actor: "operator", evidence: "receipt-reference",
-  purpose: "Independent follow-up work", independentWork: true
-});
-// Add new nodes, preflight, then publish. Imported objects are reused without apply.
-```
-
-Imported nodes are immutable; the planner must preserve their original mapped create intent. Target and executor
-identity must match. The command and source receipts survive reopening; repeating the same request returns the same draft.
-The original unknown steps remain unresolved and are never copied as new work. **The caller must ensure new work is
-independent:** the library cannot detect the same unknown intent disguised under another node ID or request ID.
-This reads stored evidence without contacting the remote service; it does not verify that an object still exists.
-Arbitrary external references and semantic deduplication across drafts are unsupported.
-See [the interface contract](docs/design/015-existing-objects.md) and run `npm run demo:import`.
-
-## Define and edit a graph
-
-```ts
-import { createStagedWrite, defineDraftType } from "stagedwrite";
-
-const definition = defineDraftType({
-  id: "example.project", version: "1",
-  nodeTypes: {
-    project: {
-      valueSchema: {
-        type: "object",
-        $defs: { quantity: { type: "number", minimum: 0 } },
-        properties: { capacity: { $ref: "#/$defs/quantity" } },
-        additionalProperties: false
-      },
-      requiredAtPublish: ["capacity"]
-    }
-  },
-  relationTypes: {}
-});
-const engine = createStagedWrite({ definitions: [definition] });
-const draft = engine.create({ type: definition.id, typeVersion: definition.version }, {
-  nodes: {
-    "project-1": { id: "project-1", nodeType: "project", fields: { capacity: { kind: "value", value: 100 } } }
-  },
-  edges: {}
-}); // Initial work content, version 0. Schema does not invent this intent.
-const ops = [
-  { op: "set", nodeId: "project-1", path: "/capacity", value: 120 }
-] as const;
-const preview = engine.preview(draft.id, draft.version, ops);
-const saved = engine.edit(draft.id, draft.version, ops);
-const check = engine.preflight(saved.id);
-```
-
-Creation validates the entire initial graph before saving it; malformed input leaves no empty draft. Business-rule failures are diagnosed by preflight. The one-argument empty creation form remains only for compatibility.
-
-The package-name import assumes a local link/build. See [local example imports](examples/registry.ts) for running from this repository.
-
-Assembly validates ordinary JSON and helper output, compiles a restricted JSON Schema 2020-12 profile, and freezes instance-owned definitions. Each node schema has a local `$defs` namespace; missing, cyclic, external and unsupported references fail at startup. Definition identity uses the versioned `sha256:stagedwrite-json-v1` format.
-
-Graph operations are `node.add`, `node.remove`, `edge.add`, `edge.remove` and field `set`/`remove`/`reset`. Field paths are single-segment JSON Pointers, including `~0`/`~1` escapes. Explicit clear is distinct from null and undeclared. Deleted node/edge IDs cannot be reused in the same draft.
-
-Operations run in input order; final field constraints and edge integrity are checked at the end. Invalid batches roll back graph, version and tombstones together. Deleting referenced nodes requires explicit removal of their edges in the batch. Preview and edit share candidate calculation; only successful edit saves once and increments version. Empty batches are rejected.
-
-## Repair an unfinished execution
-
-Graph executor `apply` / `reconcile` outcomes may optionally include `code`, `message`, and
-`diagnostics: GraphDiagnostic[]`, including candidate values and repair OPs. The adapter maps remote errors
-into graph paths. No diagnostic module is required: a basic reason or error code can still guide continuation.
-Optional metadata never overrides the outcome's effect evidence.
-
-```ts
-const result = await engine.publish(draft.id, check.certificate!);
-// Supply result.preview + result.diagnostics + result.steps to the caller/LLM.
-const repaired = engine.edit(draft.id, result.preview.version, chosenRepairOps);
-const continued = await engine.resume(result.id); // Same Run; no second publish.
-```
-
-On a changed Draft, resume reconciles original unknown requests first, then runs preflight on the repair.
-If preflight is pending/blocked/incomplete, the response includes `check`, its `preview` and `diagnostics`,
-and sends no repaired request. Use `preview.version` for the next edit: Run `version` still identifies the last
-qualified execution input until a repair is accepted. Successful steps and nodes cannot change. The initial
-implementation keeps graph/step topology stable and permits field changes on unfinished nodes.
-
-A qualified repair preserves the old steps/keys in `run.repairs` and installs `run.repairInput` atomically before
-dispatch. Changed, previously attempted requests get new keys; successful and unchanged requests retain theirs.
-`getRunInput` returns the latest qualified execution input. Original publication identity remains separately
-persisted, so retransmitting the original runId/certificate observes that same Run after repairs.
-
-There is no requirement for a crash or restart. Normal partial execution, explicit refusal followed by a field
-repair, and uncertain responses all use resume. User-stopped/closed Runs and fully successful Runs are not reopened.
-A timeout alone never proves that repeating a remote write is safe.
-
-## Check and execute
-
-Default `mode: "draft"` has no publish methods and no certificate. Its `passed` result only means draft checks passed. Register graph rules separately with `{id,version,type,typeVersion,check}`. Rules return actual findings with `code`, a graph-root JSON Pointer `path`, and a concrete `message`. Optional `hint`, `related`, `metadata`, `stage`, `constraintIds`, and preflight retry advice (`retryable`, `retryAfterSeconds`) provide context. `candidates` can include `{value,label?,message?,metadata?,repairOps?}`; `excludedCandidates` explain unavailable values separately. `repairs: [{id?,message,ops}]` offers alternative edit batches. `severity` defaults to `error`; warnings do not block. All suggestions are optional. Preflight validates each suggested batch against the checked graph without applying it or claiming that it resolves every business problem. The caller/LLM selects, changes or rejects suggestions, then uses normal version-checked edit and preflight. Exceptions, Promises returned from synchronous rules, and malformed diagnostics yield `incomplete`.
-
-For I/O checks, optionally register `asyncRules` with the same identity fields and
-`check: async (draft, {signal}) => ({status:"complete", diagnostics:[]})` or
-`{status:"pending", message:"Still processing", retryAfterSeconds:2}`. With `asyncRules`, call
-`await engine.preflight(id)`. Each call runs synchronous checks and queries asynchronous rules once;
-pending checks return `pendingRules` alongside existing diagnostics and preview, with no publish certificate.
-The application owns external jobs, progress and deduplication; it calls preflight again later.
-`preflightTimeoutMs` defaults to 5000 for the round's waiting budget. Timeout returns `incomplete`, signals
-cancellation and ignores late results; callbacks must honor the signal and avoid blocking the event loop.
-There is no queue or background polling. See [the async rule contract](docs/design/004-graph-preflight.md).
-
-Every result includes `preview`: the checked draft graph with node identities/types, edges, tombstones and all schema fields, including explicit `{kind:"undeclared"}` entries for absent fields. `{kind:"clear"}` and `{kind:"value",value:null}` remain distinct. Preview is available for `passed`, `blocked`, and `incomplete` results, including planner failures; it is the current intent, not the final remote request or predicted remote state.
-
-Pass the response and user intent to your LLM. It chooses OPs using `preview` and `diagnostics`; apply them with `engine.edit(check.draftId, check.version, ops)` and rerun preflight. The library does not call an LLM. `engine.preview(id,version,ops)` separately evaluates proposed edits without saving. See [the complete diagnostic-to-edit example](examples/preflight.ts).
-
-This experimental API uses `formatVersion: 2`: remove the old `resolution` field from rules and bump changed rule versions. Stored old-format checks must be rerun; graph data is retained. Response format versioning is separate from execution rule identity.
-
-For execution, explicitly configure `mode: "executable"` and `executors: [executor]`. Each definition version requires one `GraphExecutor` with stable id/version/target, pure synchronous `plan`, `apply`, and a `reconcile` function or an explicit unsupported reason. Missing capabilities fail assembly.
-
-```ts
-const engine = createStagedWrite({
-  definitions: [definition], rules: [], mode: "executable", executors: [executor]
-});
-// Create and edit a graph as above, then:
-const check = engine.preflight(draftId);
-if (check.certificate) {
-  let run = await engine.publish(draftId, check.certificate, { runId: "submission-1" });
-  if (run.state === "unknown" || run.state === "blocked") {
-    run = await engine.resume(run.id); // caller decides retry timing and capacity
-  }
+const draft = await engine.create(selector, initialGraph);
+const check = await engine.preflight(draft.id);
+if (check.status === "passed" && check.certificate) {
+  const run = await engine.publish(draft.id, check.certificate);
+  // If unfinished: inspect preview/diagnostics, optionally edit, then resume(run.id).
 }
+await engine.close();
 ```
 
-See [the complete executable graph example](examples/graph-execution.ts). A passing execution check fixes a copied plan and binds draft version, definition/rule digests, executor identity, target and plan digest. Publish executes that plan without rerunning the planner. The certificate is an internal handle, not external authorization.
+See the [complete registered schema and rules](examples/fixtures/project-tasks-managed.ts), [executor and calls](examples/publish-resume.ts), and [contract](docs/design/018-draft-lifecycle-proposal.md).
 
-Successful edits and repeated preflight invalidate old checks/plans. Preview and rejected edits preserve them. `getCheck(draftId,checkId)` rejects obsolete or foreign checks. Graph publish establishes each Run and its immutable input before dispatch. `publish(id,certificate,{runId})` with the same runId and original arguments observes the existing Run, even after a later preflight. The same ID with a different draft or certificate returns `RUN_ID_CONFLICT`. Omitting options generates a fresh UUID on every call; supply an ID when retrying a submission after a lost response. `resume(runId)` advances the original Run, using its stored input rather than the current draft plan. `getRunInput(runId)` returns an isolated snapshot.
+- Draft persists ordinary `graph` values, separate `fieldIntents`, immutable `initialSnapshot`, `currentRunId`, and a successful artifact reference. It retains its identity after publication.
+- `set` declares a value, `remove` explicitly clears it. `reset` restores the fixed initial intent in this version, including undeclared fields; it does not undo the last edit.
+- The first publish claims one Run atomically. Further publish calls only observe that Run; an explicitly different Run ID is rejected. Independent resource creation needs a new Draft.
+- `resume` continues the same unfinished Run, even without a process failure. Success is preserved; unknown requests use their original input/key for reconciliation. Repair edits are limited to unfinished nodes' fields.
+- Bindings are saved as individual nodes succeed. `pending` may already have remote resources; only full success marks the Draft `published`.
+- All managed APIs are asynchronous. Without executors, preflight is diagnostic-only. Without a registered backend, storage and locking are in-process memory only.
 
-Graph runIds accept 1–128 ASCII letters, digits, dots, underscores or hyphens, starting with a letter or digit. Publication IDs are unique within the engine/store, including across draft types. Already-published drafts remain uneditable in this increment; a new preflight can replace the draft qualification without modifying existing Runs. The deprecated scalar `StagedWrite` prototype retains its old one-run behavior; use `createStagedWrite` for this contract. Both entries share [ExecutionRuntime](src/execution/runtime.ts).
+## Lock and storage boundary
 
-Run `npm run demo:publish-resume` to print real library inputs/outputs with SQLite and a simulated remote. See [the recorded trace](docs/examples/publish-resume-walkthrough.md).
+Mutations acquire a lease keyed by storage namespace and Draft ID. The engine renews it and releases its own token; storage atomically verifies ownership for each state transition. Remote requests are preceded by a durable attempt record. Lost ownership cannot authorize further state writes; late receipts are recorded separately for the current owner to verify and adopt.
 
-## Dependencies and failure revisions
+The bundled SQLite backend supports processes sharing one local file, with cross-process contention and crash recovery tests. **Cross-host distributed deployment requires an external paired `ManagedStore` and `DraftLockProvider`; no production cross-host backend is bundled or claimed tested.** An unrelated lock callback plus an unguarded store is insufficient. See [the backend contract](docs/design/018-draft-lifecycle-proposal.md#锁与存储契约).
 
-A sequential plan may declare `dependsOn: ["parent"]` and `inputRefs: { projectId: "parent" }`.
-The latter fills `payload.projectId` from the applied parent's `remoteRef`. Dependencies must occur earlier;
-references require an explicit dependency and cannot overwrite literal payload fields. Both public entry points
-validate this contract. Dispatch inputs are recorded and reused unchanged for retries and reconciliation.
-Graph relations are mapped by the executor; the library does not infer execution dependencies from every graph edge.
+Remote idempotency and conclusive reconciliation are adapter responsibilities. Locks cannot cancel an already sent request. An empty search or a timeout does not prove no effect.
 
-Terminal failure marks all unattempted steps `skipped`, with `dependency_failed` or `run_stopped` as the reason.
-For a terminal run proven to have no effects, `engine.revise(runId)` returns an editable copy with a new ID,
-version 0 and `sourceRunId`. It needs a new preflight certificate. Repeated revision calls return the same copy;
-the source retains its execution history; direct edit/resume is now also available for unfinished executions. Unknown, blocked, successful and partially
-applied runs cannot be revised this way. For mapped create-only plans, use `continueFrom` for partial-success derivation (below).
+## Compatibility and scope
 
-Run `npm run demo:dependencies` for a project/task graph: zero-effect refusal → revise → parent result reference → recover a lost child response.
-The legacy `StagedWrite` class is deprecated and retained for compatibility through the planned 0.1.0 release; use `createStagedWrite` for new integrations. It remains memory-only and does not receive graph persistence/import features.
+The former graph factory is exported as **`createLegacyStagedWrite`**. Its old storage and execution protocol remain available for old data and unfinished Runs. Legacy data is not automatically converted: it may lack a recoverable initial baseline or have multiple independent Runs. New format-3 Drafts use separate managed SQLite tables. Do not feed new Drafts to old planners.
 
-## Recovery contract
+Legacy examples and regression tests explicitly use the legacy factory; [legacy reference](docs/legacy-api.md). Current recommended usage is the managed walkthrough above.
 
-- `apply` returns `applied`, `unknown`, or `not_applied` with optional `retryable`.
-- A proven retryable refusal pauses as `blocked`; explicit resume reuses its original key. A final refusal stops as `failed`.
-- `reconcile` returns `applied`, `unknown`, or `no_effect`. The latter must prove the earlier request has no effect and cannot still complete. An empty search is insufficient.
-- Earlier successes and remote receipts remain visible. **Failed does not mean no effects occurred.** No automatic rollback is provided.
-- Recovery must use the original step/key and stable target configuration; a process-local cache cannot be the only evidence source. Unsupported recovery is explicit and keeps unknown runs stopped.
-
-Callers own retry limits, backoff and scheduling. The engine cannot make a remote honor idempotency keys. No exactly-once claim.
-
-Failed steps expose `failureReason` (`remote_refusal`, `manual_no_effect`, or `retry_stopped`) and
-`failureEventSequence`, pointing to the event that explains the failure. These fields aid display and auditing;
-recovery eligibility continues to depend on effect evidence.
-
-## Stop retrying
-
-A caller can end a paused retry sequence without sending another request:
-
-```ts
-const observed = engine.getRun(runId);
-engine.stopRetry(runId, {
-  requestId: "stop-limit-1",
-  expectedSequence: observed.events.length,
-  actor: "operator-id",
-  reason: "Retry limit exhausted"
-});
-```
-
-Only an idle `blocked` run with pending steps is eligible. The engine checks dispatch history and authoritative
-no-effect evidence; absence of a remote reference is not proof. The next pending step becomes `failed`, remaining
-pending steps become `skipped/run_stopped`, and a distinct `retry_stopped` event records the command. Existing receipts
-remain intact. The old run cannot dispatch again: a zero-effect failure can use `revise`, while mapped partial success
-can use `continueFrom`. Unknown runs require reconciliation or `close_unresolved`, not this operation.
-Same command resubmissions are idempotent; stale event sequences and conflicting reuse of a stop request ID fail.
-Run `npm run demo:stop` for repeated quota refusal → stop → new revision.
-
-Every execution event now has an ISO `recordedAt`. Executable engines accept `clock: () => epochMilliseconds`
-(and the legacy constructor accepts `{ clock }` as its third argument) for deterministic tests. Event `sequence`
-remains authoritative for ordering and CAS; wall clocks can repeat or move backwards. An invalid/throwing clock falls
-back to system time so it cannot discard a remote outcome. Clocks are trusted, synchronous diagnostics, not authorization.
-
-## Manual reconciliation
-
-When automatic recovery cannot establish an outcome, a trusted host can call:
-
-```ts
-const observed = engine.getRun(runId);
-engine.adjudicate(runId, stepId, {
-  requestId: "review-123",
-  expectedSequence: observed.events.length,
-  actor: "operator-id",
-  evidence: "case-123/verified-receipt",
-  note: "Verified this exact request and target",
-  decision: { kind: "applied", remoteRef: "remote-object-id" }
-});
-await engine.resume(runId); // Separate, explicit dispatch permission from the caller.
-```
-
-`applied` records the receipt and pauses as `blocked`; resume skips that effect and resolves dependent inputs.
-`no_effect` requires proof that the original request did nothing **and cannot later complete**. Choose
-`next: "retry"` to pause for an explicit same-key retry, or `next: "stop"` to end as failed. Only a fully
-zero-effect failure permits `revise`. An empty search alone is not proof.
-`close_unresolved` ends the run as `closed`, retains the unknown step and prevents further execution or zero-effect revision.
-
-Adjudication never calls the adapter. Only the current unknown step is eligible, and an in-flight run rejects it.
-The expected event sequence rejects stale decisions. Repeating the same request ID and command returns the current run;
-reusing the ID with different content fails. Independent `adjudicated` events retain the actor, evidence, note, decision and timestamp.
-The host must authenticate/authorize the actor and verify evidence against the original request and executor target;
-these strings are audit assertions, not authentication or automatic proof. Run snapshots expose payloads and evidence:
-keep secrets out of them and enforce access control in the host. Storage is still in memory.
-
-Run `npm run demo:manual` for an offline unsupported-recovery → manual receipt → explicit resume example.
-Adjudication does not revise a failed step's business intent; mapped create-only plans can use `continueFrom` below.
-
-## Continue a partial creation
-
-Executors can opt into one-create-step-per-node mapping:
-
-```ts
-{ id: "create_parent", effect: { kind: "create", nodeId: "parent" }, payload: { name: "Parent" } }
-```
-
-After a terminal partial failure, `engine.continueFrom(runId)` copies the graph into a new draft with engine-owned
-receipts in `draft.continuation`. Repeated calls return the same draft. Edit the failed portion, run preflight again,
-and publish with the new certificate. Successful nodes cannot be changed or removed. Their original steps must
-remain in the plan with identical IDs, mappings, payloads, dependencies and input references.
-
-The new run marks these steps `reused` and records `reusedFrom` with source run/step, node, remote reference and
-resolved inputs. It does not dispatch them. Dependent steps receive the original remote reference; new requests
-use new keys. The original run remains unchanged. Preflight binds the executor, target, plan and continuation
-receipts; planners cannot substitute a different operation for a reused create.
-
-This path requires a complete one-to-one create mapping for the source and new graph. Unmapped operations,
-updates, deletes, multiple effects per node, unknown outcomes and closed runs cannot use it. Existing remote
-objects are assumed to remain valid: reuse records past creation evidence, not a fresh remote-state check.
-Run `npm run demo:continuation` for parent success → child refusal → edit child → reuse parent → child recovery.
-See [the continuation contract](docs/design/008-partial-continuation.md).
-
-## Stripe test Customer experiment
-
-`StripeTestCustomerAdapter({secretKey,accountId}).graphExecutor(selector)` connects a single customer graph to Stripe. `npm run demo:stripe` now uses the graph engine. It verifies the credential's account, creates only a test Customer with synthetic description/metadata, and does not request payments.
-
-Set `STRIPE_SECRET_KEY` and `STRIPE_ACCOUNT_ID` locally, then choose:
-
-```sh
-npm run demo:stripe
-npm run demo:stripe -- --lose-response
-```
-
-Each invocation is a new intent and can create a new test Customer. Records remain for dashboard inspection. The loss mode deliberately withholds a successful real response, then searches by request marker and context digest. These bind the original key, payload, account and executor/API version; empty, mismatched or ambiguous evidence remains unknown.
-
-Proven Customer request refusals stop as failed. A documented limiter response can pause as blocked and actually retry under the same key. Status alone is insufficient; ambiguous errors and all 5xx stay unknown. Only proven refusals are retried; unresolved POSTs are never repeated by this adapter.
-
-**Real-account verification is still pending.** Offline HTTP contract tests are not a substitute. The network demo is opt-in and excluded from CI. See [setup and acceptance](docs/design/005-stripe-adapter-experiment.md) and [the updated contract](docs/design/006-graph-execution.md).
-
-## Limits and next work
-
-- Default mode is in memory. SQLite supports explicit same-host recovery; remote outcomes still depend on adapter evidence and idempotency.
-- Trusted in-process code, one engine instance. No multi-worker fencing, tenant isolation or approval enforcement.
-- Scalar graph fields; no nested JSON, arrays, inheritance, arbitrary graph restore/import or automatic topology constraints.
-- Rules and plans are pure/synchronous by contract; their code is not hashed. Implementers must version changed behavior.
-- No durable retry limit, compensation, production billing integration or MCP server.
-- Stripe recovery now requires version-2 context metadata; old attempt-only objects are not automatically claimed.
-
-M1 definition assembly, M2 graph edits, M3 preflight and the in-memory graph execution bridge are implemented. M4 SQLite draft/check storage is implemented. M5 plan/run persistence is implemented. M6 explicit same-host recovery is implemented. Next: external trial/release (M7). This remains an experimental 0.0.1, not a completed 0.1.0 MVP.
-
-## Read and contribute
-
-- [Chinese documentation index](docs/README.md)
-- [MVP scope](docs/mvp.md), [roadmap](docs/roadmap.md), [architecture](docs/architecture.md)
-- [M1 definitions](docs/design/001-registry-and-draft.md), [M2 operations](docs/design/003-graph-operations.md), [M3 checks](docs/design/004-graph-preflight.md)
-- [Graph execution and Stripe recovery](docs/design/006-graph-execution.md)
-
-Start with a reproducible issue or focused failing test. Keep code, examples and capability claims aligned. Run `npm test` and the relevant demos before submitting changes.
-
-## License
-
-Apache-2.0. Written from scratch; no production code or account logs are included.
-
-## Release verification
-
-Run `npm run verify:package` to install the tarball in a temporary consumer directory and verify package imports,
-public TypeScript declarations and SQLite reopen behavior. This uses npm dependency resolution and is included in CI.
-Run `npm run bench` for a quick baseline or `npm run bench -- --full` for the full size/rule matrix.
-See [measured performance](docs/benchmarks/baseline.md) and [release readiness](docs/design/016-release-readiness.md).
-The package is still private and unpublished; independent external trial remains pending.
+Not implemented in the new protocol: remote update after full success, diff/drift, rollback, autofill, scheduling, full edit history, legacy data migration, manual adjudication/stop/import/retention ports, or generic nested request-body generation. [Roadmap](docs/roadmap.md).

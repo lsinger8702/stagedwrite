@@ -1,3 +1,13 @@
+# 006：Publish / Resume
+
+**当前主线为 [018：长期 Draft 生命周期](018-draft-lifecycle-proposal.md)：首次发布只认领一个 Run；重复 publish 只观察；未完成执行通过 edit + resume 续作。固定初始基线与成功基线不属于执行进度。原则冲突须先与项目所有者讨论。**
+
+默认工厂 `createStagedWrite` 已实施新协议，契约、锁、存储、边界和测试见 018。[真实输入输出](../examples/publish-resume.html)。
+
+## 旧协议历史记录（仅 createLegacyStagedWrite）
+
+**下文旧的独立多 Run 发布规则已被替代，只保留用于理解和恢复旧数据；不能作为默认 API 的实现要求。**
+
 # 006：Publish / Resume 语义与执行设计
 
 **置顶原则：新一次逻辑 publish 表达新执行意图，产生独立 Run；未全部成功时继续该次执行用 resume，不以进程故障或重启为前提。resume 只继续已有 Run。相同 Draft / 内容不等于相同执行意图。Draft 不保存执行进度，旧 Run 不跟随最新 Draft 或最新预检变化。**
@@ -76,7 +86,7 @@ recover 仍负责同主机接管，resume 才实际继续；已关闭旧引擎�
 
 内存模式不提供进程退出后的恢复。SQLite 仍限定可信本地主机，不新增跨主机接管或自动 force。适配器负责真实请求映射、执行及查证；新 Run 并不保证业务上一定创建新资源，外部效果由请求语义决定。
 
-旧标量 StagedWrite 是弃用兼容入口，本轮保持旧 publish 行为；这份多 Run 契约属于 createStagedWrite 图入口。rollback、MID、外部 Store 和指定恢复起点保持未决/延期，不冒充已实现。
+旧标量 StagedWrite 是弃用兼容入口，本轮保持旧 publish 行为；这份多 Run 契约属于 createLegacyStagedWrite 图入口。rollback、MID、外部 Store 和指定恢复起点保持未决/延期，不冒充已实现。
 
 ## 验收结果
 
@@ -98,8 +108,8 @@ recover 仍负责同主机接管，resume 才实际继续；已关闭旧引擎�
 
 ## 两种显式模式
 
-- `createStagedWrite({definitions,rules})` 或 mode:"draft"：保留草稿模式，没有 publish/resume/getRun。预检 scope 为 draft，无 certificate。
-- `createStagedWrite({definitions,rules,mode:"executable",executors})`：每个已注册定义版本必须有唯一 GraphExecutor，提供 id/version/target、纯同步 plan、apply 和 reconcile。未知绑定、重复绑定、缺失能力在装配时拒绝。
+- `createLegacyStagedWrite({definitions,rules})` 或 mode:"draft"：保留草稿模式，没有 publish/resume/getRun。预检 scope 为 draft，无 certificate。
+- `createLegacyStagedWrite({definitions,rules,mode:"executable",executors})`：每个已注册定义版本必须有唯一 GraphExecutor，提供 id/version/target、纯同步 plan、apply 和 reconcile。未知绑定、重复绑定、缺失能力在装配时拒绝。
 
 reconcile 可以是函数，或明确的 `{unsupported:"原因"}`。明确不支持时，未知结果永久等待外部处理；不能伪装成 no_effect。target 是稳定非秘密目的地标识，不能放密钥。不能把动态运行能力塞进 JSON 定义。
 

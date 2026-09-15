@@ -3,7 +3,7 @@ import test from "node:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createStagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite } from "../src/index.js";
 import type { AsyncGraphRule, AsyncRuleResult, GraphExecutor } from "../src/index.js";
 import { definition, selector, initial, rules, chosen } from "../examples/fixtures/project-tasks.js";
 const asyncRule = (check: AsyncGraphRule["check"], id = "external.status"): AsyncGraphRule => ({ ...selector, id, version: "1", check });
@@ -16,7 +16,7 @@ for (const durable of [false, true]) test(`async pending recheck, publish, recov
   const executor: GraphExecutor = { ...selector, id: "test", version: "1", target: "mock",
     plan: () => [{ id: "s1", payload: {} }], apply: async () => { calls++; return { kind: "unknown", reason: "receipt pending" }; },
     reconcile: async () => ({ kind: "applied", remoteRef: "r1" }) };
-  const open = () => createStagedWrite({ definitions: [definition], rules, asyncRules: [checker], storage, mode: "executable", executors: [executor] });
+  const open = () => createLegacyStagedWrite({ definitions: [definition], rules, asyncRules: [checker], storage, mode: "executable", executors: [executor] });
   let engine = open(); t.after(() => { engine.close(); rmSync(dir, { recursive: true, force: true }); });
   const draft = engine.create(selector, initial);
   const pending = await engine.preflight(draft.id);
@@ -37,7 +37,7 @@ for (const durable of [false, true]) test(`async pending recheck, publish, recov
 test("timeouts abort cooperatively, skip remaining rules, release lock and ignore late results", async () => {
   let resolve!: (v: AsyncRuleResult) => void;
   let signal!: AbortSignal; let secondCalls = 0;
-  const engine = createStagedWrite({ definitions: [definition], preflightTimeoutMs: 20,
+  const engine = createLegacyStagedWrite({ definitions: [definition], preflightTimeoutMs: 20,
     asyncRules: [asyncRule(async (_, context) => { signal = context.signal; return new Promise(r => { resolve = r; }); }), asyncRule(async () => { secondCalls++; return { status: "complete", diagnostics: [] }; }, "second")] });
   try {
     const draft = engine.create(selector, initial);
@@ -56,8 +56,8 @@ test("while awaiting, same-engine edits are blocked; cross-connection edits inva
   let resolve!: (v: AsyncRuleResult) => void; let started!: () => void;
   const entered = new Promise<void>(r => { started = r; });
   const checker = asyncRule(async () => { started(); return new Promise(r => { resolve = r; }); });
-  const first = createStagedWrite({ definitions: [definition], asyncRules: [checker], storage });
-  const second = createStagedWrite({ definitions: [definition], asyncRules: [checker], storage });
+  const first = createLegacyStagedWrite({ definitions: [definition], asyncRules: [checker], storage });
+  const second = createLegacyStagedWrite({ definitions: [definition], asyncRules: [checker], storage });
   t.after(() => { first.close(); second.close(); rmSync(dir, { recursive: true, force: true }); });
   const draft = first.create(selector, initial); const result = first.preflight(draft.id); await entered;
   assert.throws(() => first.edit(draft.id, 0, chosen), /CHECK_BUSY/);
@@ -70,19 +70,19 @@ test("while awaiting, same-engine edits are blocked; cross-connection edits inva
 
 test("async bindings are frozen and versioned; malformed results are incomplete", async () => {
   for (const output of [null, { status: "complete" }, { status: "pending", message: "" }, { status: "pending", message: "wait", retryAfterSeconds: -1 }, { status: "pending", message: "wait", diagnostics: [{ code: "invalid" }] }]) {
-    const engine = createStagedWrite({ definitions: [definition], asyncRules: [asyncRule(async () => output as AsyncRuleResult)] });
+    const engine = createLegacyStagedWrite({ definitions: [definition], asyncRules: [asyncRule(async () => output as AsyncRuleResult)] });
     try { assert.equal((await engine.preflight(engine.create(selector, initial).id)).status, "incomplete"); } finally { engine.close(); }
   }
   const checker = asyncRule(async () => ({ status: "complete", diagnostics: [] }));
-  const engine = createStagedWrite({ definitions: [definition], asyncRules: [checker] });
+  const engine = createLegacyStagedWrite({ definitions: [definition], asyncRules: [checker] });
   try {
     const draft = engine.create(selector, initial); const before = await engine.preflight(draft.id);
     checker.version = "changed"; checker.check = async () => { throw new Error("changed"); };
     assert.equal((await engine.preflight(draft.id)).rulesDigest, before.rulesDigest);
     assert.equal((await engine.preflight(draft.id)).status, "passed");
-    const other = createStagedWrite({ definitions: [definition], asyncRules: [checker] });
+    const other = createLegacyStagedWrite({ definitions: [definition], asyncRules: [checker] });
     try { assert.notEqual((await other.preflight(other.create(selector, initial).id)).rulesDigest, before.rulesDigest); } finally { other.close(); }
   } finally { engine.close(); }
-  assert.throws(() => createStagedWrite({ definitions: [definition], asyncRules: [checker], preflightTimeoutMs: 0 }), /INVALID_PREFLIGHT_TIMEOUT/);
-  assert.throws(() => createStagedWrite({ definitions: [definition], rules: [{ ...checker, check: () => [] }], asyncRules: [checker] }), /RULE_CONFLICT/);
+  assert.throws(() => createLegacyStagedWrite({ definitions: [definition], asyncRules: [checker], preflightTimeoutMs: 0 }), /INVALID_PREFLIGHT_TIMEOUT/);
+  assert.throws(() => createLegacyStagedWrite({ definitions: [definition], rules: [{ ...checker, check: () => [] }], asyncRules: [checker] }), /RULE_CONFLICT/);
 });

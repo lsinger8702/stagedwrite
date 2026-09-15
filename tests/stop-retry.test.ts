@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createStagedWrite, StagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite, StagedWrite } from "../src/index.js";
 import type { GraphExecutor, ApplyOutcome, Clock, Run, StopRetry } from "../src/index.js";
 const selector = { type: "stop", typeVersion: "1" };
 const definition = { id: "stop", version: "1", nodeTypes: { item: { valueSchema: { type: "object", properties: {}, additionalProperties: false } } }, relationTypes: {} };
@@ -10,7 +10,7 @@ function setup(overrides: Partial<GraphExecutor> = {}, clock: Clock = () => 0) {
     plan: () => [{ id: "a", payload: {}, effect: { kind: "create", nodeId: "a" } }, { id: "b", payload: {}, effect: { kind: "create", nodeId: "b" }, dependsOn: ["a"], inputRefs: { aId: "a" } }],
     apply: async s => { calls.push(s.id); return { kind: "not_applied", retryable: true, reason: "quota" }; },
     reconcile: { unsupported: "no lookup" }, ...overrides };
-  const engine = createStagedWrite({ definitions: [definition], mode: "executable", executors: [executor], clock });
+  const engine = createLegacyStagedWrite({ definitions: [definition], mode: "executable", executors: [executor], clock });
   const draft = engine.create(selector);
   engine.edit(draft.id, 0, [{ op: "node.add", id: "a", nodeType: "item" }, { op: "node.add", id: "b", nodeType: "item" }]);
   const certificate = engine.preflight(draft.id).certificate!;

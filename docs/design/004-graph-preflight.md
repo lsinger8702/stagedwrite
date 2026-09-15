@@ -2,19 +2,19 @@
 
 **设计约束：遵循 [000 项目原则](000-project-principles.md)；原则冲突须先与项目所有者讨论并取得明确同意。本文中的阶段实现记录不覆盖主线，publish/resume 目标及当前差异以 [006](006-graph-execution.md) 为准。**
 
-状态：已实现；2026-09-15 增补可选候选修复信息，保持诊断与 preview 契约（formatVersion: 2）。
+状态：已实现；管理协议仍使用诊断与 preview 契约 formatVersion=2。持久化 Draft 为 formatVersion=3，规则输入是 ManagedDraft，字段为普通值并另附 fieldIntents；编译与发布见 [018](018-draft-lifecycle-proposal.md)。
 
 ## 目的与边界
 
 Preflight 检查当前图，向调用方返回具体问题和足够的当前状态。LLM 结合用户意图生成 OP，库通过普通 edit 校验并应用，之后再次 preflight。LLM 无需接收整套规则再自行寻找错误，规则也不替用户决定唯一修复方案。
 
-默认 draft 模式的 passed 只表示当前检查通过。显式 executable 模式在 [006](006-graph-execution.md) 中定义固定计划与发布。这里的 preview 是当前 Draft 意图，不是远端请求体、执行后的预测状态或 drift 检测结果。
+未注册 executors 时的 passed 只表示当前检查通过。注册 executors 后的执行检查在 [006](006-graph-execution.md) 中定义固定计划与发布。这里的 preview 是当前 Draft 意图，不是远端请求体、执行后的预测状态或 drift 检测结果。
 
 ## 规则注册与返回
 
 `createStagedWrite({definitions,rules:[{id,version,type,typeVersion,check}]})`。
 
-规则绑定定义版本，纯同步接收独立冻结的 GraphDraft，返回实际命中的 GraphDiagnostic[]；没有问题返回 []。注册身份、绑定版本和重复 ID 在启动时校验。函数和注册元数据在装配后固定；实现变化须升规则版本，rulesDigest 不哈函数源码。
+规则绑定定义版本，纯同步接收独立冻结的 ManagedDraft（普通 graph + fieldIntents），返回实际命中的 GraphDiagnostic[]；没有问题返回 []。注册身份、绑定版本和重复 ID 在启动时校验。函数和注册元数据在装配后固定；实现变化须升规则版本，rulesDigest 不哈函数源码。
 
 | 字段 | 契约 |
 |---|---|
@@ -52,9 +52,9 @@ GraphCheck 始终包含 preview: GraphDraftPreview，包括 passed、blocked、p
 
 - `{kind:"value",value:...}`：显式值，包括 schema 允许的 null。
 - `{kind:"clear"}`：显式清空（remove）。
-- `{kind:"undeclared"}`：未声明或 reset 后的状态，仅在 preview 中补齐。
+- `{kind:"undeclared"}`：未声明状态；reset 恢复的基线缺席时才是此状态，仅在 preview 中补齐。
 
-未声明项只是预览投影，不写回草稿；规则仍接收原始 GraphDraft。preview 不可以作为完整替换草稿提交，修改通过 OP 进行。缺节点由业务规则诊断，不凭 schema 自动创建实例。引擎不会为 preview 自动补默认值、解析远端资源或调用 LLM。
+未声明项只是预览投影，不写回草稿；规则仍接收ManagedDraft（普通 graph + fieldIntents）。preview 不可以作为完整替换草稿提交，修改通过 OP 进行。缺节点由业务规则诊断，不凭 schema 自动创建实例。引擎不会为 preview 自动补默认值、解析远端资源或调用 LLM。
 
 ```ts
 const check = engine.preflight(draftId);
@@ -87,7 +87,7 @@ check 绑定 draftId/version/definitionDigest/rulesDigest 和随机 checkId。�
 
 覆盖 message-only 规则、可选提示与候选、跨节点关系、warning/error、三态与 null、空图和规则/计划错误时的预览、未声明可选字段、转义字段、返回快照隔离、CAS、SQLite 重开、旧格式检查失效和执行模式。
 
-实现：`src/preflight/`；测试：`tests/preflight.test.ts`、`tests/graph-execution.test.ts`、`tests/storage.test.ts`；示例：`npm run demo:preflight`。示例用明确标注的调用方决策模拟生成 OP，不含真实模型调用。
+当前管理协议的规则入口与绑定见 `src/managed/engine.ts`，测试 `tests/managed.test.ts`，示例 `npm run demo:html`。共享诊断实现：`src/preflight/`；旧协议回归测试：`tests/preflight.test.ts`、`tests/graph-execution.test.ts`、`tests/storage.test.ts`；示例：`npm run demo:preflight`。示例用明确标注的调用方决策模拟生成 OP，不含真实模型调用。
 
 
 ## 最小异步规则（2026-09-15）
@@ -97,7 +97,7 @@ check 绑定 draftId/version/definitionDigest/rulesDigest 和随机 checkId。�
 ```ts
 const engine = createStagedWrite({
   definitions: [definition],
-  rules, // Existing synchronous GraphRule[]
+  rules, // ManagedRule[]: pure, synchronous checks
   asyncRules: [{
     type: definition.id, typeVersion: definition.version,
     id: "document.export", version: "1",
@@ -114,19 +114,19 @@ const engine = createStagedWrite({
 const check = await engine.preflight(draft.id);
 ```
 
-- 没有 asyncRules 时保留同步 preflight；显式提供 asyncRules（包括空数组）时 preflight 返回 Promise。统一使用 await 兼容两种模式。
+- 管理协议所有 preflight 调用都返回 Promise；是否注册 asyncRules 不改变返回类型。旧兼容入口保留旧的同步/异步类型。
 - `complete` 必须携带 diagnostics；`pending` 必须携带 message，可带 retryAfterSeconds 与已经得到的 diagnostics。失败业务检查返回 complete + 错误诊断，不返回 pending。
 - 响应保留当前 preview 与所有已获得诊断，额外给出 pendingRules（ruleId/ruleVersion/message/retryAfterSeconds?）。有检查故障时 incomplete 优先，其次 pending，全部完成后才按诊断得出 blocked/passed。pending 不签发发布凭据。
 - 规则以注册顺序逐条执行，默认整轮等待预算 5000ms，可配置正整数毫秒。预算耗尽时后续规则不启动，列入 pendingRules；超时规则标记 rule.timeout/incomplete，并传入 AbortSignal 通知接入方取消 I/O。迟到结果不再合并或落库。预算是等待上限机制，不是 CPU 沙箱，无法抢占阻塞事件循环的同步代码，也不保证底层远端操作被取消；接入方必须配置 I/O 超时并支持 signal。
 - 下一次 preflight 重新调用规则，库不保存业务任务句柄，也不提供 exactly-once。规则应通过接入方持久化的业务身份或查询接口复用工作；尤其不能每次查询都无条件重复启动远端任务。耗时永远超预算的规则应改为启动/单次查询后立即返回 pending，避免后续规则持续得不到执行。
 - pending 是明确知道“仍未完成”；网络超时是检查结果未知，两者分别返回 pending 和 incomplete，不混用。
-- 沿用现有检查快照、epoch 和版本校验：同引擎 await 期间阻止 edit/重复 preflight/close；跨连接变更使旧结果以 STALE_CHECK 拒绝。pending 返回后可以正常 edit，后续检查针对新版本。
-- 异步规则 ID 与同步规则共用冲突检查；版本及同步/异步类别进入执行规则身份。无匹配异步规则时保持原摘要兼容，恢复已有 Run 仍核对原始绑定。未改 SQLite schema。
+- 管理协议以快照、epoch、version 和 resourceRevision 校验。外部 preflight 的 await 期间允许其他 edit 或新检查，但旧结果以 STALE_CHECK 拒绝；close 在检查进行中拒绝。resume 内部的检查持有执行租约，pending 返回后释放。
+- 异步规则 ID 与同步规则共用冲突检查；版本及同步/异步类别进入执行规则身份。无匹配异步规则时保持原摘要兼容，恢复已有 Run 仍核对原始绑定。管理协议使用独立 SQLite 表，旧表未迁移。
 - 本实验版本在 formatVersion: 2 增加 pending 状态及可选 pendingRules；消费者需要补充 pending 分支，不能把未知状态当 passed。此处尚未对外发布稳定版本。
 
 
 ## 与执行诊断共享协议
 
-publish/resume 的接入方可在明确的执行结果中附带可选 code、message、diagnostics。GraphExecutionResult 返回 Run 执行事实、对应 preview 与 GraphDiagnostic[]。诊断结构与本节相同，但不会将诊断当成远端未生效证据。
+publish/resume 的接入方可在明确的执行结果中附带可选 code、message、diagnostics。管理协议执行响应返回 ManagedRun 执行事实、对应 preview 与 GraphDiagnostic[]。诊断结构与本节相同，但不会将诊断当成远端未生效证据。
 
 resume 接受修复后的 Draft 时会重新执行本节预检；未通过则响应额外携带 check，preview/diagnostics 属于该修复版本，Run.version 仍为上次获准执行版本。下一次 edit 使用 preview.version。详见 006 的当前修复续作方案。

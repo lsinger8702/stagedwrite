@@ -1,499 +1,16 @@
-# Create → Publish → Resume 实际运行记录
+# 当前协议的真实输入输出
 
-**遵循 [项目原则](../design/000-project-principles.md)；原则冲突先与项目所有者讨论。**
+实际执行库、SQLite 与断言；远端是 Mock，无 HTTP/LLM 调用。运行时间 2026-09-14T20:59:34.264Z。
 
-运行时间：2026-09-14T17:49:44.510Z，Node v24.19.0。
+[交互 HTML](publish-resume.html) · [完整 JSON](publish-resume-trace.json) · [源码](../../examples/publish-resume.ts)
 
-实际执行本仓库代码和 SQLite；远端是进程内模拟，没有发送真实 HTTP，也没有调用大模型。首次 publish 返回业务诊断，调用方 edit 修复后在同一引擎 resume；没有进程故障、重启或 recover。
-
-[可运行源码](../../examples/publish-resume.ts) · [完整原始 JSON](publish-resume-trace.json)。运行 npm run demo:publish-resume；加 -- --write-report 可更新此记录。
-
-调用链中的 Draft ID、版本、凭据、Run 和事件来自程序输出。Run 的展示省略顶层 binding 与部分步骤声明，完整数据见 JSON。
-
-## 先看这份有问题的 Draft
-
-下方是第一次 preflight 的实际 preview；三个节点都已填写内容，两个 contains 边显式关联项目与任务。
-
-```json
-{
-  "id": "8ffae1bb-e303-4223-b015-3c43a608d725",
-  "version": 0,
-  "type": "example.project-tasks",
-  "typeVersion": "2",
-  "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
-  "nodes": {
-    "project-1": {
-      "id": "project-1",
-      "nodeType": "project",
-      "fields": {
-        "name": {
-          "kind": "value",
-          "value": "文档发布"
-        },
-        "capacityHours": {
-          "kind": "value",
-          "value": 16
-        },
-        "deadlineDay": {
-          "kind": "value",
-          "value": 20
-        }
-      }
-    },
-    "task-1": {
-      "id": "task-1",
-      "nodeType": "task",
-      "fields": {
-        "name": {
-          "kind": "value",
-          "value": "编写快速入门"
-        },
-        "estimateHours": {
-          "kind": "value",
-          "value": 12
-        },
-        "dueDay": {
-          "kind": "value",
-          "value": 22
-        },
-        "priority": {
-          "kind": "value",
-          "value": "urgent"
-        },
-        "owner": {
-          "kind": "clear"
-        }
-      }
-    },
-    "task-2": {
-      "id": "task-2",
-      "nodeType": "task",
-      "fields": {
-        "name": {
-          "kind": "value",
-          "value": "评审使用示例"
-        },
-        "estimateHours": {
-          "kind": "value",
-          "value": 10
-        },
-        "dueDay": {
-          "kind": "value",
-          "value": 18
-        },
-        "priority": {
-          "kind": "value",
-          "value": "normal"
-        },
-        "owner": {
-          "kind": "value",
-          "value": "chen"
-        }
-      }
-    }
-  },
-  "edges": {
-    "contains-1": {
-      "id": "contains-1",
-      "relationType": "contains",
-      "from": "project-1",
-      "to": "task-1"
-    },
-    "contains-2": {
-      "id": "contains-2",
-      "relationType": "contains",
-      "from": "project-1",
-      "to": "task-2"
-    }
-  },
-  "tombstones": {
-    "nodes": [],
-    "edges": []
-  }
-}
-```
-
-## 三条注册规则实际命中的诊断
-
-```json
-[
-  {
-    "code": "project.capacity_exceeded",
-    "path": "/nodes/project-1/fields/capacityHours",
-    "message": "项目“文档发布”容量为 16 小时，但 “编写快速入门”12 小时、“评审使用示例”10 小时，合计 22 小时，超出 6 小时。",
-    "hint": "可以缩减任务范围、将部分工作移到下一期，或在用户允许时增加容量；请根据用户意图选择。",
-    "related": [
-      "/nodes/task-1/fields/estimateHours",
-      "/nodes/task-2/fields/estimateHours"
-    ],
-    "stage": "work-planning",
-    "metadata": {
-      "capacityHours": 16,
-      "totalHours": 22,
-      "excessHours": 6,
-      "unit": "hours"
-    },
-    "repairs": [
-      {
-        "id": "expand-capacity",
-        "message": "若用户允许追加容量，可提高到当前任务总工时；这不会解决日期或负责人问题。",
-        "ops": [
-          {
-            "op": "set",
-            "nodeId": "project-1",
-            "path": "/capacityHours",
-            "value": 22
-          }
-        ]
-      }
-    ],
-    "severity": "error",
-    "source": {
-      "kind": "rule",
-      "id": "project.capacity",
-      "version": "2"
-    }
-  },
-  {
-    "code": "task.after_project_deadline",
-    "path": "/nodes/task-1/fields/dueDay",
-    "message": "任务“编写快速入门”安排在第 22 天完成，晚于所属项目的第 20 天截止日。",
-    "hint": "可以提前该任务、调整项目截止日，或将任务移到下一期；不要自行假设用户同意延期。",
-    "related": [
-      "/nodes/project-1/fields/deadlineDay"
-    ],
-    "repairs": [
-      {
-        "id": "earlier-task",
-        "message": "若任务可以提前，将它安排到项目截止日。",
-        "ops": [
-          {
-            "op": "set",
-            "nodeId": "task-1",
-            "path": "/dueDay",
-            "value": 20
-          }
-        ]
-      },
-      {
-        "id": "later-project",
-        "message": "若用户接受整个项目延期，将项目截止日延到该任务完成日。",
-        "ops": [
-          {
-            "op": "set",
-            "nodeId": "project-1",
-            "path": "/deadlineDay",
-            "value": 22
-          }
-        ]
-      }
-    ],
-    "severity": "error",
-    "source": {
-      "kind": "rule",
-      "id": "task.deadline",
-      "version": "2"
-    }
-  },
-  {
-    "code": "task.urgent_owner_required",
-    "path": "/nodes/task-1/fields/owner",
-    "message": "任务“编写快速入门”优先级为 urgent，但负责人被明确清空；紧急任务必须有负责人。",
-    "hint": "指定能接手的负责人，或在用户允许时降低优先级；候选人仅供选择，不代表已获授权分配。",
-    "candidates": [
-      {
-        "value": "lin",
-        "label": "林",
-        "message": "本期可以承接文档任务（虚构候选）",
-        "metadata": {
-          "availableHours": 8,
-          "skills": [
-            "documentation"
-          ]
-        },
-        "repairOps": [
-          {
-            "op": "set",
-            "nodeId": "task-1",
-            "path": "/owner",
-            "value": "lin"
-          }
-        ]
-      },
-      {
-        "value": "chen",
-        "label": "陈",
-        "message": "本期可以承接评审任务（虚构候选）",
-        "metadata": {
-          "availableHours": 4,
-          "skills": [
-            "review"
-          ]
-        },
-        "repairOps": [
-          {
-            "op": "set",
-            "nodeId": "task-1",
-            "path": "/owner",
-            "value": "chen"
-          }
-        ]
-      }
-    ],
-    "excludedCandidates": [
-      {
-        "value": "zhou",
-        "label": "周",
-        "message": "本期不可参与（虚构约束）",
-        "metadata": {
-          "available": false
-        }
-      }
-    ],
-    "constraintIds": [
-      "demo-current-period-availability"
-    ],
-    "repairs": [
-      {
-        "id": "lower-priority",
-        "message": "只有用户同意降低优先级时，才考虑保留负责人清空状态并改为普通任务。",
-        "ops": [
-          {
-            "op": "set",
-            "nodeId": "task-1",
-            "path": "/priority",
-            "value": "normal"
-          }
-        ]
-      }
-    ],
-    "related": [
-      "/nodes/task-1/fields/priority"
-    ],
-    "severity": "error",
-    "source": {
-      "kind": "rule",
-      "id": "task.urgent-owner",
-      "version": "2"
-    }
-  }
-]
-```
-
-## 假设用户意图与调用方选择的 OP
-
-项目容量保持 16 小时，截止日保持第 20 天；两个任务本期各交付 8 小时范围的最小版本；快速入门仍为紧急任务，由林负责并在第 20 天完成。
-
-这是虚构的用户上下文，不是规则中的固定修复，也没有真实模型调用。
-
-```json
-[
-  {
-    "op": "set",
-    "nodeId": "task-1",
-    "path": "/estimateHours",
-    "value": 8
-  },
-  {
-    "op": "set",
-    "nodeId": "task-2",
-    "path": "/estimateHours",
-    "value": 8
-  },
-  {
-    "op": "set",
-    "nodeId": "task-1",
-    "path": "/dueDay",
-    "value": 20
-  },
-  {
-    "op": "set",
-    "nodeId": "task-1",
-    "path": "/owner",
-    "value": "lin"
-  }
-]
-```
-
-应用后再次预检：passed，diagnostics=[]。
-
-## 注册给库的 schema 和规则
-
-组装方式：createStagedWrite({ definitions: [definition], rules, asyncRules, mode: "executable", storage, executors: [executor] })。
-
-Schema 原始值：
-
-```json
-{
-  "id": "example.project-tasks",
-  "version": "2",
-  "nodeTypes": {
-    "project": {
-      "valueSchema": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "description": "项目名称"
-          },
-          "capacityHours": {
-            "type": "integer",
-            "minimum": 1,
-            "description": "本期可用总工时"
-          },
-          "deadlineDay": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 30,
-            "description": "本期截止日，1–30"
-          }
-        },
-        "additionalProperties": false
-      },
-      "requiredAtPublish": [
-        "name",
-        "capacityHours",
-        "deadlineDay"
-      ]
-    },
-    "task": {
-      "valueSchema": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1
-          },
-          "estimateHours": {
-            "type": "integer",
-            "minimum": 1
-          },
-          "dueDay": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 30
-          },
-          "priority": {
-            "type": "string",
-            "enum": [
-              "normal",
-              "urgent"
-            ]
-          },
-          "owner": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "负责人；紧急任务必须明确指定"
-          }
-        },
-        "additionalProperties": false
-      },
-      "requiredAtPublish": [
-        "name",
-        "estimateHours",
-        "dueDay",
-        "priority"
-      ]
-    }
-  },
-  "relationTypes": {
-    "contains": {
-      "from": [
-        "project"
-      ],
-      "to": [
-        "task"
-      ]
-    }
-  }
-}
-```
-
-### project.capacity@2
-
-```ts
-draft => {
-            const issues = [];
-            for (const project of Object.values(draft.nodes).filter(n => n.nodeType === "project")) {
-                const tasks = tasksFor(draft, project), capacity = value(project, "capacityHours");
-                const hours = tasks.map(task => value(task, "estimateHours"));
-                if (typeof capacity !== "number" || hours.some(h => typeof h !== "number"))
-                    continue;
-                const total = hours.reduce((a, b) => a + b, 0);
-                if (total > capacity)
-                    issues.push({ code: "project.capacity_exceeded", path: at(project.id, "capacityHours"),
-                        message: `项目“${value(project, "name")}”容量为 ${capacity} 小时，但 ${tasks.map(task => `“${value(task, "name")}”${value(task, "estimateHours")} 小时`).join("、")}，合计 ${total} 小时，超出 ${total - capacity} 小时。`,
-                        hint: "可以缩减任务范围、将部分工作移到下一期，或在用户允许时增加容量；请根据用户意图选择。",
-                        related: tasks.map(task => at(task.id, "estimateHours")),
-                        stage: "work-planning", metadata: { capacityHours: capacity, totalHours: total, excessHours: total - capacity, unit: "hours" },
-                        repairs: [{ id: "expand-capacity", message: "若用户允许追加容量，可提高到当前任务总工时；这不会解决日期或负责人问题。",
-                                ops: [{ op: "set", nodeId: project.id, path: "/capacityHours", value: total }] }] });
-            }
-            return issues;
-        }
-```
-
-### task.deadline@2
-
-```ts
-draft => {
-            const issues = [];
-            for (const project of Object.values(draft.nodes).filter(n => n.nodeType === "project"))
-                for (const task of tasksFor(draft, project)) {
-                    const deadline = value(project, "deadlineDay"), due = value(task, "dueDay");
-                    if (typeof deadline === "number" && typeof due === "number" && due > deadline)
-                        issues.push({
-                            code: "task.after_project_deadline", path: at(task.id, "dueDay"),
-                            message: `任务“${value(task, "name")}”安排在第 ${due} 天完成，晚于所属项目的第 ${deadline} 天截止日。`,
-                            hint: "可以提前该任务、调整项目截止日，或将任务移到下一期；不要自行假设用户同意延期。",
-                            related: [at(project.id, "deadlineDay")],
-                            repairs: [
-                                { id: "earlier-task", message: "若任务可以提前，将它安排到项目截止日。", ops: [{ op: "set", nodeId: task.id, path: "/dueDay", value: deadline }] },
-                                { id: "later-project", message: "若用户接受整个项目延期，将项目截止日延到该任务完成日。", ops: [{ op: "set", nodeId: project.id, path: "/deadlineDay", value: due }] }
-                            ]
-                        });
-                }
-            return issues;
-        }
-```
-
-### task.urgent-owner@2
-
-```ts
-draft => {
-            const issues = [];
-            for (const task of Object.values(draft.nodes).filter(n => n.nodeType === "task")) {
-                const owner = value(task, "owner");
-                if (value(task, "priority") === "urgent" && (typeof owner !== "string" || !owner.trim()))
-                    issues.push({
-                        code: "task.urgent_owner_required", path: at(task.id, "owner"),
-                        message: `任务“${value(task, "name")}”优先级为 urgent，但负责人${task.fields.owner?.kind === "clear" ? "被明确清空" : "没有有效值"}；紧急任务必须有负责人。`,
-                        hint: "指定能接手的负责人，或在用户允许时降低优先级；候选人仅供选择，不代表已获授权分配。",
-                        candidates: [
-                            { value: "lin", label: "林", message: "本期可以承接文档任务（虚构候选）", metadata: { availableHours: 8, skills: ["documentation"] },
-                                repairOps: [{ op: "set", nodeId: task.id, path: "/owner", value: "lin" }] },
-                            { value: "chen", label: "陈", message: "本期可以承接评审任务（虚构候选）", metadata: { availableHours: 4, skills: ["review"] },
-                                repairOps: [{ op: "set", nodeId: task.id, path: "/owner", value: "chen" }] }
-                        ],
-                        excludedCandidates: [{ value: "zhou", label: "周", message: "本期不可参与（虚构约束）", metadata: { available: false } }],
-                        constraintIds: ["demo-current-period-availability"],
-                        repairs: [{ id: "lower-priority", message: "只有用户同意降低优先级时，才考虑保留负责人清空状态并改为普通任务。",
-                                ops: [{ op: "set", nodeId: task.id, path: "/priority", value: "normal" }] }],
-                        related: [at(task.id, "priority")]
-                    });
-            }
-            return issues;
-        }
-```
-
-规则函数使用的辅助函数见 [完整 fixture](../../examples/fixtures/project-tasks.ts)。下面继续列出真实 API 输入输出及请求映射。
+运行 npm run demo:html 重新生成。
 
 ## 1. create
 
-输入（参数顺序）：
+创建就有初始工作意图。Graph 为普通值，fieldIntents 保存三态，initialSnapshot 固定初始基线。
+
+输入：
 
 ```json
 [
@@ -507,69 +24,31 @@ draft => {
         "id": "project-1",
         "nodeType": "project",
         "fields": {
-          "name": {
-            "kind": "value",
-            "value": "文档发布"
-          },
-          "capacityHours": {
-            "kind": "value",
-            "value": 16
-          },
-          "deadlineDay": {
-            "kind": "value",
-            "value": 20
-          }
+          "name": "文档发布",
+          "capacityHours": 16,
+          "deadlineDay": 20
         }
       },
       "task-1": {
         "id": "task-1",
         "nodeType": "task",
         "fields": {
-          "name": {
-            "kind": "value",
-            "value": "编写快速入门"
-          },
-          "estimateHours": {
-            "kind": "value",
-            "value": 12
-          },
-          "dueDay": {
-            "kind": "value",
-            "value": 22
-          },
-          "priority": {
-            "kind": "value",
-            "value": "urgent"
-          },
-          "owner": {
-            "kind": "clear"
-          }
+          "name": "编写快速入门",
+          "estimateHours": 12,
+          "dueDay": 22,
+          "priority": "urgent",
+          "owner": null
         }
       },
       "task-2": {
         "id": "task-2",
         "nodeType": "task",
         "fields": {
-          "name": {
-            "kind": "value",
-            "value": "评审使用示例"
-          },
-          "estimateHours": {
-            "kind": "value",
-            "value": 10
-          },
-          "dueDay": {
-            "kind": "value",
-            "value": 18
-          },
-          "priority": {
-            "kind": "value",
-            "value": "normal"
-          },
-          "owner": {
-            "kind": "value",
-            "value": "chen"
-          }
+          "name": "评审使用示例",
+          "estimateHours": 10,
+          "dueDay": 18,
+          "priority": "normal",
+          "owner": "chen"
         }
       }
     },
@@ -595,124 +74,1121 @@ draft => {
 
 ```json
 {
-  "id": "8ffae1bb-e303-4223-b015-3c43a608d725",
+  "graph": {
+    "nodes": {
+      "project-1": {
+        "id": "project-1",
+        "nodeType": "project",
+        "fields": {
+          "name": "文档发布",
+          "capacityHours": 16,
+          "deadlineDay": 20
+        }
+      },
+      "task-1": {
+        "id": "task-1",
+        "nodeType": "task",
+        "fields": {
+          "name": "编写快速入门",
+          "estimateHours": 12,
+          "dueDay": 22,
+          "priority": "urgent",
+          "owner": null
+        }
+      },
+      "task-2": {
+        "id": "task-2",
+        "nodeType": "task",
+        "fields": {
+          "name": "评审使用示例",
+          "estimateHours": 10,
+          "dueDay": 18,
+          "priority": "normal",
+          "owner": "chen"
+        }
+      }
+    },
+    "edges": {
+      "contains-1": {
+        "id": "contains-1",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-1"
+      },
+      "contains-2": {
+        "id": "contains-2",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-2"
+      }
+    }
+  },
+  "fieldIntents": {
+    "project-1": {
+      "/name": {
+        "kind": "set",
+        "value": "文档发布"
+      },
+      "/capacityHours": {
+        "kind": "set",
+        "value": 16
+      },
+      "/deadlineDay": {
+        "kind": "set",
+        "value": 20
+      }
+    },
+    "task-1": {
+      "/name": {
+        "kind": "set",
+        "value": "编写快速入门"
+      },
+      "/estimateHours": {
+        "kind": "set",
+        "value": 12
+      },
+      "/dueDay": {
+        "kind": "set",
+        "value": 22
+      },
+      "/priority": {
+        "kind": "set",
+        "value": "urgent"
+      },
+      "/owner": {
+        "kind": "set",
+        "value": null
+      }
+    },
+    "task-2": {
+      "/name": {
+        "kind": "set",
+        "value": "评审使用示例"
+      },
+      "/estimateHours": {
+        "kind": "set",
+        "value": 10
+      },
+      "/dueDay": {
+        "kind": "set",
+        "value": 18
+      },
+      "/priority": {
+        "kind": "set",
+        "value": "normal"
+      },
+      "/owner": {
+        "kind": "set",
+        "value": "chen"
+      }
+    }
+  },
+  "formatVersion": 3,
+  "id": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
   "version": 0,
   "type": "example.project-tasks",
   "typeVersion": "2",
   "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
-  "nodes": {
-    "project-1": {
-      "id": "project-1",
-      "nodeType": "project",
-      "fields": {
-        "name": {
-          "kind": "value",
+  "status": "pending",
+  "currentRunId": null,
+  "targetId": null,
+  "initialSnapshot": {
+    "graph": {
+      "nodes": {
+        "project-1": {
+          "id": "project-1",
+          "nodeType": "project",
+          "fields": {
+            "name": "文档发布",
+            "capacityHours": 16,
+            "deadlineDay": 20
+          }
+        },
+        "task-1": {
+          "id": "task-1",
+          "nodeType": "task",
+          "fields": {
+            "name": "编写快速入门",
+            "estimateHours": 12,
+            "dueDay": 22,
+            "priority": "urgent",
+            "owner": null
+          }
+        },
+        "task-2": {
+          "id": "task-2",
+          "nodeType": "task",
+          "fields": {
+            "name": "评审使用示例",
+            "estimateHours": 10,
+            "dueDay": 18,
+            "priority": "normal",
+            "owner": "chen"
+          }
+        }
+      },
+      "edges": {
+        "contains-1": {
+          "id": "contains-1",
+          "relationType": "contains",
+          "from": "project-1",
+          "to": "task-1"
+        },
+        "contains-2": {
+          "id": "contains-2",
+          "relationType": "contains",
+          "from": "project-1",
+          "to": "task-2"
+        }
+      }
+    },
+    "fieldIntents": {
+      "project-1": {
+        "/name": {
+          "kind": "set",
           "value": "文档发布"
         },
-        "capacityHours": {
-          "kind": "value",
+        "/capacityHours": {
+          "kind": "set",
           "value": 16
         },
-        "deadlineDay": {
-          "kind": "value",
+        "/deadlineDay": {
+          "kind": "set",
           "value": 20
         }
-      }
-    },
-    "task-1": {
-      "id": "task-1",
-      "nodeType": "task",
-      "fields": {
-        "name": {
-          "kind": "value",
+      },
+      "task-1": {
+        "/name": {
+          "kind": "set",
           "value": "编写快速入门"
         },
-        "estimateHours": {
-          "kind": "value",
+        "/estimateHours": {
+          "kind": "set",
           "value": 12
         },
-        "dueDay": {
-          "kind": "value",
+        "/dueDay": {
+          "kind": "set",
           "value": 22
         },
-        "priority": {
-          "kind": "value",
+        "/priority": {
+          "kind": "set",
           "value": "urgent"
         },
-        "owner": {
-          "kind": "clear"
+        "/owner": {
+          "kind": "set",
+          "value": null
         }
-      }
-    },
-    "task-2": {
-      "id": "task-2",
-      "nodeType": "task",
-      "fields": {
-        "name": {
-          "kind": "value",
+      },
+      "task-2": {
+        "/name": {
+          "kind": "set",
           "value": "评审使用示例"
         },
-        "estimateHours": {
-          "kind": "value",
+        "/estimateHours": {
+          "kind": "set",
           "value": 10
         },
-        "dueDay": {
-          "kind": "value",
+        "/dueDay": {
+          "kind": "set",
           "value": 18
         },
-        "priority": {
-          "kind": "value",
+        "/priority": {
+          "kind": "set",
           "value": "normal"
         },
-        "owner": {
-          "kind": "value",
+        "/owner": {
+          "kind": "set",
           "value": "chen"
         }
       }
     }
   },
-  "edges": {
-    "contains-1": {
-      "id": "contains-1",
-      "relationType": "contains",
-      "from": "project-1",
-      "to": "task-1"
-    },
-    "contains-2": {
-      "id": "contains-2",
-      "relationType": "contains",
-      "from": "project-1",
-      "to": "task-2"
-    }
-  },
+  "publishedArtifactId": null,
+  "lastPublishedAt": null,
   "tombstones": {
     "nodes": [],
     "edges": []
-  }
+  },
+  "createdAt": "2026-09-14T20:59:34.241Z",
+  "updatedAt": "2026-09-14T20:59:34.241Z"
 }
 ```
 
-本步异步检查：
+远端调用：
 
 ```json
 []
 ```
 
-本步远端调用：
+## 2. edit
 
-```json
-[]
-```
+先连续修改名称，供下一步验证 reset 的固定基线。
 
-模拟资源总数：0。
-
-## 2. preflight
-
-输入（参数顺序）：
+输入：
 
 ```json
 [
-  "8ffae1bb-e303-4223-b015-3c43a608d725"
+  "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+  0,
+  [
+    {
+      "op": "set",
+      "nodeId": "project-1",
+      "path": "/name",
+      "value": "临时名称 A"
+    }
+  ]
+]
+```
+
+输出：
+
+```json
+{
+  "graph": {
+    "nodes": {
+      "project-1": {
+        "id": "project-1",
+        "nodeType": "project",
+        "fields": {
+          "name": "临时名称 A",
+          "capacityHours": 16,
+          "deadlineDay": 20
+        }
+      },
+      "task-1": {
+        "id": "task-1",
+        "nodeType": "task",
+        "fields": {
+          "name": "编写快速入门",
+          "estimateHours": 12,
+          "dueDay": 22,
+          "priority": "urgent",
+          "owner": null
+        }
+      },
+      "task-2": {
+        "id": "task-2",
+        "nodeType": "task",
+        "fields": {
+          "name": "评审使用示例",
+          "estimateHours": 10,
+          "dueDay": 18,
+          "priority": "normal",
+          "owner": "chen"
+        }
+      }
+    },
+    "edges": {
+      "contains-1": {
+        "id": "contains-1",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-1"
+      },
+      "contains-2": {
+        "id": "contains-2",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-2"
+      }
+    }
+  },
+  "fieldIntents": {
+    "project-1": {
+      "/name": {
+        "kind": "set",
+        "value": "临时名称 A"
+      },
+      "/capacityHours": {
+        "kind": "set",
+        "value": 16
+      },
+      "/deadlineDay": {
+        "kind": "set",
+        "value": 20
+      }
+    },
+    "task-1": {
+      "/name": {
+        "kind": "set",
+        "value": "编写快速入门"
+      },
+      "/estimateHours": {
+        "kind": "set",
+        "value": 12
+      },
+      "/dueDay": {
+        "kind": "set",
+        "value": 22
+      },
+      "/priority": {
+        "kind": "set",
+        "value": "urgent"
+      },
+      "/owner": {
+        "kind": "set",
+        "value": null
+      }
+    },
+    "task-2": {
+      "/name": {
+        "kind": "set",
+        "value": "评审使用示例"
+      },
+      "/estimateHours": {
+        "kind": "set",
+        "value": 10
+      },
+      "/dueDay": {
+        "kind": "set",
+        "value": 18
+      },
+      "/priority": {
+        "kind": "set",
+        "value": "normal"
+      },
+      "/owner": {
+        "kind": "set",
+        "value": "chen"
+      }
+    }
+  },
+  "formatVersion": 3,
+  "id": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+  "version": 1,
+  "type": "example.project-tasks",
+  "typeVersion": "2",
+  "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+  "status": "pending",
+  "currentRunId": null,
+  "targetId": null,
+  "initialSnapshot": {
+    "graph": {
+      "nodes": {
+        "project-1": {
+          "id": "project-1",
+          "nodeType": "project",
+          "fields": {
+            "name": "文档发布",
+            "capacityHours": 16,
+            "deadlineDay": 20
+          }
+        },
+        "task-1": {
+          "id": "task-1",
+          "nodeType": "task",
+          "fields": {
+            "name": "编写快速入门",
+            "estimateHours": 12,
+            "dueDay": 22,
+            "priority": "urgent",
+            "owner": null
+          }
+        },
+        "task-2": {
+          "id": "task-2",
+          "nodeType": "task",
+          "fields": {
+            "name": "评审使用示例",
+            "estimateHours": 10,
+            "dueDay": 18,
+            "priority": "normal",
+            "owner": "chen"
+          }
+        }
+      },
+      "edges": {
+        "contains-1": {
+          "id": "contains-1",
+          "relationType": "contains",
+          "from": "project-1",
+          "to": "task-1"
+        },
+        "contains-2": {
+          "id": "contains-2",
+          "relationType": "contains",
+          "from": "project-1",
+          "to": "task-2"
+        }
+      }
+    },
+    "fieldIntents": {
+      "project-1": {
+        "/name": {
+          "kind": "set",
+          "value": "文档发布"
+        },
+        "/capacityHours": {
+          "kind": "set",
+          "value": 16
+        },
+        "/deadlineDay": {
+          "kind": "set",
+          "value": 20
+        }
+      },
+      "task-1": {
+        "/name": {
+          "kind": "set",
+          "value": "编写快速入门"
+        },
+        "/estimateHours": {
+          "kind": "set",
+          "value": 12
+        },
+        "/dueDay": {
+          "kind": "set",
+          "value": 22
+        },
+        "/priority": {
+          "kind": "set",
+          "value": "urgent"
+        },
+        "/owner": {
+          "kind": "set",
+          "value": null
+        }
+      },
+      "task-2": {
+        "/name": {
+          "kind": "set",
+          "value": "评审使用示例"
+        },
+        "/estimateHours": {
+          "kind": "set",
+          "value": 10
+        },
+        "/dueDay": {
+          "kind": "set",
+          "value": 18
+        },
+        "/priority": {
+          "kind": "set",
+          "value": "normal"
+        },
+        "/owner": {
+          "kind": "set",
+          "value": "chen"
+        }
+      }
+    }
+  },
+  "publishedArtifactId": null,
+  "lastPublishedAt": null,
+  "tombstones": {
+    "nodes": [],
+    "edges": []
+  },
+  "createdAt": "2026-09-14T20:59:34.241Z",
+  "updatedAt": "2026-09-14T20:59:34.244Z",
+  "changes": [
+    {
+      "opIndex": 0,
+      "target": "field",
+      "id": "project-1",
+      "path": "/name",
+      "before": {
+        "kind": "value",
+        "value": "文档发布"
+      },
+      "after": {
+        "kind": "value",
+        "value": "临时名称 A"
+      }
+    }
+  ]
+}
+```
+
+远端调用：
+
+```json
+[]
+```
+
+## 3. edit
+
+先连续修改名称，供下一步验证 reset 的固定基线。
+
+输入：
+
+```json
+[
+  "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+  1,
+  [
+    {
+      "op": "set",
+      "nodeId": "project-1",
+      "path": "/name",
+      "value": "临时名称 B"
+    }
+  ]
+]
+```
+
+输出：
+
+```json
+{
+  "graph": {
+    "nodes": {
+      "project-1": {
+        "id": "project-1",
+        "nodeType": "project",
+        "fields": {
+          "name": "临时名称 B",
+          "capacityHours": 16,
+          "deadlineDay": 20
+        }
+      },
+      "task-1": {
+        "id": "task-1",
+        "nodeType": "task",
+        "fields": {
+          "name": "编写快速入门",
+          "estimateHours": 12,
+          "dueDay": 22,
+          "priority": "urgent",
+          "owner": null
+        }
+      },
+      "task-2": {
+        "id": "task-2",
+        "nodeType": "task",
+        "fields": {
+          "name": "评审使用示例",
+          "estimateHours": 10,
+          "dueDay": 18,
+          "priority": "normal",
+          "owner": "chen"
+        }
+      }
+    },
+    "edges": {
+      "contains-1": {
+        "id": "contains-1",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-1"
+      },
+      "contains-2": {
+        "id": "contains-2",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-2"
+      }
+    }
+  },
+  "fieldIntents": {
+    "project-1": {
+      "/name": {
+        "kind": "set",
+        "value": "临时名称 B"
+      },
+      "/capacityHours": {
+        "kind": "set",
+        "value": 16
+      },
+      "/deadlineDay": {
+        "kind": "set",
+        "value": 20
+      }
+    },
+    "task-1": {
+      "/name": {
+        "kind": "set",
+        "value": "编写快速入门"
+      },
+      "/estimateHours": {
+        "kind": "set",
+        "value": 12
+      },
+      "/dueDay": {
+        "kind": "set",
+        "value": 22
+      },
+      "/priority": {
+        "kind": "set",
+        "value": "urgent"
+      },
+      "/owner": {
+        "kind": "set",
+        "value": null
+      }
+    },
+    "task-2": {
+      "/name": {
+        "kind": "set",
+        "value": "评审使用示例"
+      },
+      "/estimateHours": {
+        "kind": "set",
+        "value": 10
+      },
+      "/dueDay": {
+        "kind": "set",
+        "value": 18
+      },
+      "/priority": {
+        "kind": "set",
+        "value": "normal"
+      },
+      "/owner": {
+        "kind": "set",
+        "value": "chen"
+      }
+    }
+  },
+  "formatVersion": 3,
+  "id": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+  "version": 2,
+  "type": "example.project-tasks",
+  "typeVersion": "2",
+  "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+  "status": "pending",
+  "currentRunId": null,
+  "targetId": null,
+  "initialSnapshot": {
+    "graph": {
+      "nodes": {
+        "project-1": {
+          "id": "project-1",
+          "nodeType": "project",
+          "fields": {
+            "name": "文档发布",
+            "capacityHours": 16,
+            "deadlineDay": 20
+          }
+        },
+        "task-1": {
+          "id": "task-1",
+          "nodeType": "task",
+          "fields": {
+            "name": "编写快速入门",
+            "estimateHours": 12,
+            "dueDay": 22,
+            "priority": "urgent",
+            "owner": null
+          }
+        },
+        "task-2": {
+          "id": "task-2",
+          "nodeType": "task",
+          "fields": {
+            "name": "评审使用示例",
+            "estimateHours": 10,
+            "dueDay": 18,
+            "priority": "normal",
+            "owner": "chen"
+          }
+        }
+      },
+      "edges": {
+        "contains-1": {
+          "id": "contains-1",
+          "relationType": "contains",
+          "from": "project-1",
+          "to": "task-1"
+        },
+        "contains-2": {
+          "id": "contains-2",
+          "relationType": "contains",
+          "from": "project-1",
+          "to": "task-2"
+        }
+      }
+    },
+    "fieldIntents": {
+      "project-1": {
+        "/name": {
+          "kind": "set",
+          "value": "文档发布"
+        },
+        "/capacityHours": {
+          "kind": "set",
+          "value": 16
+        },
+        "/deadlineDay": {
+          "kind": "set",
+          "value": 20
+        }
+      },
+      "task-1": {
+        "/name": {
+          "kind": "set",
+          "value": "编写快速入门"
+        },
+        "/estimateHours": {
+          "kind": "set",
+          "value": 12
+        },
+        "/dueDay": {
+          "kind": "set",
+          "value": 22
+        },
+        "/priority": {
+          "kind": "set",
+          "value": "urgent"
+        },
+        "/owner": {
+          "kind": "set",
+          "value": null
+        }
+      },
+      "task-2": {
+        "/name": {
+          "kind": "set",
+          "value": "评审使用示例"
+        },
+        "/estimateHours": {
+          "kind": "set",
+          "value": 10
+        },
+        "/dueDay": {
+          "kind": "set",
+          "value": 18
+        },
+        "/priority": {
+          "kind": "set",
+          "value": "normal"
+        },
+        "/owner": {
+          "kind": "set",
+          "value": "chen"
+        }
+      }
+    }
+  },
+  "publishedArtifactId": null,
+  "lastPublishedAt": null,
+  "tombstones": {
+    "nodes": [],
+    "edges": []
+  },
+  "createdAt": "2026-09-14T20:59:34.241Z",
+  "updatedAt": "2026-09-14T20:59:34.245Z",
+  "changes": [
+    {
+      "opIndex": 0,
+      "target": "field",
+      "id": "project-1",
+      "path": "/name",
+      "before": {
+        "kind": "value",
+        "value": "临时名称 A"
+      },
+      "after": {
+        "kind": "value",
+        "value": "临时名称 B"
+      }
+    }
+  ]
+}
+```
+
+远端调用：
+
+```json
+[]
+```
+
+## 4. edit
+
+reset 回到 create 时的“文档发布”，不会回到上一版的“临时名称 A”。
+
+输入：
+
+```json
+[
+  "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+  2,
+  [
+    {
+      "op": "reset",
+      "nodeId": "project-1",
+      "path": "/name"
+    }
+  ]
+]
+```
+
+输出：
+
+```json
+{
+  "graph": {
+    "nodes": {
+      "project-1": {
+        "id": "project-1",
+        "nodeType": "project",
+        "fields": {
+          "name": "文档发布",
+          "capacityHours": 16,
+          "deadlineDay": 20
+        }
+      },
+      "task-1": {
+        "id": "task-1",
+        "nodeType": "task",
+        "fields": {
+          "name": "编写快速入门",
+          "estimateHours": 12,
+          "dueDay": 22,
+          "priority": "urgent",
+          "owner": null
+        }
+      },
+      "task-2": {
+        "id": "task-2",
+        "nodeType": "task",
+        "fields": {
+          "name": "评审使用示例",
+          "estimateHours": 10,
+          "dueDay": 18,
+          "priority": "normal",
+          "owner": "chen"
+        }
+      }
+    },
+    "edges": {
+      "contains-1": {
+        "id": "contains-1",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-1"
+      },
+      "contains-2": {
+        "id": "contains-2",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-2"
+      }
+    }
+  },
+  "fieldIntents": {
+    "project-1": {
+      "/name": {
+        "kind": "set",
+        "value": "文档发布"
+      },
+      "/capacityHours": {
+        "kind": "set",
+        "value": 16
+      },
+      "/deadlineDay": {
+        "kind": "set",
+        "value": 20
+      }
+    },
+    "task-1": {
+      "/name": {
+        "kind": "set",
+        "value": "编写快速入门"
+      },
+      "/estimateHours": {
+        "kind": "set",
+        "value": 12
+      },
+      "/dueDay": {
+        "kind": "set",
+        "value": 22
+      },
+      "/priority": {
+        "kind": "set",
+        "value": "urgent"
+      },
+      "/owner": {
+        "kind": "set",
+        "value": null
+      }
+    },
+    "task-2": {
+      "/name": {
+        "kind": "set",
+        "value": "评审使用示例"
+      },
+      "/estimateHours": {
+        "kind": "set",
+        "value": 10
+      },
+      "/dueDay": {
+        "kind": "set",
+        "value": 18
+      },
+      "/priority": {
+        "kind": "set",
+        "value": "normal"
+      },
+      "/owner": {
+        "kind": "set",
+        "value": "chen"
+      }
+    }
+  },
+  "formatVersion": 3,
+  "id": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+  "version": 3,
+  "type": "example.project-tasks",
+  "typeVersion": "2",
+  "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+  "status": "pending",
+  "currentRunId": null,
+  "targetId": null,
+  "initialSnapshot": {
+    "graph": {
+      "nodes": {
+        "project-1": {
+          "id": "project-1",
+          "nodeType": "project",
+          "fields": {
+            "name": "文档发布",
+            "capacityHours": 16,
+            "deadlineDay": 20
+          }
+        },
+        "task-1": {
+          "id": "task-1",
+          "nodeType": "task",
+          "fields": {
+            "name": "编写快速入门",
+            "estimateHours": 12,
+            "dueDay": 22,
+            "priority": "urgent",
+            "owner": null
+          }
+        },
+        "task-2": {
+          "id": "task-2",
+          "nodeType": "task",
+          "fields": {
+            "name": "评审使用示例",
+            "estimateHours": 10,
+            "dueDay": 18,
+            "priority": "normal",
+            "owner": "chen"
+          }
+        }
+      },
+      "edges": {
+        "contains-1": {
+          "id": "contains-1",
+          "relationType": "contains",
+          "from": "project-1",
+          "to": "task-1"
+        },
+        "contains-2": {
+          "id": "contains-2",
+          "relationType": "contains",
+          "from": "project-1",
+          "to": "task-2"
+        }
+      }
+    },
+    "fieldIntents": {
+      "project-1": {
+        "/name": {
+          "kind": "set",
+          "value": "文档发布"
+        },
+        "/capacityHours": {
+          "kind": "set",
+          "value": 16
+        },
+        "/deadlineDay": {
+          "kind": "set",
+          "value": 20
+        }
+      },
+      "task-1": {
+        "/name": {
+          "kind": "set",
+          "value": "编写快速入门"
+        },
+        "/estimateHours": {
+          "kind": "set",
+          "value": 12
+        },
+        "/dueDay": {
+          "kind": "set",
+          "value": 22
+        },
+        "/priority": {
+          "kind": "set",
+          "value": "urgent"
+        },
+        "/owner": {
+          "kind": "set",
+          "value": null
+        }
+      },
+      "task-2": {
+        "/name": {
+          "kind": "set",
+          "value": "评审使用示例"
+        },
+        "/estimateHours": {
+          "kind": "set",
+          "value": 10
+        },
+        "/dueDay": {
+          "kind": "set",
+          "value": 18
+        },
+        "/priority": {
+          "kind": "set",
+          "value": "normal"
+        },
+        "/owner": {
+          "kind": "set",
+          "value": "chen"
+        }
+      }
+    }
+  },
+  "publishedArtifactId": null,
+  "lastPublishedAt": null,
+  "tombstones": {
+    "nodes": [],
+    "edges": []
+  },
+  "createdAt": "2026-09-14T20:59:34.241Z",
+  "updatedAt": "2026-09-14T20:59:34.246Z",
+  "changes": [
+    {
+      "opIndex": 0,
+      "target": "field",
+      "id": "project-1",
+      "path": "/name",
+      "before": {
+        "kind": "value",
+        "value": "临时名称 B"
+      },
+      "after": {
+        "kind": "value",
+        "value": "文档发布"
+      }
+    }
+  ]
+}
+```
+
+远端调用：
+
+```json
+[]
+```
+
+## 5. preflight
+
+静态规则给出 3 条具体诊断；异步检查返回 pending，无发布凭据。
+
+输入：
+
+```json
+[
+  "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d"
 ]
 ```
 
@@ -722,14 +1198,14 @@ draft => {
 {
   "formatVersion": 2,
   "scope": "execution",
-  "checkId": "5506ed1f-ebbf-41ae-95f1-70fe66f193f7",
-  "draftId": "8ffae1bb-e303-4223-b015-3c43a608d725",
-  "version": 0,
+  "checkId": "b7801c73-dd05-456b-8bec-437a07ea9f60",
+  "draftId": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+  "version": 3,
   "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
   "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
   "preview": {
-    "id": "8ffae1bb-e303-4223-b015-3c43a608d725",
-    "version": 0,
+    "id": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+    "version": 3,
     "type": "example.project-tasks",
     "typeVersion": "2",
     "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
@@ -773,7 +1249,8 @@ draft => {
             "value": "urgent"
           },
           "owner": {
-            "kind": "clear"
+            "kind": "value",
+            "value": null
           }
         }
       },
@@ -906,7 +1383,7 @@ draft => {
     {
       "code": "task.urgent_owner_required",
       "path": "/nodes/task-1/fields/owner",
-      "message": "任务“编写快速入门”优先级为 urgent，但负责人被明确清空；紧急任务必须有负责人。",
+      "message": "任务“编写快速入门”优先级为 urgent，但负责人没有有效值；紧急任务必须有负责人。",
       "hint": "指定能接手的负责人，或在用户允许时降低优先级；候选人仅供选择，不代表已获授权分配。",
       "candidates": [
         {
@@ -997,40 +1474,21 @@ draft => {
 }
 ```
 
-本步异步检查：
-
-```json
-[
-  {
-    "method": "queryExport",
-    "input": {
-      "draftId": "8ffae1bb-e303-4223-b015-3c43a608d725",
-      "version": 0
-    },
-    "output": {
-      "status": "pending",
-      "message": "文档导出仍在处理中，请稍后重新预检。",
-      "retryAfterSeconds": 2
-    }
-  }
-]
-```
-
-本步远端调用：
+远端调用：
 
 ```json
 []
 ```
 
-模拟资源总数：0。
+## 6. preflight
 
-## 3. preflight
+外部检查完成，仍有 3 条业务问题。完整 preview、message、候选值和 repair OP 都来自实际检查。
 
-输入（参数顺序）：
+输入：
 
 ```json
 [
-  "8ffae1bb-e303-4223-b015-3c43a608d725"
+  "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d"
 ]
 ```
 
@@ -1040,14 +1498,14 @@ draft => {
 {
   "formatVersion": 2,
   "scope": "execution",
-  "checkId": "db356797-0096-4f9d-bb13-ae60935372e3",
-  "draftId": "8ffae1bb-e303-4223-b015-3c43a608d725",
-  "version": 0,
+  "checkId": "a81bfc97-3ac2-4726-b2df-d63e02447eff",
+  "draftId": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+  "version": 3,
   "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
   "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
   "preview": {
-    "id": "8ffae1bb-e303-4223-b015-3c43a608d725",
-    "version": 0,
+    "id": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+    "version": 3,
     "type": "example.project-tasks",
     "typeVersion": "2",
     "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
@@ -1091,7 +1549,8 @@ draft => {
             "value": "urgent"
           },
           "owner": {
-            "kind": "clear"
+            "kind": "value",
+            "value": null
           }
         }
       },
@@ -1224,7 +1683,7 @@ draft => {
     {
       "code": "task.urgent_owner_required",
       "path": "/nodes/task-1/fields/owner",
-      "message": "任务“编写快速入门”优先级为 urgent，但负责人被明确清空；紧急任务必须有负责人。",
+      "message": "任务“编写快速入门”优先级为 urgent，但负责人没有有效值；紧急任务必须有负责人。",
       "hint": "指定能接手的负责人，或在用户允许时降低优先级；候选人仅供选择，不代表已获授权分配。",
       "candidates": [
         {
@@ -1308,40 +1767,22 @@ draft => {
 }
 ```
 
-本步异步检查：
-
-```json
-[
-  {
-    "method": "queryExport",
-    "input": {
-      "draftId": "8ffae1bb-e303-4223-b015-3c43a608d725",
-      "version": 0
-    },
-    "output": {
-      "status": "complete",
-      "diagnostics": []
-    }
-  }
-]
-```
-
-本步远端调用：
+远端调用：
 
 ```json
 []
 ```
 
-模拟资源总数：0。
+## 7. edit
 
-## 4. edit
+调用方依据用户意图选定 4 个 OP。规则建议不自动执行。
 
-输入（参数顺序）：
+输入：
 
 ```json
 [
-  "8ffae1bb-e303-4223-b015-3c43a608d725",
-  0,
+  "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+  3,
   [
     {
       "op": "set",
@@ -1375,125 +1816,319 @@ draft => {
 
 ```json
 {
-  "id": "8ffae1bb-e303-4223-b015-3c43a608d725",
-  "version": 1,
-  "type": "example.project-tasks",
-  "typeVersion": "2",
-  "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
-  "nodes": {
-    "project-1": {
-      "id": "project-1",
-      "nodeType": "project",
-      "fields": {
-        "name": {
-          "kind": "value",
-          "value": "文档发布"
-        },
-        "capacityHours": {
-          "kind": "value",
-          "value": 16
-        },
-        "deadlineDay": {
-          "kind": "value",
-          "value": 20
+  "graph": {
+    "nodes": {
+      "project-1": {
+        "id": "project-1",
+        "nodeType": "project",
+        "fields": {
+          "name": "文档发布",
+          "capacityHours": 16,
+          "deadlineDay": 20
         }
+      },
+      "task-1": {
+        "id": "task-1",
+        "nodeType": "task",
+        "fields": {
+          "name": "编写快速入门",
+          "estimateHours": 8,
+          "dueDay": 20,
+          "priority": "urgent",
+          "owner": "lin"
+        }
+      },
+      "task-2": {
+        "id": "task-2",
+        "nodeType": "task",
+        "fields": {
+          "name": "评审使用示例",
+          "estimateHours": 8,
+          "dueDay": 18,
+          "priority": "normal",
+          "owner": "chen"
+        }
+      }
+    },
+    "edges": {
+      "contains-1": {
+        "id": "contains-1",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-1"
+      },
+      "contains-2": {
+        "id": "contains-2",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-2"
+      }
+    }
+  },
+  "fieldIntents": {
+    "project-1": {
+      "/name": {
+        "kind": "set",
+        "value": "文档发布"
+      },
+      "/capacityHours": {
+        "kind": "set",
+        "value": 16
+      },
+      "/deadlineDay": {
+        "kind": "set",
+        "value": 20
       }
     },
     "task-1": {
-      "id": "task-1",
-      "nodeType": "task",
-      "fields": {
-        "name": {
-          "kind": "value",
-          "value": "编写快速入门"
-        },
-        "estimateHours": {
-          "kind": "value",
-          "value": 8
-        },
-        "dueDay": {
-          "kind": "value",
-          "value": 20
-        },
-        "priority": {
-          "kind": "value",
-          "value": "urgent"
-        },
-        "owner": {
-          "kind": "value",
-          "value": "lin"
-        }
+      "/name": {
+        "kind": "set",
+        "value": "编写快速入门"
+      },
+      "/estimateHours": {
+        "kind": "set",
+        "value": 8
+      },
+      "/dueDay": {
+        "kind": "set",
+        "value": 20
+      },
+      "/priority": {
+        "kind": "set",
+        "value": "urgent"
+      },
+      "/owner": {
+        "kind": "set",
+        "value": "lin"
       }
     },
     "task-2": {
-      "id": "task-2",
-      "nodeType": "task",
-      "fields": {
-        "name": {
-          "kind": "value",
+      "/name": {
+        "kind": "set",
+        "value": "评审使用示例"
+      },
+      "/estimateHours": {
+        "kind": "set",
+        "value": 8
+      },
+      "/dueDay": {
+        "kind": "set",
+        "value": 18
+      },
+      "/priority": {
+        "kind": "set",
+        "value": "normal"
+      },
+      "/owner": {
+        "kind": "set",
+        "value": "chen"
+      }
+    }
+  },
+  "formatVersion": 3,
+  "id": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+  "version": 4,
+  "type": "example.project-tasks",
+  "typeVersion": "2",
+  "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+  "status": "pending",
+  "currentRunId": null,
+  "targetId": null,
+  "initialSnapshot": {
+    "graph": {
+      "nodes": {
+        "project-1": {
+          "id": "project-1",
+          "nodeType": "project",
+          "fields": {
+            "name": "文档发布",
+            "capacityHours": 16,
+            "deadlineDay": 20
+          }
+        },
+        "task-1": {
+          "id": "task-1",
+          "nodeType": "task",
+          "fields": {
+            "name": "编写快速入门",
+            "estimateHours": 12,
+            "dueDay": 22,
+            "priority": "urgent",
+            "owner": null
+          }
+        },
+        "task-2": {
+          "id": "task-2",
+          "nodeType": "task",
+          "fields": {
+            "name": "评审使用示例",
+            "estimateHours": 10,
+            "dueDay": 18,
+            "priority": "normal",
+            "owner": "chen"
+          }
+        }
+      },
+      "edges": {
+        "contains-1": {
+          "id": "contains-1",
+          "relationType": "contains",
+          "from": "project-1",
+          "to": "task-1"
+        },
+        "contains-2": {
+          "id": "contains-2",
+          "relationType": "contains",
+          "from": "project-1",
+          "to": "task-2"
+        }
+      }
+    },
+    "fieldIntents": {
+      "project-1": {
+        "/name": {
+          "kind": "set",
+          "value": "文档发布"
+        },
+        "/capacityHours": {
+          "kind": "set",
+          "value": 16
+        },
+        "/deadlineDay": {
+          "kind": "set",
+          "value": 20
+        }
+      },
+      "task-1": {
+        "/name": {
+          "kind": "set",
+          "value": "编写快速入门"
+        },
+        "/estimateHours": {
+          "kind": "set",
+          "value": 12
+        },
+        "/dueDay": {
+          "kind": "set",
+          "value": 22
+        },
+        "/priority": {
+          "kind": "set",
+          "value": "urgent"
+        },
+        "/owner": {
+          "kind": "set",
+          "value": null
+        }
+      },
+      "task-2": {
+        "/name": {
+          "kind": "set",
           "value": "评审使用示例"
         },
-        "estimateHours": {
-          "kind": "value",
-          "value": 8
+        "/estimateHours": {
+          "kind": "set",
+          "value": 10
         },
-        "dueDay": {
-          "kind": "value",
+        "/dueDay": {
+          "kind": "set",
           "value": 18
         },
-        "priority": {
-          "kind": "value",
+        "/priority": {
+          "kind": "set",
           "value": "normal"
         },
-        "owner": {
-          "kind": "value",
+        "/owner": {
+          "kind": "set",
           "value": "chen"
         }
       }
     }
   },
-  "edges": {
-    "contains-1": {
-      "id": "contains-1",
-      "relationType": "contains",
-      "from": "project-1",
-      "to": "task-1"
-    },
-    "contains-2": {
-      "id": "contains-2",
-      "relationType": "contains",
-      "from": "project-1",
-      "to": "task-2"
-    }
-  },
+  "publishedArtifactId": null,
+  "lastPublishedAt": null,
   "tombstones": {
     "nodes": [],
     "edges": []
-  }
+  },
+  "createdAt": "2026-09-14T20:59:34.241Z",
+  "updatedAt": "2026-09-14T20:59:34.249Z",
+  "changes": [
+    {
+      "opIndex": 0,
+      "target": "field",
+      "id": "task-1",
+      "path": "/estimateHours",
+      "before": {
+        "kind": "value",
+        "value": 12
+      },
+      "after": {
+        "kind": "value",
+        "value": 8
+      }
+    },
+    {
+      "opIndex": 1,
+      "target": "field",
+      "id": "task-2",
+      "path": "/estimateHours",
+      "before": {
+        "kind": "value",
+        "value": 10
+      },
+      "after": {
+        "kind": "value",
+        "value": 8
+      }
+    },
+    {
+      "opIndex": 2,
+      "target": "field",
+      "id": "task-1",
+      "path": "/dueDay",
+      "before": {
+        "kind": "value",
+        "value": 22
+      },
+      "after": {
+        "kind": "value",
+        "value": 20
+      }
+    },
+    {
+      "opIndex": 3,
+      "target": "field",
+      "id": "task-1",
+      "path": "/owner",
+      "before": {
+        "kind": "value",
+        "value": null
+      },
+      "after": {
+        "kind": "value",
+        "value": "lin"
+      }
+    }
+  ]
 }
 ```
 
-本步异步检查：
+远端调用：
 
 ```json
 []
 ```
 
-本步远端调用：
+## 8. preflight
 
-```json
-[]
-```
+检查通过，保存不可变 Artifact。执行器的 plan 将图映射成请求参数。
 
-模拟资源总数：0。
-
-## 5. preflight
-
-输入（参数顺序）：
+输入：
 
 ```json
 [
-  "8ffae1bb-e303-4223-b015-3c43a608d725"
+  "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d"
 ]
 ```
 
@@ -1503,14 +2138,14 @@ draft => {
 {
   "formatVersion": 2,
   "scope": "execution",
-  "checkId": "6db284ce-0bbc-42f0-90a5-15df5b324589",
-  "draftId": "8ffae1bb-e303-4223-b015-3c43a608d725",
-  "version": 1,
+  "checkId": "77955c8c-8e13-47b6-8559-a39a5a0503fd",
+  "draftId": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+  "version": 4,
   "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
   "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
   "preview": {
-    "id": "8ffae1bb-e303-4223-b015-3c43a608d725",
-    "version": 1,
+    "id": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+    "version": 4,
     "type": "example.project-tasks",
     "typeVersion": "2",
     "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
@@ -1608,53 +2243,36 @@ draft => {
   "status": "passed",
   "diagnostics": [],
   "pendingRules": [],
-  "certificate": "7e1af7e2-a5bf-4413-9353-6f4381c5ee48",
+  "certificate": "013a1f85-9455-4774-8ca8-73b74a7acd2c",
+  "artifactId": "013a1f85-9455-4774-8ca8-73b74a7acd2c",
   "execution": {
-    "checkId": "6db284ce-0bbc-42f0-90a5-15df5b324589",
+    "checkId": "77955c8c-8e13-47b6-8559-a39a5a0503fd",
     "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
     "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
     "executorId": "example.project-service",
-    "executorVersion": "4",
+    "executorVersion": "5",
     "target": "mock:local",
     "planDigest": "sha256:stagedwrite-json-v1:373748b3f14990c44e6121773348f5d260d064927ae3f872a720272d9ef816af"
   }
 }
 ```
 
-本步异步检查：
-
-```json
-[
-  {
-    "method": "queryExport",
-    "input": {
-      "draftId": "8ffae1bb-e303-4223-b015-3c43a608d725",
-      "version": 1
-    },
-    "output": {
-      "status": "complete",
-      "diagnostics": []
-    }
-  }
-]
-```
-
-本步远端调用：
+远端调用：
 
 ```json
 []
 ```
 
-模拟资源总数：0。
+## 9. publish
 
-## 6. publish
+同事务建立 Run 和 currentRunId。项目创建成功，任务 1 明确拒绝，任务 2 尚未发送。Draft 仍 pending。
 
-输入（参数顺序）：
+输入：
 
 ```json
 [
-  "8ffae1bb-e303-4223-b015-3c43a608d725",
-  "7e1af7e2-a5bf-4413-9353-6f4381c5ee48",
+  "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+  "013a1f85-9455-4774-8ca8-73b74a7acd2c",
   {
     "runId": "demo-run-1"
   }
@@ -1666,38 +2284,73 @@ draft => {
 ```json
 {
   "id": "demo-run-1",
-  "draftId": "8ffae1bb-e303-4223-b015-3c43a608d725",
-  "version": 1,
-  "state": "failed",
-  "steps": [
+  "draftId": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+  "kind": "initial_create",
+  "version": 4,
+  "state": "blocked",
+  "artifactId": "013a1f85-9455-4774-8ca8-73b74a7acd2c",
+  "initialArtifactId": "013a1f85-9455-4774-8ca8-73b74a7acd2c",
+  "certificate": "013a1f85-9455-4774-8ca8-73b74a7acd2c",
+  "revision": 0,
+  "revisions": [],
+  "attempts": [
     {
-      "id": "project-1",
-      "status": "applied",
-      "key": "demo-run-1:project-1",
-      "remoteRef": "resource-1",
-      "resolvedPayload": {
+      "stepId": "project-1",
+      "key": "[\"demo-run-1\",\"project-1\",0]",
+      "number": 1,
+      "input": {
         "title": "文档发布",
         "capacity_hours": 16,
         "deadline_day": 20
+      },
+      "status": "applied",
+      "outcome": {
+        "kind": "applied",
+        "remoteRef": "resource-1"
       }
     },
     {
-      "id": "task-1",
-      "status": "failed",
-      "key": "demo-run-1:task-1",
-      "resolvedPayload": {
+      "stepId": "task-1",
+      "key": "[\"demo-run-1\",\"task-1\",0]",
+      "number": 2,
+      "input": {
         "title": "编写快速入门",
         "estimate_hours": 8,
         "due_day": 20,
         "priority": "urgent",
         "assignee": "lin",
         "projectId": "resource-1"
+      },
+      "status": "no_effect",
+      "outcome": {
+        "kind": "not_applied",
+        "reason": "Owner unavailable; request rejected before creation",
+        "retryable": false,
+        "code": "OWNER_UNAVAILABLE",
+        "message": "负责人暂不可用，任务未创建。",
+        "diagnostics": [
+          {
+            "code": "task.owner_unavailable",
+            "path": "/nodes/task-1/fields/owner",
+            "message": "林无法接手，请选择其他负责人后续作。",
+            "candidates": [
+              {
+                "value": "chen",
+                "label": "陈",
+                "message": "目前可接手（虚构候选）",
+                "repairOps": [
+                  {
+                    "op": "set",
+                    "nodeId": "task-1",
+                    "path": "/owner",
+                    "value": "chen"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       }
-    },
-    {
-      "id": "task-2",
-      "status": "skipped",
-      "key": "demo-run-1:task-2"
     }
   ],
   "events": [
@@ -1705,46 +2358,254 @@ draft => {
       "sequence": 1,
       "stepId": "project-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-14T17:49:44.505Z"
+      "recordedAt": "2026-09-14T20:59:34.253Z"
     },
     {
       "sequence": 2,
       "stepId": "project-1",
       "kind": "applied",
-      "recordedAt": "2026-09-14T17:49:44.506Z"
+      "recordedAt": "2026-09-14T20:59:34.253Z"
     },
     {
       "sequence": 3,
       "stepId": "task-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-14T17:49:44.506Z"
+      "recordedAt": "2026-09-14T20:59:34.254Z"
     },
     {
       "sequence": 4,
       "stepId": "task-1",
       "kind": "not_applied",
-      "reason": "Selected owner is no longer available",
-      "retryable": false,
-      "recordedAt": "2026-09-14T17:49:44.506Z"
+      "recordedAt": "2026-09-14T20:59:34.254Z",
+      "reason": "Owner unavailable; request rejected before creation"
+    }
+  ],
+  "steps": [
+    {
+      "id": "project-1",
+      "effect": {
+        "kind": "create",
+        "nodeId": "project-1"
+      },
+      "payload": {
+        "title": "文档发布",
+        "capacity_hours": 16,
+        "deadline_day": 20
+      },
+      "key": "[\"demo-run-1\",\"project-1\",0]",
+      "status": "applied",
+      "resolvedPayload": {
+        "title": "文档发布",
+        "capacity_hours": 16,
+        "deadline_day": 20
+      },
+      "feedback": {},
+      "remoteRef": "resource-1"
     },
     {
-      "sequence": 5,
-      "stepId": "task-2",
-      "kind": "skipped",
-      "reason": "run_stopped: task-1",
-      "recordedAt": "2026-09-14T17:49:44.506Z"
+      "id": "task-1",
+      "effect": {
+        "kind": "create",
+        "nodeId": "task-1"
+      },
+      "payload": {
+        "title": "编写快速入门",
+        "estimate_hours": 8,
+        "due_day": 20,
+        "priority": "urgent",
+        "assignee": "lin"
+      },
+      "dependsOn": [
+        "project-1"
+      ],
+      "inputRefs": {
+        "projectId": "project-1"
+      },
+      "key": "[\"demo-run-1\",\"task-1\",0]",
+      "status": "ready",
+      "resolvedPayload": {
+        "title": "编写快速入门",
+        "estimate_hours": 8,
+        "due_day": 20,
+        "priority": "urgent",
+        "assignee": "lin",
+        "projectId": "resource-1"
+      },
+      "feedback": {
+        "code": "OWNER_UNAVAILABLE",
+        "message": "负责人暂不可用，任务未创建。",
+        "diagnostics": [
+          {
+            "code": "task.owner_unavailable",
+            "path": "/nodes/task-1/fields/owner",
+            "message": "林无法接手，请选择其他负责人后续作。",
+            "candidates": [
+              {
+                "value": "chen",
+                "label": "陈",
+                "message": "目前可接手（虚构候选）",
+                "repairOps": [
+                  {
+                    "op": "set",
+                    "nodeId": "task-1",
+                    "path": "/owner",
+                    "value": "chen"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "reason": "Owner unavailable; request rejected before creation"
+      }
+    },
+    {
+      "id": "task-2",
+      "effect": {
+        "kind": "create",
+        "nodeId": "task-2"
+      },
+      "payload": {
+        "title": "评审使用示例",
+        "estimate_hours": 8,
+        "due_day": 18,
+        "priority": "normal",
+        "assignee": "chen"
+      },
+      "dependsOn": [
+        "project-1"
+      ],
+      "inputRefs": {
+        "projectId": "project-1"
+      },
+      "key": "[\"demo-run-1\",\"task-2\",0]",
+      "status": "ready"
+    }
+  ],
+  "previewVersion": 4,
+  "preview": {
+    "id": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+    "version": 4,
+    "type": "example.project-tasks",
+    "typeVersion": "2",
+    "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+    "nodes": {
+      "project-1": {
+        "id": "project-1",
+        "nodeType": "project",
+        "fields": {
+          "name": {
+            "kind": "value",
+            "value": "文档发布"
+          },
+          "capacityHours": {
+            "kind": "value",
+            "value": 16
+          },
+          "deadlineDay": {
+            "kind": "value",
+            "value": 20
+          }
+        }
+      },
+      "task-1": {
+        "id": "task-1",
+        "nodeType": "task",
+        "fields": {
+          "name": {
+            "kind": "value",
+            "value": "编写快速入门"
+          },
+          "estimateHours": {
+            "kind": "value",
+            "value": 8
+          },
+          "dueDay": {
+            "kind": "value",
+            "value": 20
+          },
+          "priority": {
+            "kind": "value",
+            "value": "urgent"
+          },
+          "owner": {
+            "kind": "value",
+            "value": "lin"
+          }
+        }
+      },
+      "task-2": {
+        "id": "task-2",
+        "nodeType": "task",
+        "fields": {
+          "name": {
+            "kind": "value",
+            "value": "评审使用示例"
+          },
+          "estimateHours": {
+            "kind": "value",
+            "value": 8
+          },
+          "dueDay": {
+            "kind": "value",
+            "value": 18
+          },
+          "priority": {
+            "kind": "value",
+            "value": "normal"
+          },
+          "owner": {
+            "kind": "value",
+            "value": "chen"
+          }
+        }
+      }
+    },
+    "edges": {
+      "contains-1": {
+        "id": "contains-1",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-1"
+      },
+      "contains-2": {
+        "id": "contains-2",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-2"
+      }
+    },
+    "tombstones": {
+      "nodes": [],
+      "edges": []
+    }
+  },
+  "diagnostics": [
+    {
+      "code": "task.owner_unavailable",
+      "path": "/nodes/task-1/fields/owner",
+      "message": "林无法接手，请选择其他负责人后续作。",
+      "candidates": [
+        {
+          "value": "chen",
+          "label": "陈",
+          "message": "目前可接手（虚构候选）",
+          "repairOps": [
+            {
+              "op": "set",
+              "nodeId": "task-1",
+              "path": "/owner",
+              "value": "chen"
+            }
+          ]
+        }
+      ]
     }
   ]
 }
 ```
 
-本步异步检查：
-
-```json
-[]
-```
-
-本步远端调用：
+远端调用：
 
 ```json
 [
@@ -1761,16 +2622,9 @@ draft => {
         "effect": {
           "kind": "create",
           "nodeId": "project-1"
-        },
-        "key": "demo-run-1:project-1",
-        "status": "dispatching",
-        "resolvedPayload": {
-          "title": "文档发布",
-          "capacity_hours": 16,
-          "deadline_day": 20
         }
       },
-      "key": "demo-run-1:project-1"
+      "key": "[\"demo-run-1\",\"project-1\",0]"
     },
     "output": {
       "kind": "applied",
@@ -1790,44 +2644,34 @@ draft => {
           "assignee": "lin",
           "projectId": "resource-1"
         },
-        "effect": {
-          "kind": "create",
-          "nodeId": "task-1"
-        },
         "dependsOn": [
           "project-1"
         ],
         "inputRefs": {
           "projectId": "project-1"
         },
-        "key": "demo-run-1:task-1",
-        "status": "dispatching",
-        "resolvedPayload": {
-          "title": "编写快速入门",
-          "estimate_hours": 8,
-          "due_day": 20,
-          "priority": "urgent",
-          "assignee": "lin",
-          "projectId": "resource-1"
+        "effect": {
+          "kind": "create",
+          "nodeId": "task-1"
         }
       },
-      "key": "demo-run-1:task-1"
+      "key": "[\"demo-run-1\",\"task-1\",0]"
     },
     "output": {
       "kind": "not_applied",
-      "reason": "Selected owner is no longer available",
+      "reason": "Owner unavailable; request rejected before creation",
       "code": "OWNER_UNAVAILABLE",
-      "message": "林目前不可接单，任务尚未创建。请选择其他负责人后继续本次执行。",
+      "message": "负责人暂不可用，任务未创建。",
       "diagnostics": [
         {
           "code": "task.owner_unavailable",
           "path": "/nodes/task-1/fields/owner",
-          "message": "远端拒绝负责人 lin：林刚被安排了其他工作。任务未创建，可改选陈后继续。",
+          "message": "林无法接手，请选择其他负责人后续作。",
           "candidates": [
             {
               "value": "chen",
               "label": "陈",
-              "message": "远端当前可接手人员（虚构）",
+              "message": "目前可接手（虚构候选）",
               "repairOps": [
                 {
                   "op": "set",
@@ -1845,16 +2689,278 @@ draft => {
 ]
 ```
 
-模拟资源总数：1。
+## 10. getDraft
 
-## 7. edit
+失败后 currentRunId 保留；pending 不意味着远端没有资源。
 
-输入（参数顺序）：
+输入：
 
 ```json
 [
-  "8ffae1bb-e303-4223-b015-3c43a608d725",
-  1,
+  "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d"
+]
+```
+
+输出：
+
+```json
+{
+  "graph": {
+    "nodes": {
+      "project-1": {
+        "id": "project-1",
+        "nodeType": "project",
+        "fields": {
+          "name": "文档发布",
+          "capacityHours": 16,
+          "deadlineDay": 20
+        }
+      },
+      "task-1": {
+        "id": "task-1",
+        "nodeType": "task",
+        "fields": {
+          "name": "编写快速入门",
+          "estimateHours": 8,
+          "dueDay": 20,
+          "priority": "urgent",
+          "owner": "lin"
+        }
+      },
+      "task-2": {
+        "id": "task-2",
+        "nodeType": "task",
+        "fields": {
+          "name": "评审使用示例",
+          "estimateHours": 8,
+          "dueDay": 18,
+          "priority": "normal",
+          "owner": "chen"
+        }
+      }
+    },
+    "edges": {
+      "contains-1": {
+        "id": "contains-1",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-1"
+      },
+      "contains-2": {
+        "id": "contains-2",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-2"
+      }
+    }
+  },
+  "fieldIntents": {
+    "project-1": {
+      "/name": {
+        "kind": "set",
+        "value": "文档发布"
+      },
+      "/capacityHours": {
+        "kind": "set",
+        "value": 16
+      },
+      "/deadlineDay": {
+        "kind": "set",
+        "value": 20
+      }
+    },
+    "task-1": {
+      "/name": {
+        "kind": "set",
+        "value": "编写快速入门"
+      },
+      "/estimateHours": {
+        "kind": "set",
+        "value": 8
+      },
+      "/dueDay": {
+        "kind": "set",
+        "value": 20
+      },
+      "/priority": {
+        "kind": "set",
+        "value": "urgent"
+      },
+      "/owner": {
+        "kind": "set",
+        "value": "lin"
+      }
+    },
+    "task-2": {
+      "/name": {
+        "kind": "set",
+        "value": "评审使用示例"
+      },
+      "/estimateHours": {
+        "kind": "set",
+        "value": 8
+      },
+      "/dueDay": {
+        "kind": "set",
+        "value": 18
+      },
+      "/priority": {
+        "kind": "set",
+        "value": "normal"
+      },
+      "/owner": {
+        "kind": "set",
+        "value": "chen"
+      }
+    }
+  },
+  "formatVersion": 3,
+  "id": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+  "version": 4,
+  "type": "example.project-tasks",
+  "typeVersion": "2",
+  "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+  "status": "pending",
+  "currentRunId": "demo-run-1",
+  "targetId": "mock:local",
+  "initialSnapshot": {
+    "graph": {
+      "nodes": {
+        "project-1": {
+          "id": "project-1",
+          "nodeType": "project",
+          "fields": {
+            "name": "文档发布",
+            "capacityHours": 16,
+            "deadlineDay": 20
+          }
+        },
+        "task-1": {
+          "id": "task-1",
+          "nodeType": "task",
+          "fields": {
+            "name": "编写快速入门",
+            "estimateHours": 12,
+            "dueDay": 22,
+            "priority": "urgent",
+            "owner": null
+          }
+        },
+        "task-2": {
+          "id": "task-2",
+          "nodeType": "task",
+          "fields": {
+            "name": "评审使用示例",
+            "estimateHours": 10,
+            "dueDay": 18,
+            "priority": "normal",
+            "owner": "chen"
+          }
+        }
+      },
+      "edges": {
+        "contains-1": {
+          "id": "contains-1",
+          "relationType": "contains",
+          "from": "project-1",
+          "to": "task-1"
+        },
+        "contains-2": {
+          "id": "contains-2",
+          "relationType": "contains",
+          "from": "project-1",
+          "to": "task-2"
+        }
+      }
+    },
+    "fieldIntents": {
+      "project-1": {
+        "/name": {
+          "kind": "set",
+          "value": "文档发布"
+        },
+        "/capacityHours": {
+          "kind": "set",
+          "value": 16
+        },
+        "/deadlineDay": {
+          "kind": "set",
+          "value": 20
+        }
+      },
+      "task-1": {
+        "/name": {
+          "kind": "set",
+          "value": "编写快速入门"
+        },
+        "/estimateHours": {
+          "kind": "set",
+          "value": 12
+        },
+        "/dueDay": {
+          "kind": "set",
+          "value": 22
+        },
+        "/priority": {
+          "kind": "set",
+          "value": "urgent"
+        },
+        "/owner": {
+          "kind": "set",
+          "value": null
+        }
+      },
+      "task-2": {
+        "/name": {
+          "kind": "set",
+          "value": "评审使用示例"
+        },
+        "/estimateHours": {
+          "kind": "set",
+          "value": 10
+        },
+        "/dueDay": {
+          "kind": "set",
+          "value": 18
+        },
+        "/priority": {
+          "kind": "set",
+          "value": "normal"
+        },
+        "/owner": {
+          "kind": "set",
+          "value": "chen"
+        }
+      }
+    }
+  },
+  "publishedArtifactId": null,
+  "lastPublishedAt": null,
+  "tombstones": {
+    "nodes": [],
+    "edges": []
+  },
+  "createdAt": "2026-09-14T20:59:34.241Z",
+  "updatedAt": "2026-09-14T20:59:34.249Z"
+}
+```
+
+远端调用：
+
+```json
+[]
+```
+
+## 11. edit
+
+假设用户同意改由陈接手，只修复未完成任务。成功项目不允许修改。
+
+输入：
+
+```json
+[
+  "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+  4,
   [
     {
       "op": "set",
@@ -1870,121 +2976,273 @@ draft => {
 
 ```json
 {
-  "id": "8ffae1bb-e303-4223-b015-3c43a608d725",
-  "version": 2,
-  "type": "example.project-tasks",
-  "typeVersion": "2",
-  "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
-  "nodes": {
-    "project-1": {
-      "id": "project-1",
-      "nodeType": "project",
-      "fields": {
-        "name": {
-          "kind": "value",
-          "value": "文档发布"
-        },
-        "capacityHours": {
-          "kind": "value",
-          "value": 16
-        },
-        "deadlineDay": {
-          "kind": "value",
-          "value": 20
+  "graph": {
+    "nodes": {
+      "project-1": {
+        "id": "project-1",
+        "nodeType": "project",
+        "fields": {
+          "name": "文档发布",
+          "capacityHours": 16,
+          "deadlineDay": 20
         }
+      },
+      "task-1": {
+        "id": "task-1",
+        "nodeType": "task",
+        "fields": {
+          "name": "编写快速入门",
+          "estimateHours": 8,
+          "dueDay": 20,
+          "priority": "urgent",
+          "owner": "chen"
+        }
+      },
+      "task-2": {
+        "id": "task-2",
+        "nodeType": "task",
+        "fields": {
+          "name": "评审使用示例",
+          "estimateHours": 8,
+          "dueDay": 18,
+          "priority": "normal",
+          "owner": "chen"
+        }
+      }
+    },
+    "edges": {
+      "contains-1": {
+        "id": "contains-1",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-1"
+      },
+      "contains-2": {
+        "id": "contains-2",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-2"
+      }
+    }
+  },
+  "fieldIntents": {
+    "project-1": {
+      "/name": {
+        "kind": "set",
+        "value": "文档发布"
+      },
+      "/capacityHours": {
+        "kind": "set",
+        "value": 16
+      },
+      "/deadlineDay": {
+        "kind": "set",
+        "value": 20
       }
     },
     "task-1": {
-      "id": "task-1",
-      "nodeType": "task",
-      "fields": {
-        "name": {
-          "kind": "value",
-          "value": "编写快速入门"
-        },
-        "estimateHours": {
-          "kind": "value",
-          "value": 8
-        },
-        "dueDay": {
-          "kind": "value",
-          "value": 20
-        },
-        "priority": {
-          "kind": "value",
-          "value": "urgent"
-        },
-        "owner": {
-          "kind": "value",
-          "value": "chen"
-        }
+      "/name": {
+        "kind": "set",
+        "value": "编写快速入门"
+      },
+      "/estimateHours": {
+        "kind": "set",
+        "value": 8
+      },
+      "/dueDay": {
+        "kind": "set",
+        "value": 20
+      },
+      "/priority": {
+        "kind": "set",
+        "value": "urgent"
+      },
+      "/owner": {
+        "kind": "set",
+        "value": "chen"
       }
     },
     "task-2": {
-      "id": "task-2",
-      "nodeType": "task",
-      "fields": {
-        "name": {
-          "kind": "value",
+      "/name": {
+        "kind": "set",
+        "value": "评审使用示例"
+      },
+      "/estimateHours": {
+        "kind": "set",
+        "value": 8
+      },
+      "/dueDay": {
+        "kind": "set",
+        "value": 18
+      },
+      "/priority": {
+        "kind": "set",
+        "value": "normal"
+      },
+      "/owner": {
+        "kind": "set",
+        "value": "chen"
+      }
+    }
+  },
+  "formatVersion": 3,
+  "id": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+  "version": 5,
+  "type": "example.project-tasks",
+  "typeVersion": "2",
+  "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+  "status": "pending",
+  "currentRunId": "demo-run-1",
+  "targetId": "mock:local",
+  "initialSnapshot": {
+    "graph": {
+      "nodes": {
+        "project-1": {
+          "id": "project-1",
+          "nodeType": "project",
+          "fields": {
+            "name": "文档发布",
+            "capacityHours": 16,
+            "deadlineDay": 20
+          }
+        },
+        "task-1": {
+          "id": "task-1",
+          "nodeType": "task",
+          "fields": {
+            "name": "编写快速入门",
+            "estimateHours": 12,
+            "dueDay": 22,
+            "priority": "urgent",
+            "owner": null
+          }
+        },
+        "task-2": {
+          "id": "task-2",
+          "nodeType": "task",
+          "fields": {
+            "name": "评审使用示例",
+            "estimateHours": 10,
+            "dueDay": 18,
+            "priority": "normal",
+            "owner": "chen"
+          }
+        }
+      },
+      "edges": {
+        "contains-1": {
+          "id": "contains-1",
+          "relationType": "contains",
+          "from": "project-1",
+          "to": "task-1"
+        },
+        "contains-2": {
+          "id": "contains-2",
+          "relationType": "contains",
+          "from": "project-1",
+          "to": "task-2"
+        }
+      }
+    },
+    "fieldIntents": {
+      "project-1": {
+        "/name": {
+          "kind": "set",
+          "value": "文档发布"
+        },
+        "/capacityHours": {
+          "kind": "set",
+          "value": 16
+        },
+        "/deadlineDay": {
+          "kind": "set",
+          "value": 20
+        }
+      },
+      "task-1": {
+        "/name": {
+          "kind": "set",
+          "value": "编写快速入门"
+        },
+        "/estimateHours": {
+          "kind": "set",
+          "value": 12
+        },
+        "/dueDay": {
+          "kind": "set",
+          "value": 22
+        },
+        "/priority": {
+          "kind": "set",
+          "value": "urgent"
+        },
+        "/owner": {
+          "kind": "set",
+          "value": null
+        }
+      },
+      "task-2": {
+        "/name": {
+          "kind": "set",
           "value": "评审使用示例"
         },
-        "estimateHours": {
-          "kind": "value",
-          "value": 8
+        "/estimateHours": {
+          "kind": "set",
+          "value": 10
         },
-        "dueDay": {
-          "kind": "value",
+        "/dueDay": {
+          "kind": "set",
           "value": 18
         },
-        "priority": {
-          "kind": "value",
+        "/priority": {
+          "kind": "set",
           "value": "normal"
         },
-        "owner": {
-          "kind": "value",
+        "/owner": {
+          "kind": "set",
           "value": "chen"
         }
       }
     }
   },
-  "edges": {
-    "contains-1": {
-      "id": "contains-1",
-      "relationType": "contains",
-      "from": "project-1",
-      "to": "task-1"
-    },
-    "contains-2": {
-      "id": "contains-2",
-      "relationType": "contains",
-      "from": "project-1",
-      "to": "task-2"
-    }
-  },
+  "publishedArtifactId": null,
+  "lastPublishedAt": null,
   "tombstones": {
     "nodes": [],
     "edges": []
-  }
+  },
+  "createdAt": "2026-09-14T20:59:34.241Z",
+  "updatedAt": "2026-09-14T20:59:34.255Z",
+  "changes": [
+    {
+      "opIndex": 0,
+      "target": "field",
+      "id": "task-1",
+      "path": "/owner",
+      "before": {
+        "kind": "value",
+        "value": "lin"
+      },
+      "after": {
+        "kind": "value",
+        "value": "chen"
+      }
+    }
+  ]
 }
 ```
 
-本步异步检查：
+远端调用：
 
 ```json
 []
 ```
 
-本步远端调用：
+## 12. resume
 
-```json
-[]
-```
+沿用同一 Run，重新检查修复；项目跳过，任务 1 用新请求 key 创建，任务 2 模拟超时。
 
-模拟资源总数：1。
-
-## 8. resume
-
-输入（参数顺序）：
+输入：
 
 ```json
 [
@@ -1997,47 +3255,217 @@ draft => {
 ```json
 {
   "id": "demo-run-1",
-  "draftId": "8ffae1bb-e303-4223-b015-3c43a608d725",
-  "version": 2,
-  "state": "published",
-  "steps": [
+  "draftId": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+  "kind": "initial_create",
+  "version": 5,
+  "state": "unknown",
+  "artifactId": "885e15bd-03ff-4983-ae27-f9e0094e4d5d",
+  "initialArtifactId": "013a1f85-9455-4774-8ca8-73b74a7acd2c",
+  "certificate": "885e15bd-03ff-4983-ae27-f9e0094e4d5d",
+  "revision": 1,
+  "revisions": [
     {
-      "id": "project-1",
-      "status": "applied",
-      "key": "demo-run-1:project-1",
-      "remoteRef": "resource-1",
-      "resolvedPayload": {
+      "artifactId": "013a1f85-9455-4774-8ca8-73b74a7acd2c",
+      "version": 4,
+      "steps": [
+        {
+          "id": "project-1",
+          "effect": {
+            "kind": "create",
+            "nodeId": "project-1"
+          },
+          "payload": {
+            "title": "文档发布",
+            "capacity_hours": 16,
+            "deadline_day": 20
+          },
+          "key": "[\"demo-run-1\",\"project-1\",0]",
+          "status": "applied",
+          "resolvedPayload": {
+            "title": "文档发布",
+            "capacity_hours": 16,
+            "deadline_day": 20
+          },
+          "feedback": {},
+          "remoteRef": "resource-1"
+        },
+        {
+          "id": "task-1",
+          "effect": {
+            "kind": "create",
+            "nodeId": "task-1"
+          },
+          "payload": {
+            "title": "编写快速入门",
+            "estimate_hours": 8,
+            "due_day": 20,
+            "priority": "urgent",
+            "assignee": "lin"
+          },
+          "dependsOn": [
+            "project-1"
+          ],
+          "inputRefs": {
+            "projectId": "project-1"
+          },
+          "key": "[\"demo-run-1\",\"task-1\",0]",
+          "status": "ready",
+          "resolvedPayload": {
+            "title": "编写快速入门",
+            "estimate_hours": 8,
+            "due_day": 20,
+            "priority": "urgent",
+            "assignee": "lin",
+            "projectId": "resource-1"
+          },
+          "feedback": {
+            "code": "OWNER_UNAVAILABLE",
+            "message": "负责人暂不可用，任务未创建。",
+            "diagnostics": [
+              {
+                "code": "task.owner_unavailable",
+                "path": "/nodes/task-1/fields/owner",
+                "message": "林无法接手，请选择其他负责人后续作。",
+                "candidates": [
+                  {
+                    "value": "chen",
+                    "label": "陈",
+                    "message": "目前可接手（虚构候选）",
+                    "repairOps": [
+                      {
+                        "op": "set",
+                        "nodeId": "task-1",
+                        "path": "/owner",
+                        "value": "chen"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "reason": "Owner unavailable; request rejected before creation"
+          }
+        },
+        {
+          "id": "task-2",
+          "effect": {
+            "kind": "create",
+            "nodeId": "task-2"
+          },
+          "payload": {
+            "title": "评审使用示例",
+            "estimate_hours": 8,
+            "due_day": 18,
+            "priority": "normal",
+            "assignee": "chen"
+          },
+          "dependsOn": [
+            "project-1"
+          ],
+          "inputRefs": {
+            "projectId": "project-1"
+          },
+          "key": "[\"demo-run-1\",\"task-2\",0]",
+          "status": "ready"
+        }
+      ]
+    }
+  ],
+  "attempts": [
+    {
+      "stepId": "project-1",
+      "key": "[\"demo-run-1\",\"project-1\",0]",
+      "number": 1,
+      "input": {
         "title": "文档发布",
         "capacity_hours": 16,
         "deadline_day": 20
+      },
+      "status": "applied",
+      "outcome": {
+        "kind": "applied",
+        "remoteRef": "resource-1"
       }
     },
     {
-      "id": "task-1",
-      "status": "applied",
+      "stepId": "task-1",
+      "key": "[\"demo-run-1\",\"task-1\",0]",
+      "number": 2,
+      "input": {
+        "title": "编写快速入门",
+        "estimate_hours": 8,
+        "due_day": 20,
+        "priority": "urgent",
+        "assignee": "lin",
+        "projectId": "resource-1"
+      },
+      "status": "no_effect",
+      "outcome": {
+        "kind": "not_applied",
+        "reason": "Owner unavailable; request rejected before creation",
+        "retryable": false,
+        "code": "OWNER_UNAVAILABLE",
+        "message": "负责人暂不可用，任务未创建。",
+        "diagnostics": [
+          {
+            "code": "task.owner_unavailable",
+            "path": "/nodes/task-1/fields/owner",
+            "message": "林无法接手，请选择其他负责人后续作。",
+            "candidates": [
+              {
+                "value": "chen",
+                "label": "陈",
+                "message": "目前可接手（虚构候选）",
+                "repairOps": [
+                  {
+                    "op": "set",
+                    "nodeId": "task-1",
+                    "path": "/owner",
+                    "value": "chen"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "stepId": "task-1",
       "key": "[\"demo-run-1\",\"task-1\",1]",
-      "remoteRef": "resource-2",
-      "resolvedPayload": {
+      "number": 3,
+      "input": {
         "title": "编写快速入门",
         "estimate_hours": 8,
         "due_day": 20,
         "priority": "urgent",
         "assignee": "chen",
         "projectId": "resource-1"
+      },
+      "status": "applied",
+      "outcome": {
+        "kind": "applied",
+        "remoteRef": "resource-2"
       }
     },
     {
-      "id": "task-2",
-      "status": "applied",
-      "key": "demo-run-1:task-2",
-      "remoteRef": "resource-3",
-      "resolvedPayload": {
+      "stepId": "task-2",
+      "key": "[\"demo-run-1\",\"task-2\",0]",
+      "number": 4,
+      "input": {
         "title": "评审使用示例",
         "estimate_hours": 8,
         "due_day": 18,
         "priority": "normal",
         "assignee": "chen",
         "projectId": "resource-1"
+      },
+      "status": "unknown",
+      "outcome": {
+        "kind": "unknown",
+        "reason": "Response timed out; creation outcome requires lookup",
+        "code": "TIMEOUT",
+        "message": "请求超时，先查证这次请求是否已成功。"
       }
     }
   ],
@@ -2046,202 +3474,154 @@ draft => {
       "sequence": 1,
       "stepId": "project-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-14T17:49:44.505Z"
+      "recordedAt": "2026-09-14T20:59:34.253Z"
     },
     {
       "sequence": 2,
       "stepId": "project-1",
       "kind": "applied",
-      "recordedAt": "2026-09-14T17:49:44.506Z"
+      "recordedAt": "2026-09-14T20:59:34.253Z"
     },
     {
       "sequence": 3,
       "stepId": "task-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-14T17:49:44.506Z"
+      "recordedAt": "2026-09-14T20:59:34.254Z"
     },
     {
       "sequence": 4,
       "stepId": "task-1",
       "kind": "not_applied",
-      "reason": "Selected owner is no longer available",
-      "retryable": false,
-      "recordedAt": "2026-09-14T17:49:44.506Z"
+      "recordedAt": "2026-09-14T20:59:34.254Z",
+      "reason": "Owner unavailable; request rejected before creation"
     },
     {
       "sequence": 5,
-      "stepId": "task-2",
-      "kind": "skipped",
-      "reason": "run_stopped: task-1",
-      "recordedAt": "2026-09-14T17:49:44.506Z"
+      "stepId": "",
+      "kind": "plan_repaired",
+      "recordedAt": "2026-09-14T20:59:34.257Z"
     },
     {
       "sequence": 6,
       "stepId": "task-1",
-      "kind": "plan_repaired",
-      "recordedAt": "2026-09-14T17:49:44.508Z"
+      "kind": "dispatching",
+      "recordedAt": "2026-09-14T20:59:34.258Z"
     },
     {
       "sequence": 7,
-      "stepId": "task-2",
-      "kind": "plan_repaired",
-      "recordedAt": "2026-09-14T17:49:44.508Z"
+      "stepId": "task-1",
+      "kind": "applied",
+      "recordedAt": "2026-09-14T20:59:34.259Z"
     },
     {
       "sequence": 8,
-      "stepId": "task-1",
+      "stepId": "task-2",
       "kind": "dispatching",
-      "recordedAt": "2026-09-14T17:49:44.508Z"
+      "recordedAt": "2026-09-14T20:59:34.259Z"
     },
     {
       "sequence": 9,
-      "stepId": "task-1",
-      "kind": "applied",
-      "recordedAt": "2026-09-14T17:49:44.509Z"
-    },
-    {
-      "sequence": 10,
       "stepId": "task-2",
-      "kind": "dispatching",
-      "recordedAt": "2026-09-14T17:49:44.509Z"
-    },
+      "kind": "unknown",
+      "recordedAt": "2026-09-14T20:59:34.260Z",
+      "reason": "Response timed out; creation outcome requires lookup"
+    }
+  ],
+  "steps": [
     {
-      "sequence": 11,
-      "stepId": "task-2",
-      "kind": "applied",
-      "recordedAt": "2026-09-14T17:49:44.509Z"
-    }
-  ]
-}
-```
-
-本步异步检查：
-
-```json
-[
-  {
-    "method": "queryExport",
-    "input": {
-      "draftId": "8ffae1bb-e303-4223-b015-3c43a608d725",
-      "version": 2
-    },
-    "output": {
-      "status": "complete",
-      "diagnostics": []
-    }
-  }
-]
-```
-
-本步远端调用：
-
-```json
-[
-  {
-    "method": "apply",
-    "input": {
-      "step": {
-        "id": "task-1",
-        "payload": {
-          "title": "编写快速入门",
-          "estimate_hours": 8,
-          "due_day": 20,
-          "priority": "urgent",
-          "assignee": "chen",
-          "projectId": "resource-1"
-        },
-        "effect": {
-          "kind": "create",
-          "nodeId": "task-1"
-        },
-        "dependsOn": [
-          "project-1"
-        ],
-        "inputRefs": {
-          "projectId": "project-1"
-        },
-        "key": "[\"demo-run-1\",\"task-1\",1]",
-        "status": "dispatching",
-        "requestRevision": 1,
-        "resolvedPayload": {
-          "title": "编写快速入门",
-          "estimate_hours": 8,
-          "due_day": 20,
-          "priority": "urgent",
-          "assignee": "chen",
-          "projectId": "resource-1"
-        }
+      "id": "project-1",
+      "effect": {
+        "kind": "create",
+        "nodeId": "project-1"
       },
-      "key": "[\"demo-run-1\",\"task-1\",1]"
+      "payload": {
+        "title": "文档发布",
+        "capacity_hours": 16,
+        "deadline_day": 20
+      },
+      "key": "[\"demo-run-1\",\"project-1\",0]",
+      "status": "applied",
+      "resolvedPayload": {
+        "title": "文档发布",
+        "capacity_hours": 16,
+        "deadline_day": 20
+      },
+      "feedback": {},
+      "remoteRef": "resource-1"
     },
-    "output": {
-      "kind": "applied",
+    {
+      "id": "task-1",
+      "effect": {
+        "kind": "create",
+        "nodeId": "task-1"
+      },
+      "payload": {
+        "title": "编写快速入门",
+        "estimate_hours": 8,
+        "due_day": 20,
+        "priority": "urgent",
+        "assignee": "chen"
+      },
+      "dependsOn": [
+        "project-1"
+      ],
+      "inputRefs": {
+        "projectId": "project-1"
+      },
+      "key": "[\"demo-run-1\",\"task-1\",1]",
+      "status": "applied",
+      "requestRevision": 1,
+      "resolvedPayload": {
+        "title": "编写快速入门",
+        "estimate_hours": 8,
+        "due_day": 20,
+        "priority": "urgent",
+        "assignee": "chen",
+        "projectId": "resource-1"
+      },
+      "feedback": {},
       "remoteRef": "resource-2"
-    }
-  },
-  {
-    "method": "apply",
-    "input": {
-      "step": {
-        "id": "task-2",
-        "payload": {
-          "title": "评审使用示例",
-          "estimate_hours": 8,
-          "due_day": 18,
-          "priority": "normal",
-          "assignee": "chen",
-          "projectId": "resource-1"
-        },
-        "effect": {
-          "kind": "create",
-          "nodeId": "task-2"
-        },
-        "dependsOn": [
-          "project-1"
-        ],
-        "inputRefs": {
-          "projectId": "project-1"
-        },
-        "key": "demo-run-1:task-2",
-        "status": "dispatching",
-        "resolvedPayload": {
-          "title": "评审使用示例",
-          "estimate_hours": 8,
-          "due_day": 18,
-          "priority": "normal",
-          "assignee": "chen",
-          "projectId": "resource-1"
-        }
-      },
-      "key": "demo-run-1:task-2"
     },
-    "output": {
-      "kind": "applied",
-      "remoteRef": "resource-3"
+    {
+      "id": "task-2",
+      "effect": {
+        "kind": "create",
+        "nodeId": "task-2"
+      },
+      "payload": {
+        "title": "评审使用示例",
+        "estimate_hours": 8,
+        "due_day": 18,
+        "priority": "normal",
+        "assignee": "chen"
+      },
+      "dependsOn": [
+        "project-1"
+      ],
+      "inputRefs": {
+        "projectId": "project-1"
+      },
+      "key": "[\"demo-run-1\",\"task-2\",0]",
+      "status": "unknown",
+      "resolvedPayload": {
+        "title": "评审使用示例",
+        "estimate_hours": 8,
+        "due_day": 18,
+        "priority": "normal",
+        "assignee": "chen",
+        "projectId": "resource-1"
+      },
+      "feedback": {
+        "code": "TIMEOUT",
+        "message": "请求超时，先查证这次请求是否已成功。",
+        "reason": "Response timed out; creation outcome requires lookup"
+      }
     }
-  }
-]
-```
-
-模拟资源总数：3。
-
-## 9. getRunInput
-
-输入（参数顺序）：
-
-```json
-[
-  "demo-run-1"
-]
-```
-
-输出：
-
-```json
-{
-  "draft": {
-    "id": "8ffae1bb-e303-4223-b015-3c43a608d725",
-    "version": 2,
+  ],
+  "previewVersion": 5,
+  "preview": {
+    "id": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+    "version": 5,
     "type": "example.project-tasks",
     "typeVersion": "2",
     "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
@@ -2336,90 +3716,92 @@ draft => {
       "edges": []
     }
   },
-  "certificate": "e539a011-bd06-4792-8361-d7699dd9ed7d",
-  "plan": [
+  "diagnostics": [
     {
-      "id": "project-1",
-      "payload": {
-        "title": "文档发布",
-        "capacity_hours": 16,
-        "deadline_day": 20
-      },
-      "effect": {
-        "kind": "create",
-        "nodeId": "project-1"
-      }
-    },
-    {
-      "id": "task-1",
-      "payload": {
-        "title": "编写快速入门",
-        "estimate_hours": 8,
-        "due_day": 20,
-        "priority": "urgent",
-        "assignee": "chen"
-      },
-      "effect": {
-        "kind": "create",
-        "nodeId": "task-1"
-      },
-      "dependsOn": [
-        "project-1"
-      ],
-      "inputRefs": {
-        "projectId": "project-1"
-      }
-    },
-    {
-      "id": "task-2",
-      "payload": {
-        "title": "评审使用示例",
-        "estimate_hours": 8,
-        "due_day": 18,
-        "priority": "normal",
-        "assignee": "chen"
-      },
-      "effect": {
-        "kind": "create",
-        "nodeId": "task-2"
-      },
-      "dependsOn": [
-        "project-1"
-      ],
-      "inputRefs": {
-        "projectId": "project-1"
-      }
+      "code": "TIMEOUT",
+      "path": "/nodes/task-2",
+      "message": "请求超时，先查证这次请求是否已成功。"
     }
-  ],
-  "binding": {
-    "checkId": "3d1f9cca-4739-4bad-82d7-cd63035ea4c8",
-    "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
-    "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
-    "executorId": "example.project-service",
-    "executorVersion": "4",
-    "target": "mock:local",
-    "planDigest": "sha256:stagedwrite-json-v1:8f4ddca9b6810fc7cd58cfd5e9a14b6a1e619e96ed89fca6254dbeae2889c45f"
-  }
+  ]
 }
 ```
 
-本步异步检查：
+远端调用：
 
 ```json
-[]
+[
+  {
+    "method": "apply",
+    "input": {
+      "step": {
+        "id": "task-1",
+        "payload": {
+          "title": "编写快速入门",
+          "estimate_hours": 8,
+          "due_day": 20,
+          "priority": "urgent",
+          "assignee": "chen",
+          "projectId": "resource-1"
+        },
+        "dependsOn": [
+          "project-1"
+        ],
+        "inputRefs": {
+          "projectId": "project-1"
+        },
+        "effect": {
+          "kind": "create",
+          "nodeId": "task-1"
+        }
+      },
+      "key": "[\"demo-run-1\",\"task-1\",1]"
+    },
+    "output": {
+      "kind": "applied",
+      "remoteRef": "resource-2"
+    }
+  },
+  {
+    "method": "apply",
+    "input": {
+      "step": {
+        "id": "task-2",
+        "payload": {
+          "title": "评审使用示例",
+          "estimate_hours": 8,
+          "due_day": 18,
+          "priority": "normal",
+          "assignee": "chen",
+          "projectId": "resource-1"
+        },
+        "dependsOn": [
+          "project-1"
+        ],
+        "inputRefs": {
+          "projectId": "project-1"
+        },
+        "effect": {
+          "kind": "create",
+          "nodeId": "task-2"
+        }
+      },
+      "key": "[\"demo-run-1\",\"task-2\",0]"
+    },
+    "output": {
+      "kind": "unknown",
+      "reason": "Response timed out; creation outcome requires lookup",
+      "code": "TIMEOUT",
+      "message": "请求超时，先查证这次请求是否已成功。"
+    }
+  }
+]
 ```
 
-本步远端调用：
+## 13. resume
 
-```json
-[]
-```
+只查证任务 2 的原请求，确认成功后收尾；没有再次 apply。Draft 变 published，保留成功 Artifact。
 
-模拟资源总数：3。
-
-## 10. getRun
-
-输入（参数顺序）：
+输入：
 
 ```json
 [
@@ -2432,47 +3814,215 @@ draft => {
 ```json
 {
   "id": "demo-run-1",
-  "draftId": "8ffae1bb-e303-4223-b015-3c43a608d725",
-  "version": 2,
+  "draftId": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+  "kind": "initial_create",
+  "version": 5,
   "state": "published",
-  "steps": [
+  "artifactId": "885e15bd-03ff-4983-ae27-f9e0094e4d5d",
+  "initialArtifactId": "013a1f85-9455-4774-8ca8-73b74a7acd2c",
+  "certificate": "885e15bd-03ff-4983-ae27-f9e0094e4d5d",
+  "revision": 1,
+  "revisions": [
     {
-      "id": "project-1",
-      "status": "applied",
-      "key": "demo-run-1:project-1",
-      "remoteRef": "resource-1",
-      "resolvedPayload": {
+      "artifactId": "013a1f85-9455-4774-8ca8-73b74a7acd2c",
+      "version": 4,
+      "steps": [
+        {
+          "id": "project-1",
+          "effect": {
+            "kind": "create",
+            "nodeId": "project-1"
+          },
+          "payload": {
+            "title": "文档发布",
+            "capacity_hours": 16,
+            "deadline_day": 20
+          },
+          "key": "[\"demo-run-1\",\"project-1\",0]",
+          "status": "applied",
+          "resolvedPayload": {
+            "title": "文档发布",
+            "capacity_hours": 16,
+            "deadline_day": 20
+          },
+          "feedback": {},
+          "remoteRef": "resource-1"
+        },
+        {
+          "id": "task-1",
+          "effect": {
+            "kind": "create",
+            "nodeId": "task-1"
+          },
+          "payload": {
+            "title": "编写快速入门",
+            "estimate_hours": 8,
+            "due_day": 20,
+            "priority": "urgent",
+            "assignee": "lin"
+          },
+          "dependsOn": [
+            "project-1"
+          ],
+          "inputRefs": {
+            "projectId": "project-1"
+          },
+          "key": "[\"demo-run-1\",\"task-1\",0]",
+          "status": "ready",
+          "resolvedPayload": {
+            "title": "编写快速入门",
+            "estimate_hours": 8,
+            "due_day": 20,
+            "priority": "urgent",
+            "assignee": "lin",
+            "projectId": "resource-1"
+          },
+          "feedback": {
+            "code": "OWNER_UNAVAILABLE",
+            "message": "负责人暂不可用，任务未创建。",
+            "diagnostics": [
+              {
+                "code": "task.owner_unavailable",
+                "path": "/nodes/task-1/fields/owner",
+                "message": "林无法接手，请选择其他负责人后续作。",
+                "candidates": [
+                  {
+                    "value": "chen",
+                    "label": "陈",
+                    "message": "目前可接手（虚构候选）",
+                    "repairOps": [
+                      {
+                        "op": "set",
+                        "nodeId": "task-1",
+                        "path": "/owner",
+                        "value": "chen"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "reason": "Owner unavailable; request rejected before creation"
+          }
+        },
+        {
+          "id": "task-2",
+          "effect": {
+            "kind": "create",
+            "nodeId": "task-2"
+          },
+          "payload": {
+            "title": "评审使用示例",
+            "estimate_hours": 8,
+            "due_day": 18,
+            "priority": "normal",
+            "assignee": "chen"
+          },
+          "dependsOn": [
+            "project-1"
+          ],
+          "inputRefs": {
+            "projectId": "project-1"
+          },
+          "key": "[\"demo-run-1\",\"task-2\",0]",
+          "status": "ready"
+        }
+      ]
+    }
+  ],
+  "attempts": [
+    {
+      "stepId": "project-1",
+      "key": "[\"demo-run-1\",\"project-1\",0]",
+      "number": 1,
+      "input": {
         "title": "文档发布",
         "capacity_hours": 16,
         "deadline_day": 20
+      },
+      "status": "applied",
+      "outcome": {
+        "kind": "applied",
+        "remoteRef": "resource-1"
       }
     },
     {
-      "id": "task-1",
-      "status": "applied",
+      "stepId": "task-1",
+      "key": "[\"demo-run-1\",\"task-1\",0]",
+      "number": 2,
+      "input": {
+        "title": "编写快速入门",
+        "estimate_hours": 8,
+        "due_day": 20,
+        "priority": "urgent",
+        "assignee": "lin",
+        "projectId": "resource-1"
+      },
+      "status": "no_effect",
+      "outcome": {
+        "kind": "not_applied",
+        "reason": "Owner unavailable; request rejected before creation",
+        "retryable": false,
+        "code": "OWNER_UNAVAILABLE",
+        "message": "负责人暂不可用，任务未创建。",
+        "diagnostics": [
+          {
+            "code": "task.owner_unavailable",
+            "path": "/nodes/task-1/fields/owner",
+            "message": "林无法接手，请选择其他负责人后续作。",
+            "candidates": [
+              {
+                "value": "chen",
+                "label": "陈",
+                "message": "目前可接手（虚构候选）",
+                "repairOps": [
+                  {
+                    "op": "set",
+                    "nodeId": "task-1",
+                    "path": "/owner",
+                    "value": "chen"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "stepId": "task-1",
       "key": "[\"demo-run-1\",\"task-1\",1]",
-      "remoteRef": "resource-2",
-      "resolvedPayload": {
+      "number": 3,
+      "input": {
         "title": "编写快速入门",
         "estimate_hours": 8,
         "due_day": 20,
         "priority": "urgent",
         "assignee": "chen",
         "projectId": "resource-1"
+      },
+      "status": "applied",
+      "outcome": {
+        "kind": "applied",
+        "remoteRef": "resource-2"
       }
     },
     {
-      "id": "task-2",
-      "status": "applied",
-      "key": "demo-run-1:task-2",
-      "remoteRef": "resource-3",
-      "resolvedPayload": {
+      "stepId": "task-2",
+      "key": "[\"demo-run-1\",\"task-2\",0]",
+      "number": 4,
+      "input": {
         "title": "评审使用示例",
         "estimate_hours": 8,
         "due_day": 18,
         "priority": "normal",
         "assignee": "chen",
         "projectId": "resource-1"
+      },
+      "status": "applied",
+      "outcome": {
+        "kind": "applied",
+        "remoteRef": "resource-3"
       }
     }
   ],
@@ -2481,85 +4031,960 @@ draft => {
       "sequence": 1,
       "stepId": "project-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-14T17:49:44.505Z"
+      "recordedAt": "2026-09-14T20:59:34.253Z"
     },
     {
       "sequence": 2,
       "stepId": "project-1",
       "kind": "applied",
-      "recordedAt": "2026-09-14T17:49:44.506Z"
+      "recordedAt": "2026-09-14T20:59:34.253Z"
     },
     {
       "sequence": 3,
       "stepId": "task-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-14T17:49:44.506Z"
+      "recordedAt": "2026-09-14T20:59:34.254Z"
     },
     {
       "sequence": 4,
       "stepId": "task-1",
       "kind": "not_applied",
-      "reason": "Selected owner is no longer available",
-      "retryable": false,
-      "recordedAt": "2026-09-14T17:49:44.506Z"
+      "recordedAt": "2026-09-14T20:59:34.254Z",
+      "reason": "Owner unavailable; request rejected before creation"
     },
     {
       "sequence": 5,
-      "stepId": "task-2",
-      "kind": "skipped",
-      "reason": "run_stopped: task-1",
-      "recordedAt": "2026-09-14T17:49:44.506Z"
+      "stepId": "",
+      "kind": "plan_repaired",
+      "recordedAt": "2026-09-14T20:59:34.257Z"
     },
     {
       "sequence": 6,
       "stepId": "task-1",
-      "kind": "plan_repaired",
-      "recordedAt": "2026-09-14T17:49:44.508Z"
+      "kind": "dispatching",
+      "recordedAt": "2026-09-14T20:59:34.258Z"
     },
     {
       "sequence": 7,
-      "stepId": "task-2",
-      "kind": "plan_repaired",
-      "recordedAt": "2026-09-14T17:49:44.508Z"
+      "stepId": "task-1",
+      "kind": "applied",
+      "recordedAt": "2026-09-14T20:59:34.259Z"
     },
     {
       "sequence": 8,
-      "stepId": "task-1",
+      "stepId": "task-2",
       "kind": "dispatching",
-      "recordedAt": "2026-09-14T17:49:44.508Z"
+      "recordedAt": "2026-09-14T20:59:34.259Z"
     },
     {
       "sequence": 9,
-      "stepId": "task-1",
-      "kind": "applied",
-      "recordedAt": "2026-09-14T17:49:44.509Z"
+      "stepId": "task-2",
+      "kind": "unknown",
+      "recordedAt": "2026-09-14T20:59:34.260Z",
+      "reason": "Response timed out; creation outcome requires lookup"
     },
     {
       "sequence": 10,
       "stepId": "task-2",
-      "kind": "dispatching",
-      "recordedAt": "2026-09-14T17:49:44.509Z"
+      "kind": "reconciling",
+      "recordedAt": "2026-09-14T20:59:34.261Z"
     },
     {
       "sequence": 11,
       "stepId": "task-2",
       "kind": "applied",
-      "recordedAt": "2026-09-14T17:49:44.509Z"
+      "recordedAt": "2026-09-14T20:59:34.262Z"
     }
-  ]
+  ],
+  "steps": [
+    {
+      "id": "project-1",
+      "effect": {
+        "kind": "create",
+        "nodeId": "project-1"
+      },
+      "payload": {
+        "title": "文档发布",
+        "capacity_hours": 16,
+        "deadline_day": 20
+      },
+      "key": "[\"demo-run-1\",\"project-1\",0]",
+      "status": "applied",
+      "resolvedPayload": {
+        "title": "文档发布",
+        "capacity_hours": 16,
+        "deadline_day": 20
+      },
+      "feedback": {},
+      "remoteRef": "resource-1"
+    },
+    {
+      "id": "task-1",
+      "effect": {
+        "kind": "create",
+        "nodeId": "task-1"
+      },
+      "payload": {
+        "title": "编写快速入门",
+        "estimate_hours": 8,
+        "due_day": 20,
+        "priority": "urgent",
+        "assignee": "chen"
+      },
+      "dependsOn": [
+        "project-1"
+      ],
+      "inputRefs": {
+        "projectId": "project-1"
+      },
+      "key": "[\"demo-run-1\",\"task-1\",1]",
+      "status": "applied",
+      "requestRevision": 1,
+      "resolvedPayload": {
+        "title": "编写快速入门",
+        "estimate_hours": 8,
+        "due_day": 20,
+        "priority": "urgent",
+        "assignee": "chen",
+        "projectId": "resource-1"
+      },
+      "feedback": {},
+      "remoteRef": "resource-2"
+    },
+    {
+      "id": "task-2",
+      "effect": {
+        "kind": "create",
+        "nodeId": "task-2"
+      },
+      "payload": {
+        "title": "评审使用示例",
+        "estimate_hours": 8,
+        "due_day": 18,
+        "priority": "normal",
+        "assignee": "chen"
+      },
+      "dependsOn": [
+        "project-1"
+      ],
+      "inputRefs": {
+        "projectId": "project-1"
+      },
+      "key": "[\"demo-run-1\",\"task-2\",0]",
+      "status": "applied",
+      "resolvedPayload": {
+        "title": "评审使用示例",
+        "estimate_hours": 8,
+        "due_day": 18,
+        "priority": "normal",
+        "assignee": "chen",
+        "projectId": "resource-1"
+      },
+      "feedback": {},
+      "remoteRef": "resource-3"
+    }
+  ],
+  "previewVersion": 5,
+  "preview": {
+    "id": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+    "version": 5,
+    "type": "example.project-tasks",
+    "typeVersion": "2",
+    "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+    "nodes": {
+      "project-1": {
+        "id": "project-1",
+        "nodeType": "project",
+        "fields": {
+          "name": {
+            "kind": "value",
+            "value": "文档发布"
+          },
+          "capacityHours": {
+            "kind": "value",
+            "value": 16
+          },
+          "deadlineDay": {
+            "kind": "value",
+            "value": 20
+          }
+        }
+      },
+      "task-1": {
+        "id": "task-1",
+        "nodeType": "task",
+        "fields": {
+          "name": {
+            "kind": "value",
+            "value": "编写快速入门"
+          },
+          "estimateHours": {
+            "kind": "value",
+            "value": 8
+          },
+          "dueDay": {
+            "kind": "value",
+            "value": 20
+          },
+          "priority": {
+            "kind": "value",
+            "value": "urgent"
+          },
+          "owner": {
+            "kind": "value",
+            "value": "chen"
+          }
+        }
+      },
+      "task-2": {
+        "id": "task-2",
+        "nodeType": "task",
+        "fields": {
+          "name": {
+            "kind": "value",
+            "value": "评审使用示例"
+          },
+          "estimateHours": {
+            "kind": "value",
+            "value": 8
+          },
+          "dueDay": {
+            "kind": "value",
+            "value": 18
+          },
+          "priority": {
+            "kind": "value",
+            "value": "normal"
+          },
+          "owner": {
+            "kind": "value",
+            "value": "chen"
+          }
+        }
+      }
+    },
+    "edges": {
+      "contains-1": {
+        "id": "contains-1",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-1"
+      },
+      "contains-2": {
+        "id": "contains-2",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-2"
+      }
+    },
+    "tombstones": {
+      "nodes": [],
+      "edges": []
+    }
+  },
+  "diagnostics": []
 }
 ```
 
-本步异步检查：
+远端调用：
+
+```json
+[
+  {
+    "method": "reconcile",
+    "input": {
+      "step": {
+        "id": "task-2",
+        "payload": {
+          "title": "评审使用示例",
+          "estimate_hours": 8,
+          "due_day": 18,
+          "priority": "normal",
+          "assignee": "chen",
+          "projectId": "resource-1"
+        },
+        "dependsOn": [
+          "project-1"
+        ],
+        "inputRefs": {
+          "projectId": "project-1"
+        },
+        "effect": {
+          "kind": "create",
+          "nodeId": "task-2"
+        }
+      },
+      "key": "[\"demo-run-1\",\"task-2\",0]"
+    },
+    "output": {
+      "kind": "applied",
+      "remoteRef": "resource-3"
+    }
+  }
+]
+```
+
+## 14. getDraft
+
+全部成功才设置 published、publishedArtifactId 和 lastPublishedAt。currentRunId 仍保留。
+
+输入：
+
+```json
+[
+  "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d"
+]
+```
+
+输出：
+
+```json
+{
+  "graph": {
+    "nodes": {
+      "project-1": {
+        "id": "project-1",
+        "nodeType": "project",
+        "fields": {
+          "name": "文档发布",
+          "capacityHours": 16,
+          "deadlineDay": 20
+        }
+      },
+      "task-1": {
+        "id": "task-1",
+        "nodeType": "task",
+        "fields": {
+          "name": "编写快速入门",
+          "estimateHours": 8,
+          "dueDay": 20,
+          "priority": "urgent",
+          "owner": "chen"
+        }
+      },
+      "task-2": {
+        "id": "task-2",
+        "nodeType": "task",
+        "fields": {
+          "name": "评审使用示例",
+          "estimateHours": 8,
+          "dueDay": 18,
+          "priority": "normal",
+          "owner": "chen"
+        }
+      }
+    },
+    "edges": {
+      "contains-1": {
+        "id": "contains-1",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-1"
+      },
+      "contains-2": {
+        "id": "contains-2",
+        "relationType": "contains",
+        "from": "project-1",
+        "to": "task-2"
+      }
+    }
+  },
+  "fieldIntents": {
+    "project-1": {
+      "/name": {
+        "kind": "set",
+        "value": "文档发布"
+      },
+      "/capacityHours": {
+        "kind": "set",
+        "value": 16
+      },
+      "/deadlineDay": {
+        "kind": "set",
+        "value": 20
+      }
+    },
+    "task-1": {
+      "/name": {
+        "kind": "set",
+        "value": "编写快速入门"
+      },
+      "/estimateHours": {
+        "kind": "set",
+        "value": 8
+      },
+      "/dueDay": {
+        "kind": "set",
+        "value": 20
+      },
+      "/priority": {
+        "kind": "set",
+        "value": "urgent"
+      },
+      "/owner": {
+        "kind": "set",
+        "value": "chen"
+      }
+    },
+    "task-2": {
+      "/name": {
+        "kind": "set",
+        "value": "评审使用示例"
+      },
+      "/estimateHours": {
+        "kind": "set",
+        "value": 8
+      },
+      "/dueDay": {
+        "kind": "set",
+        "value": 18
+      },
+      "/priority": {
+        "kind": "set",
+        "value": "normal"
+      },
+      "/owner": {
+        "kind": "set",
+        "value": "chen"
+      }
+    }
+  },
+  "formatVersion": 3,
+  "id": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+  "version": 5,
+  "type": "example.project-tasks",
+  "typeVersion": "2",
+  "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+  "status": "published",
+  "currentRunId": "demo-run-1",
+  "targetId": "mock:local",
+  "initialSnapshot": {
+    "graph": {
+      "nodes": {
+        "project-1": {
+          "id": "project-1",
+          "nodeType": "project",
+          "fields": {
+            "name": "文档发布",
+            "capacityHours": 16,
+            "deadlineDay": 20
+          }
+        },
+        "task-1": {
+          "id": "task-1",
+          "nodeType": "task",
+          "fields": {
+            "name": "编写快速入门",
+            "estimateHours": 12,
+            "dueDay": 22,
+            "priority": "urgent",
+            "owner": null
+          }
+        },
+        "task-2": {
+          "id": "task-2",
+          "nodeType": "task",
+          "fields": {
+            "name": "评审使用示例",
+            "estimateHours": 10,
+            "dueDay": 18,
+            "priority": "normal",
+            "owner": "chen"
+          }
+        }
+      },
+      "edges": {
+        "contains-1": {
+          "id": "contains-1",
+          "relationType": "contains",
+          "from": "project-1",
+          "to": "task-1"
+        },
+        "contains-2": {
+          "id": "contains-2",
+          "relationType": "contains",
+          "from": "project-1",
+          "to": "task-2"
+        }
+      }
+    },
+    "fieldIntents": {
+      "project-1": {
+        "/name": {
+          "kind": "set",
+          "value": "文档发布"
+        },
+        "/capacityHours": {
+          "kind": "set",
+          "value": 16
+        },
+        "/deadlineDay": {
+          "kind": "set",
+          "value": 20
+        }
+      },
+      "task-1": {
+        "/name": {
+          "kind": "set",
+          "value": "编写快速入门"
+        },
+        "/estimateHours": {
+          "kind": "set",
+          "value": 12
+        },
+        "/dueDay": {
+          "kind": "set",
+          "value": 22
+        },
+        "/priority": {
+          "kind": "set",
+          "value": "urgent"
+        },
+        "/owner": {
+          "kind": "set",
+          "value": null
+        }
+      },
+      "task-2": {
+        "/name": {
+          "kind": "set",
+          "value": "评审使用示例"
+        },
+        "/estimateHours": {
+          "kind": "set",
+          "value": 10
+        },
+        "/dueDay": {
+          "kind": "set",
+          "value": 18
+        },
+        "/priority": {
+          "kind": "set",
+          "value": "normal"
+        },
+        "/owner": {
+          "kind": "set",
+          "value": "chen"
+        }
+      }
+    }
+  },
+  "publishedArtifactId": "885e15bd-03ff-4983-ae27-f9e0094e4d5d",
+  "lastPublishedAt": "2026-09-14T20:59:34.263Z",
+  "tombstones": {
+    "nodes": [],
+    "edges": []
+  },
+  "createdAt": "2026-09-14T20:59:34.241Z",
+  "updatedAt": "2026-09-14T20:59:34.263Z"
+}
+```
+
+远端调用：
 
 ```json
 []
 ```
 
-本步远端调用：
+## 15. getBindings
+
+每个成功节点都已绑定远端资源；这些是确认事实，不是远端实时漂移检测。
+
+输入：
+
+```json
+[
+  "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d"
+]
+```
+
+输出：
+
+```json
+{
+  "project-1": {
+    "nodeId": "project-1",
+    "targetId": "mock:local",
+    "remoteId": "resource-1",
+    "runId": "demo-run-1",
+    "stepId": "project-1",
+    "key": "[\"demo-run-1\",\"project-1\",0]",
+    "attemptNumber": 1,
+    "input": {
+      "title": "文档发布",
+      "capacity_hours": 16,
+      "deadline_day": 20
+    }
+  },
+  "task-1": {
+    "nodeId": "task-1",
+    "targetId": "mock:local",
+    "remoteId": "resource-2",
+    "runId": "demo-run-1",
+    "stepId": "task-1",
+    "key": "[\"demo-run-1\",\"task-1\",1]",
+    "attemptNumber": 3,
+    "input": {
+      "title": "编写快速入门",
+      "estimate_hours": 8,
+      "due_day": 20,
+      "priority": "urgent",
+      "assignee": "chen",
+      "projectId": "resource-1"
+    }
+  },
+  "task-2": {
+    "nodeId": "task-2",
+    "targetId": "mock:local",
+    "remoteId": "resource-3",
+    "runId": "demo-run-1",
+    "stepId": "task-2",
+    "key": "[\"demo-run-1\",\"task-2\",0]",
+    "attemptNumber": 4,
+    "input": {
+      "title": "评审使用示例",
+      "estimate_hours": 8,
+      "due_day": 18,
+      "priority": "normal",
+      "assignee": "chen",
+      "projectId": "resource-1"
+    }
+  }
+}
+```
+
+远端调用：
 
 ```json
 []
 ```
 
-模拟资源总数：3。
+## 16. getRunInput
+
+Run 当前采用的意图与计划；旧产物仍可用 revisions 中的 artifactId 查询。
+
+输入：
+
+```json
+[
+  "demo-run-1"
+]
+```
+
+输出：
+
+```json
+{
+  "id": "885e15bd-03ff-4983-ae27-f9e0094e4d5d",
+  "intentDigest": "sha256:stagedwrite-json-v1:733962fd9cbccc460c1183cc4a07667ccdcb077d314378610d91408a5756706f",
+  "draft": {
+    "graph": {
+      "nodes": {
+        "project-1": {
+          "id": "project-1",
+          "nodeType": "project",
+          "fields": {
+            "name": "文档发布",
+            "capacityHours": 16,
+            "deadlineDay": 20
+          }
+        },
+        "task-1": {
+          "id": "task-1",
+          "nodeType": "task",
+          "fields": {
+            "name": "编写快速入门",
+            "estimateHours": 8,
+            "dueDay": 20,
+            "priority": "urgent",
+            "owner": "chen"
+          }
+        },
+        "task-2": {
+          "id": "task-2",
+          "nodeType": "task",
+          "fields": {
+            "name": "评审使用示例",
+            "estimateHours": 8,
+            "dueDay": 18,
+            "priority": "normal",
+            "owner": "chen"
+          }
+        }
+      },
+      "edges": {
+        "contains-1": {
+          "id": "contains-1",
+          "relationType": "contains",
+          "from": "project-1",
+          "to": "task-1"
+        },
+        "contains-2": {
+          "id": "contains-2",
+          "relationType": "contains",
+          "from": "project-1",
+          "to": "task-2"
+        }
+      }
+    },
+    "fieldIntents": {
+      "project-1": {
+        "/name": {
+          "kind": "set",
+          "value": "文档发布"
+        },
+        "/capacityHours": {
+          "kind": "set",
+          "value": 16
+        },
+        "/deadlineDay": {
+          "kind": "set",
+          "value": 20
+        }
+      },
+      "task-1": {
+        "/name": {
+          "kind": "set",
+          "value": "编写快速入门"
+        },
+        "/estimateHours": {
+          "kind": "set",
+          "value": 8
+        },
+        "/dueDay": {
+          "kind": "set",
+          "value": 20
+        },
+        "/priority": {
+          "kind": "set",
+          "value": "urgent"
+        },
+        "/owner": {
+          "kind": "set",
+          "value": "chen"
+        }
+      },
+      "task-2": {
+        "/name": {
+          "kind": "set",
+          "value": "评审使用示例"
+        },
+        "/estimateHours": {
+          "kind": "set",
+          "value": 8
+        },
+        "/dueDay": {
+          "kind": "set",
+          "value": 18
+        },
+        "/priority": {
+          "kind": "set",
+          "value": "normal"
+        },
+        "/owner": {
+          "kind": "set",
+          "value": "chen"
+        }
+      }
+    },
+    "formatVersion": 3,
+    "id": "9f0f1bd5-b44d-408d-8da4-ee60ecc2921d",
+    "version": 5,
+    "type": "example.project-tasks",
+    "typeVersion": "2",
+    "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+    "status": "pending",
+    "currentRunId": "demo-run-1",
+    "targetId": "mock:local",
+    "initialSnapshot": {
+      "graph": {
+        "nodes": {
+          "project-1": {
+            "id": "project-1",
+            "nodeType": "project",
+            "fields": {
+              "name": "文档发布",
+              "capacityHours": 16,
+              "deadlineDay": 20
+            }
+          },
+          "task-1": {
+            "id": "task-1",
+            "nodeType": "task",
+            "fields": {
+              "name": "编写快速入门",
+              "estimateHours": 12,
+              "dueDay": 22,
+              "priority": "urgent",
+              "owner": null
+            }
+          },
+          "task-2": {
+            "id": "task-2",
+            "nodeType": "task",
+            "fields": {
+              "name": "评审使用示例",
+              "estimateHours": 10,
+              "dueDay": 18,
+              "priority": "normal",
+              "owner": "chen"
+            }
+          }
+        },
+        "edges": {
+          "contains-1": {
+            "id": "contains-1",
+            "relationType": "contains",
+            "from": "project-1",
+            "to": "task-1"
+          },
+          "contains-2": {
+            "id": "contains-2",
+            "relationType": "contains",
+            "from": "project-1",
+            "to": "task-2"
+          }
+        }
+      },
+      "fieldIntents": {
+        "project-1": {
+          "/name": {
+            "kind": "set",
+            "value": "文档发布"
+          },
+          "/capacityHours": {
+            "kind": "set",
+            "value": 16
+          },
+          "/deadlineDay": {
+            "kind": "set",
+            "value": 20
+          }
+        },
+        "task-1": {
+          "/name": {
+            "kind": "set",
+            "value": "编写快速入门"
+          },
+          "/estimateHours": {
+            "kind": "set",
+            "value": 12
+          },
+          "/dueDay": {
+            "kind": "set",
+            "value": 22
+          },
+          "/priority": {
+            "kind": "set",
+            "value": "urgent"
+          },
+          "/owner": {
+            "kind": "set",
+            "value": null
+          }
+        },
+        "task-2": {
+          "/name": {
+            "kind": "set",
+            "value": "评审使用示例"
+          },
+          "/estimateHours": {
+            "kind": "set",
+            "value": 10
+          },
+          "/dueDay": {
+            "kind": "set",
+            "value": 18
+          },
+          "/priority": {
+            "kind": "set",
+            "value": "normal"
+          },
+          "/owner": {
+            "kind": "set",
+            "value": "chen"
+          }
+        }
+      }
+    },
+    "publishedArtifactId": null,
+    "lastPublishedAt": null,
+    "tombstones": {
+      "nodes": [],
+      "edges": []
+    },
+    "createdAt": "2026-09-14T20:59:34.241Z",
+    "updatedAt": "2026-09-14T20:59:34.255Z"
+  },
+  "plan": [
+    {
+      "id": "project-1",
+      "effect": {
+        "kind": "create",
+        "nodeId": "project-1"
+      },
+      "payload": {
+        "title": "文档发布",
+        "capacity_hours": 16,
+        "deadline_day": 20
+      }
+    },
+    {
+      "id": "task-1",
+      "effect": {
+        "kind": "create",
+        "nodeId": "task-1"
+      },
+      "payload": {
+        "title": "编写快速入门",
+        "estimate_hours": 8,
+        "due_day": 20,
+        "priority": "urgent",
+        "assignee": "chen"
+      },
+      "dependsOn": [
+        "project-1"
+      ],
+      "inputRefs": {
+        "projectId": "project-1"
+      }
+    },
+    {
+      "id": "task-2",
+      "effect": {
+        "kind": "create",
+        "nodeId": "task-2"
+      },
+      "payload": {
+        "title": "评审使用示例",
+        "estimate_hours": 8,
+        "due_day": 18,
+        "priority": "normal",
+        "assignee": "chen"
+      },
+      "dependsOn": [
+        "project-1"
+      ],
+      "inputRefs": {
+        "projectId": "project-1"
+      }
+    }
+  ],
+  "binding": {
+    "checkId": "93800e8a-502c-4ced-a29d-be3df91050e6",
+    "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+    "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
+    "executorId": "example.project-service",
+    "executorVersion": "5",
+    "target": "mock:local",
+    "planDigest": "sha256:stagedwrite-json-v1:8f4ddca9b6810fc7cd58cfd5e9a14b6a1e619e96ed89fca6254dbeae2889c45f"
+  },
+  "resourceRevision": 1
+}
+```
+
+远端调用：
+
+```json
+[]
+```

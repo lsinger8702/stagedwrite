@@ -5,14 +5,14 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn, spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
-import { createStagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite } from "../src/index.js";
 import type { GraphExecutor, Run, Clock, ApplyOutcome, Step } from "../src/index.js";
 const definition = { id: "recovery", version: "1", nodeTypes: { item: { valueSchema: { type: "object", properties: {}, additionalProperties: false } } }, relationTypes: {} };
 const selector = { type: "recovery", typeVersion: "1" };
 const plan: Step[] = [{ id: "a", payload: { title: "Project" } }, { id: "b", payload: {}, dependsOn: ["a"], inputRefs: { projectId: "a" } }];
 function file(t: { after(fn: () => void): void }) { const dir = mkdtempSync(join(tmpdir(), "sw-recovery-")); t.after(() => rmSync(dir, { recursive: true, force: true })); return join(dir, "data.sqlite"); }
 function open(path: string, overrides: Partial<GraphExecutor> = {}, clock: Clock = () => 0) {
-  return createStagedWrite({ definitions: [definition], mode: "executable", storage: { kind: "sqlite", path }, clock, executors: [{
+  return createLegacyStagedWrite({ definitions: [definition], mode: "executable", storage: { kind: "sqlite", path }, clock, executors: [{
     ...selector, id: "mock", version: "1", target: "mock:local", plan: () => structuredClone(plan),
     apply: async (): Promise<ApplyOutcome> => ({ kind: "unknown", reason: "lost" }), reconcile: { unsupported: "no evidence" }, ...overrides }] });
 }
@@ -20,8 +20,8 @@ async function start(engine: ReturnType<typeof open>) { const draft = engine.cre
 const command = (run: Run, requestId = "claim") => ({ requestId, expectedSequence: run.events.length, actor: "operator", reason: "Resume interrupted work" });
 function crash(path: string, phase = "apply") {
   const api = new URL("../src/index.js", import.meta.url).href;
-  const code = `import {createStagedWrite} from ${JSON.stringify(api)}; import {writeFileSync} from 'node:fs';
-  const engine=createStagedWrite({definitions:[${JSON.stringify(definition)}],mode:'executable',storage:{kind:'sqlite',path:${JSON.stringify(path)}},executors:[{...${JSON.stringify(selector)},id:'mock',version:'1',target:'mock:local',plan:()=>${JSON.stringify(plan)},
+  const code = `import {createLegacyStagedWrite} from ${JSON.stringify(api)}; import {writeFileSync} from 'node:fs';
+  const engine=createLegacyStagedWrite({definitions:[${JSON.stringify(definition)}],mode:'executable',storage:{kind:'sqlite',path:${JSON.stringify(path)}},executors:[{...${JSON.stringify(selector)},id:'mock',version:'1',target:'mock:local',plan:()=>${JSON.stringify(plan)},
   apply:async(step,key)=>{writeFileSync(${JSON.stringify(path + '.receipt')},JSON.stringify({key,payload:step.payload,remoteRef:'project-remote'}));process.exit(19)},
   reconcile:async()=>process.exit(20)}]});
   ${phase === 'apply' ? `const d=engine.create(${JSON.stringify(selector)});engine.edit(d.id,0,[{op:"node.add",id:"a",nodeType:"item"}]);await engine.publish(d.id,engine.preflight(d.id).certificate);` : `const run=engine.getRun(engine.listRunIds()[0]);engine.recover(run.id,{requestId:'child',expectedSequence:run.events.length,actor:'child',reason:'recover'});await engine.resume(run.id);`}`;
@@ -143,8 +143,8 @@ test("recovery clock callbacks cannot close or mutate the recovering run", async
 
 test("exit before the dispatch checkpoint leaves ready work that can safely resume", async t => {
   const path = file(t), api = new URL("../src/index.js", import.meta.url).href;
-  const child = spawnSync(process.execPath, ["--input-type=module", "-e", `import {createStagedWrite} from ${JSON.stringify(api)};
-  const e=createStagedWrite({definitions:[${JSON.stringify(definition)}],mode:'executable',storage:{kind:'sqlite',path:${JSON.stringify(path)}},clock:()=>process.exit(21),executors:[{...${JSON.stringify(selector)},id:'mock',version:'1',target:'mock:local',plan:()=>${JSON.stringify(plan)},apply:async()=>process.exit(99),reconcile:{unsupported:'fixture'}}]});
+  const child = spawnSync(process.execPath, ["--input-type=module", "-e", `import {createLegacyStagedWrite} from ${JSON.stringify(api)};
+  const e=createLegacyStagedWrite({definitions:[${JSON.stringify(definition)}],mode:'executable',storage:{kind:'sqlite',path:${JSON.stringify(path)}},clock:()=>process.exit(21),executors:[{...${JSON.stringify(selector)},id:'mock',version:'1',target:'mock:local',plan:()=>${JSON.stringify(plan)},apply:async()=>process.exit(99),reconcile:{unsupported:'fixture'}}]});
   const d=e.create(${JSON.stringify(selector)});e.edit(d.id,0,[{op:'node.add',id:'a',nodeType:'item'}]);await e.publish(d.id,e.preflight(d.id).certificate);`], { encoding: "utf8", timeout: 10000 });
   assert.equal(child.status, 21, child.stderr); let calls = 0;
   const e = open(path, { apply: async s => { calls++; return { kind: "applied", remoteRef: s.id }; } });
@@ -155,8 +155,8 @@ test("exit before the dispatch checkpoint leaves ready work that can safely resu
 test("two competing processes cannot both take ownership", async t => {
   const path = file(t); const first = open(path); const run = await start(first); first.close();
   const api = new URL("../src/index.js", import.meta.url).href;
-  const source = `import {createStagedWrite} from ${JSON.stringify(api)};
-  const e=createStagedWrite({definitions:[${JSON.stringify(definition)}],mode:'executable',storage:{kind:'sqlite',path:${JSON.stringify(path)}},executors:[{...${JSON.stringify(selector)},id:'mock',version:'1',target:'mock:local',plan:()=>[],apply:async()=>({kind:'unknown',reason:'fixture'}),reconcile:{unsupported:'fixture'}}]});
+  const source = `import {createLegacyStagedWrite} from ${JSON.stringify(api)};
+  const e=createLegacyStagedWrite({definitions:[${JSON.stringify(definition)}],mode:'executable',storage:{kind:'sqlite',path:${JSON.stringify(path)}},executors:[{...${JSON.stringify(selector)},id:'mock',version:'1',target:'mock:local',plan:()=>[],apply:async()=>({kind:'unknown',reason:'fixture'}),reconcile:{unsupported:'fixture'}}]});
   process.on('message',()=>{try{e.recover(${JSON.stringify(run.id)},{...${JSON.stringify(command(run))},requestId:String(process.pid)});process.send('claimed')}catch(error){process.send(error.message)}});process.send('ready');`;
   const children = [0, 1].map(() => spawn(process.execPath, ["--input-type=module", "-e", source], { stdio: ["ignore", "ignore", "ignore", "ipc"] }));
   t.after(() => { for (const child of children) child.kill(); });

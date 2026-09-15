@@ -5,15 +5,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
-import { createStagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite } from "../src/index.js";
 import type { DraftOptions, GraphRule } from "../src/index.js";
 const definition = { id: "stored", version: "1", nodeTypes: { item: { valueSchema: { type: "object", properties: { name: { type: "string" } }, additionalProperties: false }, requiredAtPublish: ["name"] } }, relationTypes: { uses: { from: ["item"], to: ["item"] } } };
 const selector = { type: "stored", typeVersion: "1" };
-const create = (path: string, rules: readonly GraphRule[] = []) => createStagedWrite({ definitions: [definition], rules, storage: { kind: "sqlite", path } });
+const create = (path: string, rules: readonly GraphRule[] = []) => createLegacyStagedWrite({ definitions: [definition], rules, storage: { kind: "sqlite", path } });
 function file(t: { after(fn: () => void): void }) { const dir = mkdtempSync(join(tmpdir(), "stagedwrite-storage-")); t.after(() => rmSync(dir, { recursive: true, force: true })); return join(dir, "drafts.sqlite"); }
 const api = new URL("../src/index.js", import.meta.url).href;
 function child(path: string, code: string) {
-  return spawnSync(process.execPath, ["--input-type=module", "-e", `import { createStagedWrite } from ${JSON.stringify(api)}; const engine = createStagedWrite({definitions:[${JSON.stringify(definition)}],storage:{kind:'sqlite',path:${JSON.stringify(path)}}}); ${code}`], { encoding: "utf8" });
+  return spawnSync(process.execPath, ["--input-type=module", "-e", `import { createLegacyStagedWrite } from ${JSON.stringify(api)}; const engine = createLegacyStagedWrite({definitions:[${JSON.stringify(definition)}],storage:{kind:'sqlite',path:${JSON.stringify(path)}}}); ${code}`], { encoding: "utf8" });
 }
 test("SQLite restores graph fields, edges, tombstones and current checks across processes", t => {
   const path = file(t); const engine = create(path); const draft = engine.create(selector);
@@ -59,14 +59,14 @@ test("check epochs prevent an older same-version preflight from overwriting a ne
 test("definition identity persists and rule changes invalidate restored checks", t => {
   const path = file(t); const first = create(path); const d = first.create(selector); const check = first.preflight(d.id); first.close();
   const changed = structuredClone(definition); changed.nodeTypes.item.requiredAtPublish = [];
-  assert.throws(() => createStagedWrite({ definitions: [changed], storage: { kind: "sqlite", path } }), /STORED_DEFINITION_CONFLICT/);
+  assert.throws(() => createLegacyStagedWrite({ definitions: [changed], storage: { kind: "sqlite", path } }), /STORED_DEFINITION_CONFLICT/);
   const other = create(path, [{ ...selector, id: "new-rule", version: "1", check: () => [] }]); t.after(() => other.close());
   assert.throws(() => other.getCheck(d.id, check.checkId), /CHECK_NOT_CURRENT/);
   assert.equal(other.preflight(d.id).scope, "draft");
 });
 test("process exit inside preflight leaves the old check invalidated and the graph readable", t => {
   const path = file(t); const engine = create(path); const d = engine.create(selector); const check = engine.preflight(d.id); engine.close();
-  const crash = spawnSync(process.execPath, ["--input-type=module", "-e", `import {createStagedWrite} from ${JSON.stringify(api)}; const e=createStagedWrite({definitions:[${JSON.stringify(definition)}],storage:{kind:'sqlite',path:${JSON.stringify(path)}},rules:[{type:'stored',typeVersion:'1',id:'exit',version:'1',check:()=>process.exit(17)}]});e.preflight('${d.id}');`], { encoding: "utf8" });
+  const crash = spawnSync(process.execPath, ["--input-type=module", "-e", `import {createLegacyStagedWrite} from ${JSON.stringify(api)}; const e=createLegacyStagedWrite({definitions:[${JSON.stringify(definition)}],storage:{kind:'sqlite',path:${JSON.stringify(path)}},rules:[{type:'stored',typeVersion:'1',id:'exit',version:'1',check:()=>process.exit(17)}]});e.preflight('${d.id}');`], { encoding: "utf8" });
   assert.equal(crash.status, 17, crash.stderr);
   const restored = create(path); t.after(() => restored.close());
   assert.deepEqual(restored.getDraft(d.id), d);
@@ -76,7 +76,7 @@ test("process exit inside preflight leaves the old check invalidated and the gra
 test("draft SQLite mode has no publishing capability and invalid storage is rejected", t => {
   const path = file(t); const engine = create(path); assert.equal("publish" in engine, false); engine.close();
   assert.throws(() => engine.listDraftIds(), /STORE_CLOSED/);
-  assert.throws(() => createStagedWrite({ definitions: [], storage: { kind: "invalid", path } } as unknown as DraftOptions), /INVALID_STORAGE/);
+  assert.throws(() => createLegacyStagedWrite({ definitions: [], storage: { kind: "invalid", path } } as unknown as DraftOptions), /INVALID_STORAGE/);
 });
 
 

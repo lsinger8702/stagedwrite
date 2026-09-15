@@ -1,6 +1,6 @@
 # 0.1.0 核心 MVP
 
-**置顶约束：遵循 [项目原则](design/000-project-principles.md)；原则冲突必须先与项目所有者讨论并取得明确同意。publish/resume 本轮多 Run 接口已实现供评阅，长期扩展仍有未决项，详见 [006](design/006-graph-execution.md)。旧阶段完成记录不代表新目标已完成。**
+**当前默认 API 已切换到 [018 生命周期协议](design/018-draft-lifecycle-proposal.md)，[000 原则](design/000-project-principles.md) 优先，原则冲突先讨论。下文保留旧原型阶段的结构与任务记录，不表示旧多 Run、reset 或恢复语义适用于新协议。**
 
 状态：计划。当前 package.json 的 0.0.1 是探索原型，不代表本页已实现。
 

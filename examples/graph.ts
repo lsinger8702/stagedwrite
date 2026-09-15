@@ -1,4 +1,4 @@
-import { createStagedWrite, defineDraftType } from "../src/index.js";
+import { createLegacyStagedWrite, defineDraftType } from "../src/index.js";
 import type { GraphOp } from "../src/index.js";
 
 const definition = defineDraftType({
@@ -9,7 +9,7 @@ const definition = defineDraftType({
   },
   relationTypes: { uses: { from: ["project"], to: ["document"] } }
 });
-const engine = createStagedWrite({ definitions: [definition] });
+const engine = createLegacyStagedWrite({ definitions: [definition] });
 const draft = engine.create({ type: definition.id, typeVersion: definition.version });
 const ops: GraphOp[] = [
   { op: "node.add", id: "project-a", nodeType: "project" },

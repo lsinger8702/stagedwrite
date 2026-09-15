@@ -128,7 +128,7 @@ test("planning is pure and rejects unsupported field intent", () => {
 });
 
 test("proven limiter refusal actually retries through graph publish and resume", async () => {
-  const { createStagedWrite, defineDraftType } = await import("../src/index.js");
+  const { createLegacyStagedWrite, defineDraftType } = await import("../src/index.js");
   let posts = 0, searches = 0;
   const keys: string[] = [];
   const adapter = makeAdapter({ secretKey, transport: async (_url, init) => {
@@ -142,7 +142,7 @@ test("proven limiter refusal actually retries through graph publish and resume",
     valueSchema: { type: "object", properties: { description: { type: "string" } }, additionalProperties: false }, requiredAtPublish: ["description"]
   } }, relationTypes: {} });
   const selector = { type: definition.id, typeVersion: definition.version };
-  const engine = createStagedWrite({ definitions: [definition], mode: "executable", executors: [adapter.graphExecutor(selector)] });
+  const engine = createLegacyStagedWrite({ definitions: [definition], mode: "executable", executors: [adapter.graphExecutor(selector)] });
   let draft = engine.create(selector);
   draft = engine.edit(draft.id, 0, [{ op: "node.add", id: "customer", nodeType: "customer" }, { op: "set", nodeId: "customer", path: "/description", value: "fixture" }]);
   const run = await engine.publish(draft.id, engine.preflight(draft.id).certificate!);

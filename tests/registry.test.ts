@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash } from "node:crypto";
-import { createStagedWrite, defineDraftType, DefinitionAssemblyError } from "../src/index.js";
+import { createLegacyStagedWrite, defineDraftType, DefinitionAssemblyError } from "../src/index.js";
 import type { DefinitionIssue } from "../src/index.js";
 import { canonicalJson, definitionDigest } from "../src/registry/json.js";
 
@@ -24,7 +24,7 @@ function definition(version = "1") {
 }
 const selector = { type: "example.project", typeVersion: "1" };
 function issues(...definitions: unknown[]): readonly DefinitionIssue[] {
-  try { createStagedWrite({ definitions }); }
+  try { createLegacyStagedWrite({ definitions }); }
   catch (error) { assert.ok(error instanceof DefinitionAssemblyError); return error.issues; }
   assert.fail("Expected atomic assembly failure");
 }
@@ -39,8 +39,8 @@ function withField(field: unknown, defs: unknown = {}) {
 test("helper and ordinary JSON have the same identity; duplicate definitions deduplicate", () => {
   const helper = defineDraftType(definition());
   const json = JSON.parse(JSON.stringify(helper));
-  const engine = createStagedWrite({ definitions: [helper, json] });
-  assert.equal(engine.getDefinition(selector).digest, createStagedWrite({ definitions: [json] }).getDefinition(selector).digest);
+  const engine = createLegacyStagedWrite({ definitions: [helper, json] });
+  assert.equal(engine.getDefinition(selector).digest, createLegacyStagedWrite({ definitions: [json] }).getDefinition(selector).digest);
   const draft = engine.create(selector);
   assert.equal(draft.version, 0);
   assert.equal(draft.typeVersion, "1");
@@ -56,10 +56,10 @@ test("helper and ordinary JSON have the same identity; duplicate definitions ded
 
 test("input, returned snapshots and separate registries cannot mutate an assembled definition", () => {
   const input = definition();
-  const engine = createStagedWrite({ definitions: [input] });
+  const engine = createLegacyStagedWrite({ definitions: [input] });
   const original = engine.getDefinition(selector);
   input.nodeTypes.project.valueSchema.$defs.quantity.minimum = 10;
-  const other = createStagedWrite({ definitions: [input] });
+  const other = createLegacyStagedWrite({ definitions: [input] });
   const returned = engine.getDefinition(selector);
   (returned.definition as ReturnType<typeof definition>).nodeTypes.project.valueSchema.$defs.quantity.minimum = 999;
   const draft = engine.create(selector);
@@ -76,7 +76,7 @@ test("input, returned snapshots and separate registries cannot mutate an assembl
 test("versions are exact and explicit; drafts retain the selected version and digest", () => {
   const v2 = definition("2");
   v2.nodeTypes.project.valueSchema.$defs.quantity.minimum = 20;
-  const engine = createStagedWrite({ definitions: [definition(), v2] });
+  const engine = createLegacyStagedWrite({ definitions: [definition(), v2] });
   const one = engine.create(selector);
   const two = engine.create({ ...selector, typeVersion: "2" });
   assert.notEqual(one.id, two.id);
@@ -100,11 +100,11 @@ test("assembly reports independent problems across definitions in stable order",
   const conflict = definition();
   conflict.nodeTypes.project.valueSchema.$defs.quantity.minimum = 9;
   assert.equal(issues(definition(), conflict)[0]?.code, "DEFINITION_CONFLICT");
-  assert.equal(createStagedWrite({ definitions: [definition()] }).create(selector).version, 0);
+  assert.equal(createLegacyStagedWrite({ definitions: [definition()] }).create(selector).version, 0);
 });
 
 test("shared references compile constraints without coercion, defaults or deletion", () => {
-  const engine = createStagedWrite({ definitions: [definition()] });
+  const engine = createLegacyStagedWrite({ definitions: [definition()] });
   for (const field of ["capacity", "limit"]) {
     assert.equal(engine.validateValues(selector, "project", { [field]: 0 }).valid, true);
     for (const value of [-1, "2", null]) assert.equal(engine.validateValues(selector, "project", { [field]: value }).valid, false);
@@ -122,7 +122,7 @@ test("acyclic chains, escaped names and per-document definitions resolve indepen
   const first = withField({ $ref: "#/$defs/alias" }, defs);
   const secondSchema = { type: "object", properties: { value: { $ref: "#/$defs/alias" } }, $defs: { alias: { type: "string" } }, additionalProperties: false };
   const input = { ...first, nodeTypes: { ...first.nodeTypes, other: { valueSchema: secondSchema } } };
-  const engine = createStagedWrite({ definitions: [input] });
+  const engine = createLegacyStagedWrite({ definitions: [input] });
   assert.equal(engine.validateValues(selector, "project", { value: 3 }).valid, true);
   assert.equal(engine.validateValues(selector, "project", { value: 2 }).valid, false);
   assert.equal(engine.validateValues(selector, "other", { value: "text" }).valid, true);
@@ -168,7 +168,7 @@ test("profile rejects unsupported and malformed features, including unused defs"
 });
 
 test("nullable scalar constraints and Unicode string length follow JSON Schema", () => {
-  const engine = createStagedWrite({ definitions: [withField({ type: ["string", "null"], minLength: 1, maxLength: 1, enum: [null, "😀"] })] });
+  const engine = createLegacyStagedWrite({ definitions: [withField({ type: ["string", "null"], minLength: 1, maxLength: 1, enum: [null, "😀"] })] });
   for (const value of [null, "😀"]) assert.equal(engine.validateValues(selector, "project", { value }).valid, true);
   for (const value of ["", "xx", 1]) assert.equal(engine.validateValues(selector, "project", { value }).valid, false);
 });
@@ -183,7 +183,7 @@ test("JSON input rejects dangerous keys, cycles and values JSON.stringify would 
   ]) assert.ok(issues(raw).some(e => e.code === "INVALID_DEFINITION"));
   assert.equal(getterCalls, 0);
   assert.equal(Object.hasOwn(Object.prototype, "polluted"), false);
-  const engine = createStagedWrite({ definitions: [definition()] });
+  const engine = createLegacyStagedWrite({ definitions: [definition()] });
   assert.equal(engine.validateValues(selector, "project", { capacity: Infinity }).valid, false);
 });
 
@@ -202,7 +202,7 @@ test("key ordering is irrelevant but unused defs and scalar changes alter defini
     if (value !== null && typeof value === "object") return Object.fromEntries(Object.entries(value).reverse().map(([k, v]) => [k, reversed(v)]));
     return value;
   }
-  const digest = (d: unknown) => createStagedWrite({ definitions: [d] }).getDefinition(selector).digest;
+  const digest = (d: unknown) => createLegacyStagedWrite({ definitions: [d] }).getDefinition(selector).digest;
   assert.equal(digest(original), digest(reversed(original)));
   const updated = definition(); updated.nodeTypes.project.valueSchema.$defs.quantity.minimum = 1;
   assert.notEqual(digest(original), digest(updated));

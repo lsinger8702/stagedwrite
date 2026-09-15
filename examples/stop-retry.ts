@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createStagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite } from "../src/index.js";
 import type { GraphExecutor } from "../src/index.js";
 const selector = { type: "example.stop", typeVersion: "1" };
 let limited = true, calls = 0;
@@ -8,7 +8,7 @@ const executor: GraphExecutor = { ...selector, id: "example.stop", version: "1",
   apply: async () => { calls++; return limited ? { kind: "not_applied", retryable: true, reason: "Synthetic quota exhausted" } : { kind: "applied", remoteRef: "remote-object" }; },
   reconcile: { unsupported: "Offline example" }
 };
-const engine = createStagedWrite({ definitions: [{ id: selector.type, version: "1", nodeTypes: { item: {
+const engine = createLegacyStagedWrite({ definitions: [{ id: selector.type, version: "1", nodeTypes: { item: {
   valueSchema: { type: "object", properties: {}, additionalProperties: false } } }, relationTypes: {} }], mode: "executable", executors: [executor] });
 const draft = engine.create(selector);
 engine.edit(draft.id, 0, [{ op: "node.add", id: "one", nodeType: "item" }]);

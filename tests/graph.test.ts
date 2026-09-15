@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createStagedWrite, defineDraftType, GraphEditError } from "../src/index.js";
+import { createLegacyStagedWrite, defineDraftType, GraphEditError } from "../src/index.js";
 import type { GraphOp } from "../src/index.js";
 
 function setup() {
@@ -18,7 +18,7 @@ function setup() {
     },
     relationTypes: { uses: { from: ["project"], to: ["document"] } }
   });
-  const engine = createStagedWrite({ definitions: [definition] });
+  const engine = createLegacyStagedWrite({ definitions: [definition] });
   const draft = engine.create({ type: definition.id, typeVersion: definition.version });
   return { engine, draft };
 }

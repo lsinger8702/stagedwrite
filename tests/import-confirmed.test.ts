@@ -4,13 +4,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { createStagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite } from "../src/index.js";
 import type { GraphDraft, GraphExecutor, ImportConfirmedRequest, Run, Step } from "../src/index.js";
 const selector = { type: "imports", typeVersion: "1" };
 const definition = { id: selector.type, version: "1", nodeTypes: { item: { valueSchema: { type: "object", properties: { name: { type: "string" } }, additionalProperties: false } } }, relationTypes: { uses: { from: ["item"], to: ["item"] } } };
 function plan(d: GraphDraft): Step[] { return Object.values(d.nodes).map(n => ({ id: n.id, payload: { name: n.fields.name?.kind === "value" ? n.fields.name.value : n.id }, effect: { kind: "create", nodeId: n.id }, ...(n.id !== "project" ? { dependsOn: ["project"], inputRefs: { projectId: "project" } } : {}) })); }
 function open(path?: string, overrides: Partial<GraphExecutor> = {}) {
-  return createStagedWrite({ definitions: [definition], mode: "executable", ...(path ? { storage: { kind: "sqlite" as const, path } } : {}), executors: [{ ...selector, id: "mock", version: "1", target: "mock:local", plan,
+  return createLegacyStagedWrite({ definitions: [definition], mode: "executable", ...(path ? { storage: { kind: "sqlite" as const, path } } : {}), executors: [{ ...selector, id: "mock", version: "1", target: "mock:local", plan,
     apply: async s => s.id === "uncertain" ? { kind: "unknown", reason: "lost" } : { kind: "applied", remoteRef: `remote-${s.id}` }, reconcile: { unsupported: "fixture" }, ...overrides }] });
 }
 const request = (run: Run, requestId = "import-1"): ImportConfirmedRequest => ({ requestId, expectedSequence: run.events.length, actor: "operator", evidence: "receipt-ledger", purpose: "Independent follow-up task", independentWork: true });

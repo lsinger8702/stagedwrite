@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createStagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite } from "../src/index.js";
 import type { GraphDraft, GraphExecutor, Step, ApplyOutcome } from "../src/index.js";
 const selector = { type: "continue", typeVersion: "1" };
 const definition = { id: "continue", version: "1", nodeTypes: { item: { valueSchema: { type: "object", properties: { name: { type: "string" } }, additionalProperties: false }, requiredAtPublish: ["name"] } }, relationTypes: {} };
@@ -9,7 +9,7 @@ const plan = (d: GraphDraft): Step[] => Object.values(d.nodes).map(n => ({ id: n
   ...(n.id === "child" ? { dependsOn: ["parent"], inputRefs: { parentId: "parent" } } : {}) }));
 function setup(overrides: Partial<GraphExecutor> = {}) {
   const calls: { id: string; key: string }[] = [];
-  const engine = createStagedWrite({ definitions: [definition], mode: "executable", executors: [{ ...selector,
+  const engine = createLegacyStagedWrite({ definitions: [definition], mode: "executable", executors: [{ ...selector,
     id: "create", version: "1", target: "mock", plan,
     apply: async (s, key): Promise<ApplyOutcome> => { calls.push({ id: s.id, key });
       if (s.id === "child") { assert.equal(s.payload.parentId, "remote-parent"); if (s.payload.name === "bad") return { kind: "not_applied", reason: "bad child" }; }

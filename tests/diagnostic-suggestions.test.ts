@@ -3,14 +3,14 @@ import test from "node:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createStagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite } from "../src/index.js";
 import type { GraphDiagnostic, GraphRule } from "../src/index.js";
 import { definition, selector, initial, rules, chosen } from "../examples/fixtures/project-tasks.js";
 
 for (const durable of [false, true]) test(`optional candidates and repairs survive snapshots; never auto-apply (${durable ? "sqlite" : "memory"})`, t => {
   const dir = mkdtempSync(join(tmpdir(), "stagedwrite-suggestions-"));
   const storage = durable ? { kind: "sqlite" as const, path: join(dir, "drafts.sqlite") } : undefined;
-  let engine = createStagedWrite({ definitions: [definition], rules, storage });
+  let engine = createLegacyStagedWrite({ definitions: [definition], rules, storage });
   t.after(() => { engine.close(); rmSync(dir, { recursive: true, force: true }); });
   const draft = engine.create(selector, initial);
   const check = engine.preflight(draft.id);
@@ -24,7 +24,7 @@ for (const durable of [false, true]) test(`optional candidates and repairs survi
   assert.deepEqual(owner.constraintIds, ["demo-current-period-availability"]);
   assert.equal(owner.excludedCandidates![0]!.value, "zhou");
   assert.equal("repairOps" in owner.excludedCandidates![0]!, false);
-  if (durable) { engine.close(); engine = createStagedWrite({ definitions: [definition], rules, storage }); }
+  if (durable) { engine.close(); engine = createLegacyStagedWrite({ definitions: [definition], rules, storage }); }
   assert.deepEqual(engine.getCheck(draft.id), check);
   // Selecting one repair really uses ordinary edit, without implicitly accepting other alternatives.
   const ops = owner.candidates![0]!.repairOps!;
@@ -39,7 +39,7 @@ for (const durable of [false, true]) test(`optional candidates and repairs survi
 const minimal = { code: "test.issue", path: "/nodes/task-1/fields/owner", message: "An owner decision is needed." };
 function checkWith(output: unknown) {
   const rule: GraphRule = { ...selector, id: "test.optional", version: "1", check: (() => output) as GraphRule["check"] };
-  const engine = createStagedWrite({ definitions: [definition], rules: [rule] });
+  const engine = createLegacyStagedWrite({ definitions: [definition], rules: [rule] });
   const draft = engine.create(selector, initial);
   try { const result = engine.preflight(draft.id); assert.deepEqual(engine.getDraft(draft.id), draft); return result; }
   finally { engine.close(); }
@@ -82,7 +82,7 @@ test("malformed optional data or inapplicable repair batches fail the whole rule
 });
 
 test("returned optional nested data cannot mutate cached checks", () => {
-  const engine = createStagedWrite({ definitions: [definition], rules });
+  const engine = createLegacyStagedWrite({ definitions: [definition], rules });
   try {
     const draft = engine.create(selector, initial); const check = engine.preflight(draft.id);
     const copy = structuredClone(check);

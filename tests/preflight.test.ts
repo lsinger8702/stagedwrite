@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createStagedWrite, defineDraftType } from "../src/index.js";
+import { createLegacyStagedWrite, defineDraftType } from "../src/index.js";
 import type { GraphRule, GraphDiagnostic, DraftEngine } from "../src/index.js";
 
 const definition = defineDraftType({
@@ -13,7 +13,7 @@ const definition = defineDraftType({
 const selector = { type: definition.id, typeVersion: definition.version };
 function rule(check: GraphRule["check"], version = "1"): GraphRule { return { ...selector, id: "capacity-policy", version, check }; }
 function setup(rules: GraphRule[] = []) {
-  const engine = createStagedWrite({ definitions: [definition], rules });
+  const engine = createLegacyStagedWrite({ definitions: [definition], rules });
   const draft = engine.create(selector);
   return { engine, draft };
 }
@@ -160,7 +160,7 @@ test("bindings are frozen, versioned and restricted to their definition", () => 
   const other = setup([rule(() => [], "2")]); fill(other.engine, other.draft.id);
   assert.notEqual(other.engine.preflight(other.draft.id).rulesDigest, original.rulesDigest);
   const alternate = { ...definition, version: "2" };
-  const isolated = createStagedWrite({ definitions: [definition, alternate], rules: [rule(() => { throw new Error("wrong version"); })] });
+  const isolated = createLegacyStagedWrite({ definitions: [definition, alternate], rules: [rule(() => { throw new Error("wrong version"); })] });
   const v2 = isolated.create({ ...selector, typeVersion: "2" }); fill(isolated, v2.id);
   assert.equal(isolated.preflight(v2.id).status, "passed");
   assert.throws(() => setup([rule(() => []), rule(() => [], "2")]), /RULE_CONFLICT/);
@@ -172,7 +172,7 @@ test("same-draft callback reentry is blocked and the check lock is always releas
   let engine!: DraftEngine;
   let draftId = "";
   let action: "edit" | "preflight" | "none" = "edit";
-  engine = createStagedWrite({ definitions: [definition], rules: [rule(() => {
+  engine = createLegacyStagedWrite({ definitions: [definition], rules: [rule(() => {
     if (action === "edit") engine.edit(draftId, 1, [{ op: "reset", nodeId: "c/1", path: "/note" }]);
     if (action === "preflight") engine.preflight(draftId);
     return [];
@@ -194,7 +194,7 @@ test("a graph relationship diagnostic leaves node and edge choices to the caller
     code: "graph.related", path: "/edges", message: "Project c/1 has no related project.",
     hint: "Connect another project or create one according to user intent.", related: ["/nodes/c~11"]
   }]);
-  const engine = createStagedWrite({ definitions: [graphDefinition], rules: [graphRule] });
+  const engine = createLegacyStagedWrite({ definitions: [graphDefinition], rules: [graphRule] });
   const draft = engine.create(selector); fill(engine, draft.id);
   const check = engine.preflight(draft.id);
   assert.equal(check.status, "blocked");
@@ -255,7 +255,7 @@ test("preview includes undeclared optional escaped field names, graph edges and 
   const special = defineDraftType({ id: "escaped", version: "1", nodeTypes: { item: {
     valueSchema: { type: "object", properties: { "a/b~c": { type: "string" } }, additionalProperties: false }
   } }, relationTypes: { uses: { from: ["item"], to: ["item"] } } });
-  const engine = createStagedWrite({ definitions: [special] });
+  const engine = createLegacyStagedWrite({ definitions: [special] });
   const draft = engine.create({ type: "escaped", typeVersion: "1" });
   engine.edit(draft.id, 0, [
     { op: "node.add", id: "a", nodeType: "item" }, { op: "node.add", id: "b", nodeType: "item" },

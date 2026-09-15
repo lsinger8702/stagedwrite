@@ -1,3 +1,37 @@
+# Roadmap
+
+**遵循 [000 原则](design/000-project-principles.md)；原则冲突先讨论。当前协议及部署边界见 [018](design/018-draft-lifecycle-proposal.md)。**
+
+## 当前交付：首次创建与修复闭环
+
+- [x] 非空初始意图、普通 Graph + fieldIntents、固定 initialSnapshot、reset 恢复基线。
+- [x] currentRunId 原子认领；重复 publish 观察，同 Draft 不开第二个首次 Run。
+- [x] 丰富诊断与 preview、异步 pending、edit 后同 Run resume。
+- [x] 冻结 Artifact、逐节点 Binding、原请求账本、成功节点和拓扑保护。
+- [x] 外部锁/Store 端口；内存与 SQLite 配对实现、跨进程互斥和退出恢复测试。
+- [x] 默认新协议、显式 legacy 兼容入口，真实 HTML/JSON 输入输出。
+
+## 下一步：验证接入边界
+
+- [ ] 为管理协议接入一个实际远端 adapter，做请求映射与服务端幂等/查证契约测试和受控联调。
+- [ ] 一套跨主机共享 Store + LeaseProvider；真实共享服务、失锁、重启和网络分区集成验证。
+- [ ] 按实际使用需求设计旧数据迁移、人工处置、停止与证据保留；不盲目复制旧接口。
+- [ ] 开放外部试用，确认 API 后发布可安装版本。
+
+## 后续能力：每项先定协议再实现
+
+1. 固定节点集合的远端字段 update：同一 Draft、成功基线与 Binding，确定新 Run 的认领/切换协议。
+2. 增删子树与多效果：将部分成功、未知请求、资源所有权和删除补偿纳入计划，防止重复创建。
+3. 远端 read/归一化和 drift：区分用户意图差异与外部变化，再决定冲突处理。
+4. Saga rollback 与显式放弃；不把解锁当成资源删除或新创建资格。
+5. 字段消费/清空契约、可选推导层、历史审计，依据实际需求决定。
+
+未来方向不是预先批准所有接口。尤其“更新失败后一律新 Run”仍未定稿。
+
+## 历史阶段记录（旧协议）
+
+下面的完成标记是旧原型证据，不代表管理协议支持旧接口，也不覆盖上方 Roadmap。
+
 # 开发任务与进度
 
 **置顶约束：遵循 [项目原则](design/000-project-principles.md)；原则冲突必须先与项目所有者讨论并取得明确同意。publish/resume 本轮多 Run 接口已实现供评阅，长期扩展仍有未决项，详见 [006](design/006-graph-execution.md)。旧阶段完成记录不代表新目标已完成。**

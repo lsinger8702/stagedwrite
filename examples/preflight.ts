@@ -1,4 +1,4 @@
-import { createStagedWrite, defineDraftType } from "../src/index.js";
+import { createLegacyStagedWrite, defineDraftType } from "../src/index.js";
 import type { GraphRule } from "../src/index.js";
 
 const definition = defineDraftType({
@@ -18,7 +18,7 @@ const capacityRule: GraphRule = {
     }] : [];
   }
 };
-const engine = createStagedWrite({ definitions: [definition], rules: [capacityRule] });
+const engine = createLegacyStagedWrite({ definitions: [definition], rules: [capacityRule] });
 let draft = engine.create({ type: definition.id, typeVersion: definition.version });
 draft = engine.edit(draft.id, 0, [{ op: "node.add", id: "project", nodeType: "project" }]);
 console.log("1. Missing intent:", engine.preflight(draft.id).diagnostics);

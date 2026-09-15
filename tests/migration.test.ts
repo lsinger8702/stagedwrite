@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir, hostname } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { createStagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite } from "../src/index.js";
 import type { GraphExecutor } from "../src/index.js";
 const selector = { type: "migration", typeVersion: "1" };
 const definition = { id: selector.type, version: "1", nodeTypes: { item: { valueSchema: { type: "object", properties: {}, additionalProperties: false } } }, relationTypes: {} };
@@ -12,7 +12,7 @@ const executor: GraphExecutor = { ...selector, id: "fixture", version: "1", targ
 function file(t: { after(fn: () => void): void }) { const dir = mkdtempSync(join(tmpdir(), "sw-migrate-")); t.after(() => rmSync(dir, { recursive: true, force: true })); return join(dir, "data.sqlite"); }
 for (const version of [2, 3, 4]) test(`real schema ${version} layout upgrades with sealed plans and run evidence intact`, async t => {
   const path = file(t);
-  const memory = createStagedWrite({ definitions: [definition], mode: "executable", executors: [executor] });
+  const memory = createLegacyStagedWrite({ definitions: [definition], mode: "executable", executors: [executor] });
   const d = memory.create(selector); const draft = memory.edit(d.id, 0, [{ op: "node.add", id: "one", nodeType: "item" }]);
   const check = memory.preflight(d.id); const run = await memory.publish(d.id, check.certificate!); memory.close();
   const db = new DatabaseSync(path);
@@ -34,7 +34,7 @@ for (const version of [2, 3, 4]) test(`real schema ${version} layout upgrades wi
   }
   if (version === 4) db.exec("CREATE TABLE sw_imports (source_run TEXT NOT NULL, request_id TEXT NOT NULL, command TEXT NOT NULL, draft_id TEXT NOT NULL UNIQUE, PRIMARY KEY(source_run, request_id)) STRICT;");
   db.close();
-  const next = createStagedWrite({ definitions: [definition], mode: "executable", executors: [executor], storage: { kind: "sqlite", path } });
+  const next = createLegacyStagedWrite({ definitions: [definition], mode: "executable", executors: [executor], storage: { kind: "sqlite", path } });
   assert.deepEqual(next.getDraft(d.id), draft); assert.deepEqual(next.getRun(run.id), run);
   assert.deepEqual(await next.publish(d.id, check.certificate!, { runId: run.id }), run);
   assert.throws(() => next.edit(d.id, draft.version, [{ op: "node.remove", id: "one" }]), /REPAIR_TOPOLOGY_CHANGED/);
@@ -52,6 +52,6 @@ for (const version of [2, 3, 4]) test(`real schema ${version} layout upgrades wi
 test("missing historical columns reject startup without advancing the schema version", t => {
   const path = file(t); const db = new DatabaseSync(path);
   db.exec("CREATE TABLE sw_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT; INSERT INTO sw_meta VALUES ('schema','1'); CREATE TABLE sw_drafts (id TEXT PRIMARY KEY, version INTEGER NOT NULL, body TEXT NOT NULL) STRICT;"); db.close();
-  assert.throws(() => createStagedWrite({ definitions: [definition], storage: { kind: "sqlite", path } }), /STORAGE_SCHEMA_MISMATCH/);
+  assert.throws(() => createLegacyStagedWrite({ definitions: [definition], storage: { kind: "sqlite", path } }), /STORAGE_SCHEMA_MISMATCH/);
   const inspect = new DatabaseSync(path); assert.equal(inspect.prepare("SELECT value FROM sw_meta WHERE key='schema'").get()?.value, "1"); inspect.close();
 });

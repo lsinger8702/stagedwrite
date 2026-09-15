@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createStagedWrite, StagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite, StagedWrite } from "../src/index.js";
 import type { Adjudication, GraphExecutor, Run, ApplyOutcome, ReconcileOutcome } from "../src/index.js";
 const definition = { id: "manual", version: "1", nodeTypes: { item: { valueSchema: { type: "object", properties: {}, additionalProperties: false } } }, relationTypes: {} };
 const selector = { type: "manual", typeVersion: "1" };
 function setup(overrides: Partial<GraphExecutor> = {}) {
-  const engine = createStagedWrite({ definitions: [definition], mode: "executable", executors: [{ ...selector,
+  const engine = createLegacyStagedWrite({ definitions: [definition], mode: "executable", executors: [{ ...selector,
     id: "manual", version: "1", target: "mock", plan: () => [
       { id: "parent", payload: {} }, { id: "child", payload: {}, dependsOn: ["parent"], inputRefs: { parentId: "parent" } }
     ], apply: async (): Promise<ApplyOutcome> => ({ kind: "unknown", reason: "lost" }), reconcile: { unsupported: "No lookup API" }, ...overrides }] });

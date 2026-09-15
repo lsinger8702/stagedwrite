@@ -1,5 +1,7 @@
 # 005：Stripe 测试 Customer 实验
 
+**历史协议/阶段设计：当前默认 API 的 Draft、reset、发布归属与租约以 [018](018-draft-lifecycle-proposal.md) 和 [000 原则](000-project-principles.md) 为准。下文旧接口与阶段测试保留历史语境，不表示已移植到新协议。**
+
 **设计约束：遵循 [000 项目原则](000-project-principles.md)；原则冲突须先与项目所有者讨论并取得明确同意。本文中的阶段实现记录不覆盖主线，publish/resume 目标及当前差异以 [006](006-graph-execution.md) 为准。**
 
 状态：版本 2 已接图执行入口，12 项离线 HTTP 契约测试完成；真实 Stripe 账号联调未运行（当前环境未配置 STRIPE_SECRET_KEY）。2026-09-12。

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createStagedWrite, defineDraftType, StagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite, defineDraftType, StagedWrite } from "../src/index.js";
 import type { GraphExecutor, Step, ApplyOutcome } from "../src/index.js";
 const definition = defineDraftType({ id: "example.executable", version: "1", nodeTypes: {
   item: { valueSchema: { type: "object", properties: { name: { type: "string" } }, additionalProperties: false }, requiredAtPublish: ["name"] }
@@ -11,7 +11,7 @@ function binding(overrides: Partial<GraphExecutor> = {}): GraphExecutor {
     apply: async () => ({ kind: "applied", remoteRef: "remote" }), reconcile: async () => ({ kind: "unknown", reason: "no evidence" }), ...overrides };
 }
 function setup(executor = binding()) {
-  const engine = createStagedWrite({ definitions: [definition], mode: "executable", executors: [executor] });
+  const engine = createLegacyStagedWrite({ definitions: [definition], mode: "executable", executors: [executor] });
   let draft = engine.create(selector);
   draft = engine.edit(draft.id, 0, [{ op: "node.add", id: "one", nodeType: "item" }, { op: "set", nodeId: "one", path: "/name", value: "first" }]);
   return { engine, draft };
@@ -49,11 +49,11 @@ test("graph unknown recovery skips earlier effects and reuses the shared state m
 });
 
 test("draft-only mode has no publish and executable assembly rejects missing capabilities", () => {
-  const draftOnly = createStagedWrite({ definitions: [definition] });
+  const draftOnly = createLegacyStagedWrite({ definitions: [definition] });
   assert.equal("publish" in draftOnly, false);
-  assert.throws(() => createStagedWrite({ definitions: [definition], mode: "executable", executors: [] }), /EXECUTOR_REQUIRED/);
+  assert.throws(() => createLegacyStagedWrite({ definitions: [definition], mode: "executable", executors: [] }), /EXECUTOR_REQUIRED/);
   assert.throws(() => setup(binding({ reconcile: undefined })), /RECOVERY_CAPABILITY_REQUIRED/);
-  assert.throws(() => createStagedWrite({ definitions: [definition], mode: "executable", executors: [binding(), binding()] }), /EXECUTOR_CONFLICT/);
+  assert.throws(() => createLegacyStagedWrite({ definitions: [definition], mode: "executable", executors: [binding(), binding()] }), /EXECUTOR_CONFLICT/);
   assert.throws(() => setup(binding({ typeVersion: "missing" })), /TYPE_VERSION_NOT_FOUND/);
   assert.throws(() => setup(binding({ apply: undefined })), /INVALID_EXECUTOR/);
 });
@@ -208,7 +208,7 @@ test("revision rejects uncertain, retryable, successful and partially applied ru
 
 test("warning diagnostics retain draft context and do not prevent execution planning", () => {
   let plans = 0, calls = 0;
-  const engine = createStagedWrite({ definitions: [definition], mode: "executable", executors: [binding({
+  const engine = createLegacyStagedWrite({ definitions: [definition], mode: "executable", executors: [binding({
     plan: () => { plans++; return [{ id: "one", payload: {} }]; },
     apply: async () => { calls++; return { kind: "applied", remoteRef: "one" }; }
   })], rules: [{ ...selector, id: "advisory", version: "1", check: () => [{

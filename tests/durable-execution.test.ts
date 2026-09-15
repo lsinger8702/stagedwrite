@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
-import { createStagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite } from "../src/index.js";
 import type { GraphExecutor, ApplyOutcome } from "../src/index.js";
 const definition = { id: "durable", version: "1", nodeTypes: { item: { valueSchema: { type: "object", properties: {}, additionalProperties: false } } }, relationTypes: {} };
 const selector = { type: "durable", typeVersion: "1" };
@@ -14,7 +14,7 @@ function open(path: string, overrides: Partial<GraphExecutor> = {}) {
   const binding: GraphExecutor = { ...selector, id: "mock", version: "1", target: "mock:local",
     plan: () => [{ id: "a", payload: {}, effect: { kind: "create", nodeId: "a" } }, { id: "b", payload: {}, effect: { kind: "create", nodeId: "b" }, dependsOn: ["a"], inputRefs: { aId: "a" } }],
     apply: async s => ({ kind: "applied", remoteRef: s.id }), reconcile: { unsupported: "fixture" }, ...overrides };
-  return createStagedWrite({ definitions: [definition], mode: "executable", executors: [binding], storage: { kind: "sqlite", path }, clock: () => 0 });
+  return createLegacyStagedWrite({ definitions: [definition], mode: "executable", executors: [binding], storage: { kind: "sqlite", path }, clock: () => 0 });
 }
 function ready(engine: ReturnType<typeof open>) { const d = engine.create(selector); engine.edit(d.id, 0, [
   { op: "node.add", id: "a", nodeType: "item" }, { op: "node.add", id: "b", nodeType: "item" }]); return { id: d.id, check: engine.preflight(d.id) }; }
@@ -34,7 +34,7 @@ test("durable sealing prevents a second instance and draft mode from redispatchi
   const path = file(t); let finish!: (o: ApplyOutcome) => void, calls = 0;
   const first = open(path, { apply: async s => { calls++; if (s.id === "a") return new Promise(resolve => { finish = resolve; }); return { kind: "applied", remoteRef: "b" }; } });
   const { id, check } = ready(first); const pending = first.publish(id, check.certificate!, { runId: "shared-submit" });
-  const second = open(path); const observer = createStagedWrite({ definitions: [definition], storage: { kind: "sqlite", path } });
+  const second = open(path); const observer = createLegacyStagedWrite({ definitions: [definition], storage: { kind: "sqlite", path } });
   const observed = await second.publish(id, check.certificate!, { runId: "shared-submit" });
   assert.equal(observed.steps[0]?.status, "dispatching"); assert.ok(observed.steps[0]?.resolvedPayload);
   await assert.rejects(second.resume(observed.id), /RECOVERY_REQUIRED/);
@@ -91,7 +91,7 @@ test("a failed outcome checkpoint preserves dispatch intent and never sends the 
 
 test("process exit inside an adapter leaves durable dispatch intent and a sealed draft", t => {
   const path = file(t); const api = new URL("../src/index.js", import.meta.url).href;
-  const result = spawnSync(process.execPath, ["--input-type=module", "-e", `import {createStagedWrite} from ${JSON.stringify(api)}; const e=createStagedWrite({definitions:[${JSON.stringify(definition)}],mode:'executable',storage:{kind:'sqlite',path:${JSON.stringify(path)}},executors:[{type:'durable',typeVersion:'1',id:'mock',version:'1',target:'mock:local',plan:()=>[{id:'a',payload:{value:1}}],apply:async()=>process.exit(19),reconcile:{unsupported:'fixture'}}]});const d=e.create({type:'durable',typeVersion:'1'});e.edit(d.id,0,[{op:'node.add',id:'a',nodeType:'item'}]);await e.publish(d.id,e.preflight(d.id).certificate);`], { encoding: "utf8" });
+  const result = spawnSync(process.execPath, ["--input-type=module", "-e", `import {createLegacyStagedWrite} from ${JSON.stringify(api)}; const e=createLegacyStagedWrite({definitions:[${JSON.stringify(definition)}],mode:'executable',storage:{kind:'sqlite',path:${JSON.stringify(path)}},executors:[{type:'durable',typeVersion:'1',id:'mock',version:'1',target:'mock:local',plan:()=>[{id:'a',payload:{value:1}}],apply:async()=>process.exit(19),reconcile:{unsupported:'fixture'}}]});const d=e.create({type:'durable',typeVersion:'1'});e.edit(d.id,0,[{op:'node.add',id:'a',nodeType:'item'}]);await e.publish(d.id,e.preflight(d.id).certificate);`], { encoding: "utf8" });
   assert.equal(result.status, 19, result.stderr);
   const engine = open(path); t.after(() => engine.close()); const run = engine.getRun(engine.listRunIds()[0]!);
   assert.equal(run.state, "running"); assert.equal(run.steps[0]?.status, "dispatching"); assert.deepEqual(run.steps[0]?.resolvedPayload, { value: 1 });
@@ -119,7 +119,7 @@ test("schema version one upgrades without losing draft data and future versions 
   const path = file(t); const db = new DatabaseSync(path);
   db.exec("CREATE TABLE sw_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT; INSERT INTO sw_meta VALUES ('schema','1'); CREATE TABLE sw_drafts (id TEXT PRIMARY KEY, version INTEGER NOT NULL, body TEXT NOT NULL, check_epoch INTEGER NOT NULL DEFAULT 0, check_body TEXT) STRICT;");
   // Construct the pre-M5 database layout; no run or plan tables existed in that version.
-  const memory = createStagedWrite({ definitions: [definition] }); const original = memory.create(selector); memory.close();
+  const memory = createLegacyStagedWrite({ definitions: [definition] }); const original = memory.create(selector); memory.close();
   db.prepare("INSERT INTO sw_drafts (id,version,body) VALUES (?,?,?)").run(original.id, original.version, JSON.stringify(original));
   db.close(); const engine = open(path); assert.deepEqual(engine.getDraft(original.id), original); const { id } = ready(engine); engine.close();
   const inspect = new DatabaseSync(path); assert.equal(inspect.prepare("SELECT value FROM sw_meta WHERE key='schema'").get()?.value, "5");

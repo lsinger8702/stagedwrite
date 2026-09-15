@@ -7,7 +7,7 @@ const tracePath=join(root,'docs/examples/publish-resume-trace.json');
 const raw=readFileSync(tracePath,'utf8');
 const trace=JSON.parse(raw);
 const source=p=>({path:p,text:readFileSync(join(root,p),'utf8')});
-const bundle={trace,traceSha256:createHash('sha256').update(raw).digest('hex'),sources:{fixture:source('examples/fixtures/project-tasks.ts'),example:source('examples/publish-resume.ts')}};
+const bundle={trace,traceSha256:createHash('sha256').update(raw).digest('hex'),sources:{fixture:source('examples/fixtures/project-tasks-managed.ts'),example:source('examples/publish-resume.ts')}};
 const template=readFileSync(join(root,'scripts/walkthrough-template.html'),'utf8');
 if(!template.includes('__BUNDLE__'))throw new Error('Missing data placeholder');
 const html=template.replace('__BUNDLE__',Buffer.from(JSON.stringify(bundle)).toString('base64'));

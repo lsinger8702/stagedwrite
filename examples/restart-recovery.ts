@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createStagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite } from "../src/index.js";
 import type { GraphExecutor, Step } from "../src/index.js";
 
 const childMode = process.argv[2] === "child";
@@ -28,7 +28,7 @@ const executor: GraphExecutor = { ...selector, id: "mock.restart", version: "1",
     return { kind: "applied", remoteRef: receipt.remoteRef };
   }
 };
-const open = () => createStagedWrite({ definitions: [definition], mode: "executable", storage: { kind: "sqlite", path }, executors: [executor] });
+const open = () => createLegacyStagedWrite({ definitions: [definition], mode: "executable", storage: { kind: "sqlite", path }, executors: [executor] });
 if (childMode) {
   const engine = open(), draft = engine.create(selector);
   engine.edit(draft.id, 0, [{ op: "node.add", id: "project", nodeType: "item" }]);

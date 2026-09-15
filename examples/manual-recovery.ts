@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createStagedWrite } from "../src/index.js";
+import { createLegacyStagedWrite } from "../src/index.js";
 import type { GraphExecutor } from "../src/index.js";
 
 const selector = { type: "example.manual", typeVersion: "1" };
@@ -13,7 +13,7 @@ const executor: GraphExecutor = { ...selector, id: "example.manual", version: "1
     return { kind: "applied", remoteRef: "remote-child" };
   }, reconcile: { unsupported: "This simulated service has no lookup API" }
 };
-const engine = createStagedWrite({ mode: "executable", executors: [executor], definitions: [{ id: selector.type, version: "1",
+const engine = createLegacyStagedWrite({ mode: "executable", executors: [executor], definitions: [{ id: selector.type, version: "1",
   nodeTypes: { item: { valueSchema: { type: "object", properties: {}, additionalProperties: false } } }, relationTypes: {} }] });
 const draft = engine.create(selector);
 engine.edit(draft.id, 0, [{ op: "node.add", id: "one", nodeType: "item" }]);
