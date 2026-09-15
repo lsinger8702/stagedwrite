@@ -12,6 +12,12 @@ npm run demo:html
 
 Requires Node.js 22.13+ with `node:sqlite`. Open [the actual input/output walkthrough](docs/examples/publish-resume.html). It runs the library and SQLite against a fictional remote service: three real rule failures, asynchronous pending, fixed-baseline reset, partial publication, repair, and unknown-outcome reconciliation. No HTTP or LLM calls are made.
 
+## Stripe sandbox example
+
+A real Product → two Prices integration demonstrates a remote validation refusal, explicit Draft repair, and same-Run resume. [Run the sample](examples/stripe/README.md) · [Testing scope and recorded result](docs/testing/stripe-sandbox.md). The receipt-loss scenario is fault injection after a real creation.
+
+`npm run test:stripe` runs offline regression tests with no credentials. Live requests require an explicit flag and a test key; state and raw traces stay local. [Contributing](CONTRIBUTING.md).
+
 ## Current API
 
 ```ts

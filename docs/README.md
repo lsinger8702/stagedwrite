@@ -8,4 +8,6 @@
 4. [架构与目录](architecture.md)：当前模块分工。
 5. [当前范围](mvp.md) · [Roadmap](roadmap.md) · [运行与阅读代码](implementation.zh-CN.md)。
 
+6. [Stripe 沙盒接入指南](../examples/stripe/README.md) · [真实测试记录与边界](testing/stripe-sandbox.md)。
+
 旧原型的源码与设计可从 Git 历史查阅；当前目录只保留当前实现相关文档。跨主机生产后端、update/diff/drift、rollback 尚未交付。

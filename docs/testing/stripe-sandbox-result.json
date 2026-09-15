@@ -1,0 +1,78 @@
+{
+  "formatVersion": 1,
+  "recordedAt": "2026-09-15T19:27:46.832Z",
+  "runtime": "v24.19.0",
+  "sampleSourceDigest": "5671699f7bbbef699fda7522e80bf2bf6dde87dda8aeb41eafc66ab380a91da2",
+  "scenario": "Real Stripe sandbox; injected annual receipt loss; no LLM or real payment",
+  "states": [
+    {
+      "method": "publish",
+      "state": "blocked"
+    },
+    {
+      "method": "resume",
+      "state": "unknown"
+    },
+    {
+      "method": "resume",
+      "state": "published"
+    }
+  ],
+  "http": [
+    {
+      "method": "POST",
+      "path": "/v1/products",
+      "status": 200,
+      "object": "product"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/prices",
+      "status": 400,
+      "errorType": "invalid_request_error",
+      "errorParam": "currency"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/prices",
+      "status": 200,
+      "object": "price"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/prices",
+      "status": 200,
+      "object": "price"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices",
+      "status": 200,
+      "object": "list"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products",
+      "status": 200,
+      "object": "list"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices",
+      "status": 200,
+      "object": "list"
+    }
+  ],
+  "assertions": {
+    "passed": true,
+    "products": 1,
+    "prices": 2,
+    "bindings": 3,
+    "singleRun": true,
+    "reopenedTwice": true,
+    "repeatedPublishNoRequests": true,
+    "unknownRecoveryNoPosts": true,
+    "allTestMode": true,
+    "repairedKeyChanged": true
+  }
+}
