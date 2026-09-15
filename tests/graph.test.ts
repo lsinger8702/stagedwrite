@@ -7,7 +7,9 @@ async function setup() { const engine = createStagedWrite({ definitions: [defini
 const initial: GraphOp[] = [{ op: "node.add", id: "c1", nodeType: "project" }, { op: "node.add", id: "c2", nodeType: "project" }, { op: "node.add", id: "document", nodeType: "document" }, { op: "set", nodeId: "c1", path: "/capacity", value: 10 }, { op: "edge.add", id: "e1", relationType: "uses", from: "c1", to: "document" }, { op: "edge.add", id: "e2", relationType: "uses", from: "c2", to: "document" }];
 const hasCode = (code: string) => (e: unknown) => e instanceof GraphEditError && e.code === code;
 test("graph: one batch adds shared references and projects ordinary values", async () => {
-    const { engine, draft } = await setup(), result = await engine.edit(draft.id, 0, initial);
+    const { engine, draft } = await setup(), receipt = await engine.edit(draft.id, 0, initial);
+    assert.equal(receipt.version, 1);
+    const result = await engine.getDraft(draft.id);
     assert.equal(result.version, 1);
     assert.equal(result.graph.edges.e1?.to, result.graph.edges.e2?.to);
     assert.equal(result.graph.nodes.c1?.fields.capacity, 10);
@@ -21,7 +23,9 @@ test("graph: preview does not consume state or identities and predicts the accep
     assert.deepEqual(await engine.getDraft(draft.id), draft);
     assert.deepEqual(ops, initial);
     assert.equal(preview.changes.length, initial.length);
-    const actual = await engine.edit(draft.id, 0, ops);
+    const receipt = await engine.edit(draft.id, 0, ops);
+    assert.deepEqual(receipt.changes, preview.changes);
+    const actual = await engine.getDraft(draft.id);
     assert.deepEqual(actual.graph, preview.candidate.graph);
     assert.deepEqual(actual.fieldIntents, preview.candidate.fieldIntents);
     preview.candidate.graph.nodes.c1!.fields.capacity = 999;
@@ -44,7 +48,8 @@ test("graph: deleting a shared target requires explicitly removing all incoming 
     const { engine, draft } = await setup();
     await engine.edit(draft.id, 0, initial);
     await assert.rejects(engine.edit(draft.id, 1, [{ op: "node.remove", id: "document" }, { op: "edge.remove", id: "e1" }]), hasCode("INVALID_GRAPH"));
-    const result = await engine.edit(draft.id, 1, [{ op: "node.remove", id: "document" }, { op: "edge.remove", id: "e1" }, { op: "edge.remove", id: "e2" }]);
+    await engine.edit(draft.id, 1, [{ op: "node.remove", id: "document" }, { op: "edge.remove", id: "e1" }, { op: "edge.remove", id: "e2" }]);
+    const result = await engine.getDraft(draft.id);
     assert.deepEqual(result.graph.edges, {});
     assert.equal(Object.hasOwn(result.fieldIntents, "document"), false);
     assert.deepEqual(result.tombstones, { nodes: ["document"], edges: ["e1", "e2"] });
@@ -67,7 +72,8 @@ test("graph: OP order is explicit and structural validity is checked on the fina
     const result = await engine.preview(draft.id, 0, ops);
     assert.deepEqual(result.changes[3]!.after, { kind: "value", value: -1 });
     assert.equal(result.candidate.graph.nodes.c1!.fields.capacity, 5);
-    assert.deepEqual((await engine.edit(draft.id, 0, ops)).graph, result.candidate.graph);
+    await engine.edit(draft.id, 0, ops);
+    assert.deepEqual((await engine.getDraft(draft.id)).graph, result.candidate.graph);
     await engine.close();
 });
 test("graph: clear, null and undeclared stay distinct with escaped field paths", async () => {
@@ -100,7 +106,9 @@ test("graph: nonempty no-op edits advance version without corrupting snapshots",
     const { engine, draft } = await setup();
     await engine.edit(draft.id, 0, [initial[0]!, { op: "reset", nodeId: "c1", path: "/note" }]);
     const before = await engine.getDraft(draft.id);
-    const next = await engine.edit(draft.id, 1, [{ op: "reset", nodeId: "c1", path: "/note" }]);
+    const receipt = await engine.edit(draft.id, 1, [{ op: "reset", nodeId: "c1", path: "/note" }]);
+    assert.equal(receipt.preflightRequired, true);
+    const next = await engine.getDraft(draft.id);
     assert.equal(next.version, 2);
     assert.deepEqual(next.graph, before.graph);
     next.graph.nodes.c1!.fields.note = "corruption";

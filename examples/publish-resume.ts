@@ -64,17 +64,17 @@ async function call<T>(method: string, note: string, input: unknown[], action: (
     return output;
 }
 try {
-    let draft = await call("create", "创建就有初始工作意图。Graph 为普通值，fieldIntents 保存三态，initialSnapshot 固定初始基线。", [selector, initial], () => engine.create(selector, initial));
+    let draft: { id: string; version: number } = await call("create", "创建就有初始工作意图。Graph 为普通值，fieldIntents 保存三态，initialSnapshot 固定初始基线。", [selector, initial], () => engine.create(selector, initial));
     assert.equal(draft.version, 0);
-    assert.deepEqual(draft.graph, initial);
+    assert.deepEqual((await engine.getDraft(draft.id)).graph, initial);
     const editName = (text: string): GraphOp[] => [{ op: "set", nodeId: "project-1", path: "/name", value: text }];
     for (const name of ["临时名称 A", "临时名称 B"]) {
         const ops = editName(name);
-        draft = await call("edit", "先连续修改名称，供下一步验证 reset 的固定基线。", [draft.id, draft.version, ops], () => engine.edit(draft.id, draft.version, ops));
+        draft = await call("edit", "先连续修改名称，供下一步验证 reset 的固定基线。", [draft.id, draft.version, ops], () => engine.edit(draft.id, draft.version, ops)).then(receipt => ({ id: receipt.draftId, version: receipt.version }));
     }
     const reset: GraphOp[] = [{ op: "reset", nodeId: "project-1", path: "/name" }];
-    draft = await call("edit", "reset 回到 create 时的“文档发布”，不会回到上一版的“临时名称 A”。", [draft.id, draft.version, reset], () => engine.edit(draft.id, draft.version, reset));
-    assert.equal(draft.graph.nodes["project-1"]!.fields.name, "文档发布");
+    draft = await call("edit", "reset 回到 create 时的“文档发布”，不会回到上一版的“临时名称 A”。", [draft.id, draft.version, reset], () => engine.edit(draft.id, draft.version, reset)).then(receipt => ({ id: receipt.draftId, version: receipt.version }));
+    assert.equal((await engine.getDraft(draft.id)).graph.nodes["project-1"]!.fields.name, "文档发布");
     const pending = await call("preflight", "静态规则给出 3 条具体诊断；异步检查返回 pending，无发布凭据。", [draft.id], () => engine.preflight(draft.id));
     assert.equal(pending.status, "pending");
     assert.equal(pending.diagnostics.length, 3);
@@ -83,7 +83,7 @@ try {
     const blocked = await call("preflight", "外部检查完成，仍有 3 条业务问题。完整 preview、message、候选值和 repair OP 都来自实际检查。", [draft.id], () => engine.preflight(draft.id));
     assert.equal(blocked.status, "blocked");
     assert.equal(blocked.diagnostics[1]!.repairs!.length, 2);
-    draft = await call("edit", "调用方依据用户意图选定 4 个 OP。规则建议不自动执行。", [draft.id, draft.version, chosen], () => engine.edit(draft.id, draft.version, chosen));
+    draft = await call("edit", "调用方依据用户意图选定 4 个 OP。规则建议不自动执行。", [draft.id, draft.version, chosen], () => engine.edit(draft.id, draft.version, chosen)).then(receipt => ({ id: receipt.draftId, version: receipt.version }));
     const check = await call("preflight", "检查通过，保存不可变 Artifact。执行器的 plan 将图映射成请求参数。", [draft.id], () => engine.preflight(draft.id));
     assert.equal(check.status, "passed");
     assert.ok(check.certificate);
@@ -94,7 +94,7 @@ try {
     assert.deepEqual(partial.steps.map(s => s.status), ["applied", "ready", "ready"]);
     await call("getDraft", "失败后 currentRunId 保留；pending 不意味着远端没有资源。", [draft.id], () => engine.getDraft(draft.id));
     const repair = partial.diagnostics[0]!.candidates![0]!.repairOps!;
-    draft = await call("edit", "假设用户同意改由陈接手，只修复未完成任务。成功项目不允许修改。", [draft.id, draft.version, repair], () => engine.edit(draft.id, draft.version, repair));
+    draft = await call("edit", "假设用户同意改由陈接手，只修复未完成任务。成功项目不允许修改。", [draft.id, draft.version, repair], () => engine.edit(draft.id, draft.version, repair)).then(receipt => ({ id: receipt.draftId, version: receipt.version }));
     const unknown = await call("resume", "沿用同一 Run，重新检查修复；项目跳过，任务 1 用新请求 key 创建，任务 2 模拟超时。", [partial.id], () => engine.resume(partial.id));
     assert.equal(unknown.state, "unknown");
     assert.equal(effects.size, 3);

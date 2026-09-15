@@ -20,12 +20,14 @@ test("managed: initial intent is required, plain values and fixed reset baseline
     assert.deepEqual(d.fieldIntents.a!["/note"], { kind: "set", value: null });
     let next = await e.edit(d.id, 0, [{ op: "set", nodeId: "a", path: "/name", value: "v1" }]);
     next = await e.edit(d.id, next.version, [{ op: "set", nodeId: "a", path: "/name", value: "v2" }, { op: "remove", nodeId: "a", path: "/note" }, { op: "set", nodeId: "b", path: "/note", value: "new" }]);
-    assert.equal("note" in next.graph.nodes.a!.fields, false);
-    assert.deepEqual(next.fieldIntents.a!["/note"], { kind: "remove" });
+    let stored = await e.getDraft(d.id);
+    assert.equal("note" in stored.graph.nodes.a!.fields, false);
+    assert.deepEqual(stored.fieldIntents.a!["/note"], { kind: "remove" });
     next = await e.edit(d.id, next.version, [{ op: "reset", nodeId: "a", path: "/name" }, { op: "reset", nodeId: "a", path: "/note" }, { op: "reset", nodeId: "b", path: "/note" }]);
-    assert.deepEqual(next.graph, initial());
-    assert.equal(next.fieldIntents.b!["/note"], undefined);
-    assert.deepEqual(next.initialSnapshot, d.initialSnapshot);
+    stored = await e.getDraft(d.id);
+    assert.deepEqual(stored.graph, initial());
+    assert.equal(stored.fieldIntents.b!["/note"], undefined);
+    assert.deepEqual(stored.initialSnapshot, d.initialSnapshot);
     await assert.rejects(e.create(selector, { nodes: {}, edges: {} }), /INITIAL_INTENT_REQUIRED/);
     await assert.rejects(e.edit(d.id, 0, [{ op: "remove", nodeId: "a", path: "/name" }]));
     await e.close();
@@ -381,4 +383,33 @@ test("managed: failed preflight replacement cannot revive an earlier certificate
     const next = await e.preflight(d.id);
     assert.equal((await e.publish(d.id, next.certificate!)).state, "published");
     await e.close();
+});
+
+test("managed: edit acknowledges only its batch and invalidates check without exposing storage snapshots", async () => {
+    for (const sqlite of [false, true]) {
+        const dir = mkdtempSync(join(tmpdir(), "sw-edit-receipt-"));
+        const backend = sqlite ? createSqliteBackend(join(dir, "state.sqlite")) : createMemoryBackend();
+        try {
+            const e = engine(executor(), backend);
+            const { d, c } = await ready(e);
+            const receipt = await e.edit(d.id, d.version, [{ op: "set", nodeId: "b", path: "/name", value: "Fixed" }]);
+            assert.deepEqual(Object.keys(receipt).sort(), ["changes", "draftId", "preflightRequired", "version"]);
+            assert.equal(receipt.draftId, d.id);
+            assert.equal(receipt.version, 1);
+            assert.equal(receipt.preflightRequired, true);
+            assert.deepEqual(receipt.changes, [{ opIndex: 0, target: "field", id: "b", path: "/name", before: { kind: "value", value: "Second" }, after: { kind: "value", value: "Fixed" } }]);
+            await assert.rejects(e.getCheck(d.id), /CHECK_NOT_CURRENT/);
+            await assert.rejects(e.publish(d.id, c.certificate!), /PREFLIGHT_REQUIRED/);
+            receipt.changes[0]!.after = { kind: "value", value: "tampered" };
+            const stored = await e.getDraft(d.id);
+            assert.equal(stored.graph.nodes.b!.fields.name, "Fixed");
+            assert.deepEqual(stored.initialSnapshot, d.initialSnapshot);
+            const check = await e.preflight(receipt.draftId);
+            assert.equal(check.version, receipt.version);
+            assert.equal(check.status, "passed");
+            assert.ok(check.preview);
+            assert.equal((await e.publish(d.id, check.certificate!)).state, "published");
+            await e.close();
+        } finally { rmSync(dir, { recursive: true, force: true }); }
+    }
 });

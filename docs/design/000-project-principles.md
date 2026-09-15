@@ -32,6 +32,8 @@
 
 preview 显式显示三态，响应格式与普通持久化 Graph 可不同；不能把 preview 当真实请求体。注册方负责 plan、真实请求映射和远端错误到图路径的映射。
 
+**edit 返回轻量回执：draftId、version、preflightRequired 与本批 changes；不附完整 Graph、fieldIntents、初始基线或执行归属。完整存储快照用 getDraft 查询，诊断与完整当前 preview 由 preflight 返回。**
+
 ## P4：意图与执行事实分工
 
 **Draft 保存长期身份、当前意图、固定初始基线、currentRunId 和成功产物引用；执行进度和历史请求属于 Run。currentRunId 是归属指针，不是进度、临时锁或仅供 create 使用的字段。**

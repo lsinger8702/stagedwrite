@@ -57,11 +57,11 @@ GraphCheck 始终包含 preview: GraphDraftPreview，包括 passed、blocked、p
 未声明项只是预览投影，不写回草稿；规则仍接收ManagedDraft（普通 graph + fieldIntents）。preview 不可以作为完整替换草稿提交，修改通过 OP 进行。缺节点由业务规则诊断，不凭 schema 自动创建实例。引擎不会为 preview 自动补默认值、解析远端资源或调用 LLM。
 
 ```ts
-const check = engine.preflight(draftId);
+const check = await engine.preflight(draftId);
 // Application supplies check + user intent to its LLM and receives chosen GraphOp[].
 // Use the version from that response, never silently replace it with a later version.
-const updated = engine.edit(check.draftId, check.version, chosenOps);
-const next = engine.preflight(updated.id);
+const updated = await engine.edit(check.draftId, check.version, chosenOps);
+const next = await engine.preflight(updated.draftId);
 ```
 
 `engine.preview(id,version,ops)` 是已有的 OP 预演接口；返回候选和变更，不保存。它与 `check.preview`（本次检查的当前图）用途不同。

@@ -14,7 +14,7 @@ import type { Step, ApplyOutcome, ReconcileOutcome, Event } from "../types.js";
 import type { GraphDiagnostic } from "../preflight/types.js";
 import { createMemoryBackend, lockResource } from "./storage.js";
 import { initialize, editIntent, toInternal, snapshot, same } from "./intent.js";
-import type { ManagedOptions, ManagedDraft, ManagedInitialIntent, ManagedState, ManagedRun, ManagedExecutor, ManagedCheck, Artifact, DraftLease, Attempt } from "./types.js";
+import type { ManagedOptions, ManagedEditResult, ManagedDraft, ManagedInitialIntent, ManagedState, ManagedRun, ManagedExecutor, ManagedCheck, Artifact, DraftLease, Attempt } from "./types.js";
 const key = (s: DefinitionSelector) => JSON.stringify([s.type, s.typeVersion]);
 const copy = <T>(v: T): T => structuredClone(v);
 const declaration = (s: Step): Step => ({ id: s.id, payload: s.payload, ...(s.dependsOn ? { dependsOn: s.dependsOn } : {}), ...(s.inputRefs ? { inputRefs: s.inputRefs } : {}), effect: s.effect });
@@ -401,7 +401,7 @@ export function createStagedWrite(options: ManagedOptions) {
         async getArtifact(id: string, artifactId: string) { const artifacts = (await need(id)).artifacts; const a = Object.hasOwn(artifacts, artifactId) ? artifacts[artifactId] : undefined; if (!a)
             throw new Error("ARTIFACT_NOT_FOUND"); return copy(a); },
         async preview(id: string, version: number, ops: readonly GraphOp[]) { const s = await need(id); const baseline = s.draft.publishedArtifactId ? s.artifacts[s.draft.publishedArtifactId]!.draft : s.draft.initialSnapshot; return editIntent(registry, s.draft, baseline, version, ops); },
-        async edit(id: string, version: number, ops: readonly GraphOp[]) {
+        async edit(id: string, version: number, ops: readonly GraphOp[]): Promise<ManagedEditResult> {
             return withLease(id, async (l) => {
                 let changes: ReturnType<typeof editIntent>["changes"] = [];
                 const s = await tx(id, l, current => {
@@ -414,7 +414,7 @@ export function createStagedWrite(options: ManagedOptions) {
                     current.draft = out.candidate;
                     current.check = null;
                 });
-                return { ...copy(s.draft), changes };
+                return { draftId: s.draft.id, version: s.draft.version, preflightRequired: true, changes: copy(changes) };
             });
         },
         async preflight(id: string) { open(); active++; try {

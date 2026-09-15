@@ -56,6 +56,8 @@ set 更新声明和普通值；remove 保存 remove 并移除普通值。reset �
 
 OP 继续使用 node.add/node.remove/edge.add/edge.remove/set/remove/reset，字段限注册 schema 下的顶层标量。每批按序校验、全批提交或全批拒绝。preview 返回候选，不持久化，也不等同于执行资格；实际 edit 另校验锁和修复限制。
 
+`edit` 返回 `ManagedEditResult = {draftId, version, preflightRequired: true, changes}`。这是编辑回执，不是完整 Draft 或发布凭据；完整持久化快照用 getDraft 查询。已有 Run 时仍通过 resume 续作，resume 会对修复版本重新预检。
+
 `edit.changes` 是当批变化展示，继续沿用 GraphChange 的 before/after 三态展示格式（value/clear/null），不是持久化意图格式，也不是完整历史。修复安全不依赖它，而是比较 Run 的已采用快照。失败节点多次编辑后，净差异可能为零，version 仍推进并需重新检查。
 
 ## 编译、规则和真实请求

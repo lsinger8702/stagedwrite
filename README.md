@@ -40,6 +40,7 @@ See the [complete registered schema and rules](examples/fixtures/project-tasks-m
 - `set` declares a value, `remove` explicitly clears it. `reset` restores the fixed initial intent in this version, including undeclared fields; it does not undo the last edit.
 - The first publish claims one Run atomically. Further publish calls only observe that Run; an explicitly different Run ID is rejected. Independent resource creation needs a new Draft.
 - `resume` continues the same unfinished Run, even without a process failure. Success is preserved; unknown requests use their original input/key for reconciliation. Repair edits are limited to unfinished nodes' fields.
+- `edit` returns only `{draftId, version, preflightRequired: true, changes}`. Use `getDraft` for the stored snapshot and `preflight` for the complete current preview and diagnostics. Editing an existing Run still requires `resume` to continue it.
 - Bindings are saved as individual nodes succeed. `pending` may already have remote resources; only full success marks the Draft `published`.
 - All managed APIs are asynchronous. Without executors, preflight is diagnostic-only. Without a registered backend, storage and locking are in-process memory only.
 
