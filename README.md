@@ -43,6 +43,23 @@ See the [complete registered schema and rules](examples/fixtures/project-tasks-m
 - Bindings are saved as individual nodes succeed. `pending` may already have remote resources; only full success marks the Draft `published`.
 - All managed APIs are asynchronous. Without executors, preflight is diagnostic-only. Without a registered backend, storage and locking are in-process memory only.
 
+## Recovery boundary
+
+**Continue unfinished work with `resume(run.id)`. Repeating `publish` only observes the existing Run; it does not retry it.** Inspect `getRun(run.id)` for the current preview, diagnostics and recorded attempts.
+
+| Situation | Current recovery path |
+|---|---|
+| `blocked` by invalid input | Repair unfinished nodes with `edit`, then `resume`; the repaired version must pass preflight. Successful nodes and topology remain protected. |
+| Execution interrupted before dispatch | After the underlying fault is resolved, `resume` continues unfinished steps without repeating confirmed effects. |
+| `unknown` with conclusive remote evidence | `resume` reconciles the original input/key or adopts a recorded success receipt. Confirmed success is retained; confirmed `no_effect` permits continuation. |
+| `unknown` without conclusive evidence | The Run remains unresolved. `resume` cannot resend that request or adopt changed input until its original outcome is resolved. |
+
+**If reconciliation is unsupported, keeps returning `unknown`, or evidence remains conflicting, the Run may remain unresolved indefinitely. There is currently no public manual adjudication API to resolve it.** Changing the Draft does not establish whether an earlier request took effect. Do not create a replacement Draft as a retry: the unresolved request may already have created resources.
+
+There is also no persistent stop/abandon API. The engine does not schedule retries, so callers can stop invoking `resume`, but that does not close the Run or prevent a later caller from resuming it. It does not cancel an in-flight request or reclaim resources already created. A permanently unrepairable `blocked` Run likewise has no explicit terminal closure operation in this version.
+
+On an execution interruption, the engine attempts to record a diagnostic and mark the Run `unknown` when an attempt is unresolved, otherwise `blocked`. A store outage, process exit or lost lease can prevent that update: persisted `running` is not proof of a live worker. Preserve the Draft/Run identity, inspect recorded facts after recovery, and resume under a valid lease. The original operation may throw even when a remote effect succeeded.
+
 ## Lock and storage boundary
 
 Mutations acquire a lease keyed by storage namespace and Draft ID. The engine renews it and releases its own token; storage atomically verifies ownership for each state transition. Remote requests are preceded by a durable attempt record. Lost ownership cannot authorize further state writes; late receipts are recorded separately for the current owner to verify and adopt.
