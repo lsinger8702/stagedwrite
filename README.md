@@ -61,6 +61,8 @@ There is also no persistent stop/abandon API. The engine does not schedule retri
 
 On an execution interruption, the engine attempts to record a diagnostic and mark the Run `unknown` when an attempt is unresolved, otherwise `blocked`. A store outage, process exit or lost lease can prevent that update: persisted `running` is not proof of a live worker. Preserve the Draft/Run identity, inspect recorded facts after recovery, and resume under a valid lease. The original operation may throw even when a remote effect succeeded.
 
+Hosts control their storage and can technically modify Run records, but direct repair is outside the library contract and is not a supported recovery API. Inconsistent edits can lose outcome evidence, break bindings or create duplicate resources; storage access alone does not establish a safe recovery procedure.
+
 ## Lock and storage boundary
 
 Mutations acquire a lease keyed by storage namespace and Draft ID. The engine renews it and releases its own token; storage atomically verifies ownership for each state transition. Remote requests are preceded by a durable attempt record. Lost ownership cannot authorize further state writes; late receipts are recorded separately for the current owner to verify and adopt.
@@ -76,3 +78,11 @@ There is one engine factory: `createStagedWrite`. The unused scalar and graph pr
 Not implemented: remote update after full success, diff/drift, rollback, autofill, scheduling, full edit history, manual adjudication/stop/import/retention APIs, or generic nested request-body generation. [Roadmap](docs/roadmap.md).
 
 `npm run build` cleans `dist` first, so removed implementations cannot survive in a tarball. CI runs the current regression suite, the actual walkthrough and an isolated package-consumer check.
+
+## Walkthrough integrity
+
+`npm run demo:html` executes the real library and SQLite against a simulated remote, then generates the JSON trace, Markdown, standalone HTML and offline ZIP together. The ZIP contains those exact HTML/JSON/Markdown bytes, with fixed archive metadata.
+
+`npm run verify:walkthrough` runs the example again without overwriting the checked-in evidence. It compares the new trace with the committed trace after consistently renaming runtime UUIDs and ignoring only engine/report timestamps and the Node version label. Business values, diagnostics, OP order, versions, bindings and effects must match. It also rebuilds HTML/Markdown/ZIP from the committed trace and current source/template and requires byte equality. The fresh unmodified trace is saved as `dist/walkthrough-raw.json` and uploaded by CI for inspection.
+
+The committed trace remains an actual execution record, not a fixed-clock simulation. The check establishes freshness and internal consistency for this scenario; it does not claim real Stripe access or validate all concurrency scenarios.

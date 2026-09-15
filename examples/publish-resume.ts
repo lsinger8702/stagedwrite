@@ -118,11 +118,11 @@ try {
         asyncScenario: "异步规则返回 pending，上游重入预检。测试驱动模拟外部任务完成，没有实际等待或启动后台任务。",
         executionRepairIntent: "首次 publish 返回负责人不可用诊断；调用方选择候选 OP 修复后 resume。同 Run 的后续超时再次 resume 查证，成功部分不重发。",
         userIntent, chosenOps: chosen, steps, effects: [...effects].map(([key, resource]) => ({ key, ...resource })), assertions: { duplicatePublishCreatedNothing: true, resetRestoredInitialIntent: true, finalEffectCount: effects.size } };
-    if (process.argv.includes("--write-report")) {
-        const out = join(process.cwd(), "docs/examples");
+    if (process.argv.includes("--write-report") || process.argv.includes("--check-report")) {
+        const checking = process.argv.includes("--check-report");
+        const out = join(process.cwd(), checking ? "dist" : "docs/examples");
         mkdirSync(out, { recursive: true });
-        writeFileSync(join(out, "publish-resume-trace.json"), JSON.stringify(report, null, 2) + "\n");
-        writeFileSync(join(out, "publish-resume-walkthrough.md"), `# 当前协议的真实输入输出\n\n实际执行库、SQLite 与断言；远端是 Mock，无 HTTP/LLM 调用。运行时间 ${report.recordedAt}。\n\n[交互 HTML](publish-resume.html) · [完整 JSON](publish-resume-trace.json) · [源码](../../examples/publish-resume.ts)\n\n运行 npm run demo:html 重新生成。\n\n${steps.map((s, i) => `## ${i + 1}. ${s.method}\n\n${s.note}\n\n输入：\n\n\`\`\`json\n${JSON.stringify(s.input, null, 2)}\n\`\`\`\n\n输出：\n\n\`\`\`json\n${JSON.stringify(s.output, null, 2)}\n\`\`\`\n\n远端调用：\n\n\`\`\`json\n${JSON.stringify(s.remoteCalls, null, 2)}\n\`\`\``).join("\n\n")}\n`);
+        writeFileSync(join(out, checking ? "walkthrough-raw.json" : "publish-resume-trace.json"), JSON.stringify(report, null, 2) + "\n");
         console.log(JSON.stringify({ calls: steps.length, effects: effects.size, assertions: report.assertions }));
     }
     else

@@ -23,7 +23,8 @@
     "demo": "npm run demo:publish-resume",
     "demo:publish-resume": "npm run build && node dist/examples/publish-resume.js",
     "demo:html": "npm run demo:publish-resume -- --write-report && node scripts/render-walkthrough.mjs",
-    "verify:package": "npm run build && node scripts/package-smoke.mjs"
+    "verify:package": "npm run build && node scripts/package-smoke.mjs",
+    "verify:walkthrough": "npm run demo:publish-resume -- --check-report && node scripts/render-walkthrough.mjs --check && node --test scripts/walkthrough.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

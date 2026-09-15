@@ -13,5 +13,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - run: npm run demo:html
+      - run: npm run verify:walkthrough
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: walkthrough-raw
+          path: dist/walkthrough-raw.json
+          if-no-files-found: warn
       - run: npm run verify:package
