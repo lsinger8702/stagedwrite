@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import type { DatabaseSync as Database } from "node:sqlite";
-import type { DraftLease, DraftLockProvider, ManagedStore, ManagedState, LateFact } from "./types.js";
+import type { DraftLockProvider, ManagedStore, ManagedState, LateFact } from "./types.js";
 export const lockResource = (namespace: string, id: string) => JSON.stringify([namespace, "draft", id]);
 function copy<T>(v: T): T { return structuredClone(v); }
 function stateValid(id: string, s: ManagedState) {

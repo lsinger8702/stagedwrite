@@ -10,14 +10,14 @@ import { publicationId } from "../execution/publication.js";
 import { performance } from "node:perf_hooks";
 import type { DefinitionSelector } from "../registry/types.js";
 import type { GraphOp } from "../graph/types.js";
-import type { Step, ApplyOutcome, ReconcileOutcome, Event, ExecutionStep } from "../types.js";
+import type { Step, ApplyOutcome, ReconcileOutcome, Event } from "../types.js";
 import type { GraphDiagnostic } from "../preflight/types.js";
 import { createMemoryBackend, lockResource } from "./storage.js";
 import { initialize, editIntent, toInternal, snapshot, same } from "./intent.js";
 import type { ManagedOptions, ManagedDraft, ManagedInitialIntent, ManagedState, ManagedRun, ManagedExecutor, ManagedCheck, Artifact, DraftLease, Attempt } from "./types.js";
 const key = (s: DefinitionSelector) => JSON.stringify([s.type, s.typeVersion]);
 const copy = <T>(v: T): T => structuredClone(v);
-const declaration = (s: Step): Step => ({ id: s.id, payload: s.payload, ...(s.dependsOn ? { dependsOn: s.dependsOn } : {}), ...(s.inputRefs ? { inputRefs: s.inputRefs } : {}), ...(s.effect ? { effect: s.effect } : {}) });
+const declaration = (s: Step): Step => ({ id: s.id, payload: s.payload, ...(s.dependsOn ? { dependsOn: s.dependsOn } : {}), ...(s.inputRefs ? { inputRefs: s.inputRefs } : {}), effect: s.effect });
 const event = (r: ManagedRun, stepId: string, kind: Event["kind"], reason?: string) => r.events.push({ sequence: r.events.length + 1, stepId, kind, recordedAt: new Date().toISOString(), ...(reason ? { reason } : {}) });
 /** Managed protocol: long-lived intent, one initial create, explicit repair/resume. All I/O APIs are async. */
 export function createStagedWrite(options: ManagedOptions) {
@@ -119,7 +119,7 @@ export function createStagedWrite(options: ManagedOptions) {
             if (old.graph.nodes[n]!.nodeType !== d.graph.nodes[n]!.nodeType)
                 throw new Error("REPAIR_TOPOLOGY_CHANGED");
         for (const step of r.steps)
-            if (step.status === "applied" || step.status === "reused") {
+            if (step.status === "applied") {
                 const n = step.effect!.nodeId;
                 if (!same(old.graph.nodes[n], d.graph.nodes[n]) || !same(old.fieldIntents[n], d.fieldIntents[n]))
                     throw new Error("APPLIED_STEP_IMMUTABLE");
@@ -131,7 +131,7 @@ export function createStagedWrite(options: ManagedOptions) {
                 const prev = r.steps[i]!, next = nextPlan[i]!;
                 if (!same({ ...declaration(prev), payload: {} }, { ...declaration(next), payload: {} }))
                     throw new Error("REPAIR_TOPOLOGY_CHANGED");
-                if (["applied", "reused"].includes(prev.status) && !same(declaration(prev), declaration(next)))
+                if (["applied"].includes(prev.status) && !same(declaration(prev), declaration(next)))
                     throw new Error("APPLIED_STEP_IMMUTABLE");
             }
         }
@@ -140,7 +140,7 @@ export function createStagedWrite(options: ManagedOptions) {
         const diagnostics: GraphDiagnostic[] = [];
         const d = toInternal(s.draft);
         for (const step of r.steps)
-            if (!["applied", "reused"].includes(step.status) && step.feedback) {
+            if (!["applied"].includes(step.status) && step.feedback) {
                 const f = step.feedback, accepted = (f.diagnostics ?? []).filter(x => validDiagnostic(x as unknown as Json, registry, d));
                 diagnostics.push(...copy(accepted));
                 if (!accepted.length)
@@ -259,7 +259,7 @@ export function createStagedWrite(options: ManagedOptions) {
                 throw new Error("LEASE_LOST");
             s = await need(id);
             const r = s.runs[runId]!;
-            const step = r.steps.find(x => !["applied", "reused"].includes(x.status));
+            const step = r.steps.find(x => !["applied"].includes(x.status));
             if (!step) {
                 if (!reconcileOnly)
                     s = await tx(id, l, current => { const run = current.runs[runId]!; if (current.draft.version !== run.version)
@@ -281,7 +281,7 @@ export function createStagedWrite(options: ManagedOptions) {
                         throw new Error("UNRESOLVED_EXECUTION");
                     const input = copy(st.payload);
                     for (const dep of st.dependsOn ?? [])
-                        if (!["applied", "reused"].includes(run.steps.find(x => x.id === dep)?.status ?? ""))
+                        if (!["applied"].includes(run.steps.find(x => x.id === dep)?.status ?? ""))
                             throw new Error("DEPENDENCY_NOT_APPLIED");
                     for (const [field, dep] of Object.entries(st.inputRefs ?? {}))
                         input[field] = run.steps.find(x => x.id === dep)!.remoteRef!;
@@ -467,7 +467,7 @@ export function createStagedWrite(options: ManagedOptions) {
                         run.revision++;
                         run.steps = a.plan.map((st, i) => {
                             const old = run.steps[i]!;
-                            if (["applied", "reused"].includes(old.status))
+                            if (["applied"].includes(old.status))
                                 return old;
                             const changed = !same(declaration(old), declaration(st));
                             const attempted = run.attempts.some(a => a.stepId === st.id);

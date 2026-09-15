@@ -77,6 +77,3 @@ export interface GraphCheck {
   pendingRules?: PendingRule[];
   diagnostics: SourcedGraphDiagnostic[];
 }
-
-/** Execution facts plus LLM-facing diagnostics for the associated input snapshot. */
-export type GraphExecutionResult = import("../types.js").Run & { preview: GraphDraftPreview; diagnostics: GraphDiagnostic[]; check?: GraphCheck };

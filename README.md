@@ -2,7 +2,7 @@
 
 **A graph intent library for agent tools: create meaningful work, diagnose it, repair it with explicit OPs, and resume unfinished publication without recreating successful resources.**
 
-Early prototype, v0.0.1; no published npm package. The default `createStagedWrite` now uses the managed Draft lifecycle. [Project principles](docs/design/000-project-principles.md) govern development; conflicting changes require the project owner's explicit agreement.
+Early prototype, v0.0.1; no published npm package. `createStagedWrite` is the only engine entry point, using the managed Draft lifecycle. [Project principles](docs/design/000-project-principles.md) govern development; conflicting changes require the project owner's explicit agreement.
 
 ```sh
 npm ci
@@ -51,10 +51,10 @@ The bundled SQLite backend supports processes sharing one local file, with cross
 
 Remote idempotency and conclusive reconciliation are adapter responsibilities. Locks cannot cancel an already sent request. An empty search or a timeout does not prove no effect.
 
-## Compatibility and scope
+## Scope
 
-The former graph factory is exported as **`createLegacyStagedWrite`**. Its old storage and execution protocol remain available for old data and unfinished Runs. Legacy data is not automatically converted: it may lack a recoverable initial baseline or have multiple independent Runs. New format-3 Drafts use separate managed SQLite tables. Do not feed new Drafts to old planners.
+There is one engine factory: `createStagedWrite`. The unused scalar and graph prototypes, their adapters, storage, migrations and compatibility exports have been removed before publication. We do not maintain a deprecated entry point or an old-data migration path. This does not delete any existing database file; use a fresh database for this experimental release.
 
-Legacy examples and regression tests explicitly use the legacy factory; [legacy reference](docs/legacy-api.md). Current recommended usage is the managed walkthrough above.
+Not implemented: remote update after full success, diff/drift, rollback, autofill, scheduling, full edit history, manual adjudication/stop/import/retention APIs, or generic nested request-body generation. [Roadmap](docs/roadmap.md).
 
-Not implemented in the new protocol: remote update after full success, diff/drift, rollback, autofill, scheduling, full edit history, legacy data migration, manual adjudication/stop/import/retention ports, or generic nested request-body generation. [Roadmap](docs/roadmap.md).
+`npm run build` cleans `dist` first, so removed implementations cannot survive in a tarball. CI runs the current regression suite, the actual walkthrough and an isolated package-consumer check.

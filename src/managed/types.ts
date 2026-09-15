@@ -1,5 +1,5 @@
 import type { DefinitionSelector } from "../registry/types.js";
-import type { GraphEdge, GraphOp } from "../graph/types.js";
+import type { GraphEdge } from "../graph/types.js";
 import type { Value, Step, ExecutionStep, Event, ApplyOutcome, ReconcileOutcome } from "../types.js";
 import type { GraphDiagnostic, GraphCheck } from "../preflight/types.js";
 export type Intent = {
@@ -65,7 +65,7 @@ export interface ManagedRun {
     draftId: string;
     kind: "initial_create";
     version: number;
-    state: "running" | "blocked" | "failed" | "unknown" | "published";
+    state: "running" | "blocked" | "unknown" | "published";
     artifactId: string;
     initialArtifactId: string;
     certificate: string;
@@ -173,4 +173,3 @@ export interface ManagedOptions {
     preflightTimeoutMs?: number;
 }
 export type ManagedInitialIntent = IntentSnapshot["graph"];
-export type ManagedOp = GraphOp;

@@ -1,45 +1,24 @@
-# StagedWrite 实现路线
+# 运行与阅读代码
 
-**当前默认 API 已切换到 [018 生命周期协议](design/018-draft-lifecycle-proposal.md)，[000 原则](design/000-project-principles.md) 优先，原则冲突先讨论。下文保留旧原型阶段的结构与任务记录，不表示旧多 Run、reset 或恢复语义适用于新协议。**
+**先读 [000 原则](design/000-project-principles.md)。只维护当前生命周期；无原型兼容入口。**
 
-## 先理解当前版本
-
-这是一个单包 TypeScript 项目。没有前端、服务部署和 monorepo。现在的目标是让接口和一条完整链路可以运行。
-
-```text
-examples/lifecycle.ts        使用者：调用 create/edit/preflight/publish/resume
-        ↓
-src/engine.ts               控制流程、预检凭据、执行状态和内存记录
-   ├── src/draft.ts         草稿变更和版本检查
-   ├── Rule                检查草稿，返回诊断；不自动改草稿
-   └── Adapter             把草稿变成步骤、执行远端请求、查证结果
-        ↓
-src/adapters/mock.ts        模拟远端：可以生效后丢失响应
+```sh
+npm ci
+npm test
+npm run demo:html
+npm run verify:package
 ```
 
-库管理流程；规则回答“为什么不能发”；adapter 回答“具体怎么发、怎么查”。MCP 将来只是调用核心 API 的外壳。
+Node.js 22.13+。`build` 先清理 `dist` 再编译；测试和 tarball 不应读取已删除源码遗留的输出。
 
-## M1 注册与空图入口
+建议按这个顺序看：
 
-运行 `npm run demo:registry`，依次阅读 `src/registry/types.ts`、`src/registry/profile.ts`、`src/registry/registry.ts` 和 `src/graph-engine.ts`。`src/registry/json.ts` 固定纯 JSON 输入和摘要算法。
+1. [虚构 Schema 与规则](../examples/fixtures/project-tasks-managed.ts)：两种节点、显式关系、三条业务规则以及候选修复。
+2. [完整调用](../examples/publish-resume.ts)：实际执行 SQLite、Mock apply/reconcile 和行为断言。
+3. [类型](../src/managed/types.ts)：Draft 是意图，Artifact 是冻结的已检查输入，Run 是执行与尝试。
+4. [引擎](../src/managed/engine.ts)：锁、当前 Run 归属、先记账后发送、未知查证与修复保护。
+5. [存储](../src/managed/storage.ts)：所有推进事务验证有效租约，远端回执与 Binding 保存。
 
-定义装配、引用校验、冻结与空图创建已实现；`validateValues` 可独立验证标量约束。M2 已在 `src/graph/` 实现原子编辑，运行 `npm run demo:graph` 查看共享引用例子。新引擎仍只有草稿能力，下面的执行原型独立运行；M3 已在 `src/preflight/` 增加草稿预检，运行 `npm run demo:preflight` 查看缺项与显式修复闭环；显式 executable 模式现已实现图发布，运行 `npm run demo:execution` 查看；两个入口共用 `src/execution/runtime.ts`。
+测试按职责拆分：registry 校验定义和引用；graph 验证关系、三态和原子编辑；preflight 验证具体诊断、状态隔离和异步超时；managed 验证发布/修复/租约/进程退出；public-api 固定唯一入口与当前方法集合。打包验证在隔离目录按包名安装、检查类型并重开 SQLite，不依赖仓库内路径导入。
 
-## 执行原型代码阅读顺序
-
-1. 先运行 `npm run demo`，对照 `examples/lifecycle.ts` 看五个调用。
-2. 读 `src/types.ts`，理解 Draft、Diagnostic、Step、Run、Outcome。
-3. 读 `src/draft.ts`：先复制草稿、执行整批操作，全部成功后替换原草稿。
-4. 读 `src/engine.ts`：检查通过后保存计划；编辑使旧凭据失效；发布后锁定草稿。
-5. 看 `advance()`：已成功就跳过，未知就先查，仍未知就停。
-6. 对照测试，尤其是“远端成功但响应丢失”和“查不清就不重试”。
-
-目前 `certificate` 是随机句柄，服务端内存中保存它对应的版本和计划。它不是密码学证明。内存 events 是执行轨迹，不是持久账本。
-
-## 后续开发顺序（2026-09-12 更新）
-
-按 [开发任务](roadmap.md) 推进：结构注册 → 对象图与 OP → 图上的预检 → SQLite → 持久发布 → 重启恢复 → MVP 发布。
-
-第一项详细设计见 [001：结构注册与空图创建](design/001-registry-and-draft.md)。原先“先持久化，再 Stripe”的顺序已被上述计划替代；先稳定数据语义，再设计存储。
-
-每项遵循：短设计 → 实现 → 验收 → 更新文档 → 提交。M1 后、SQLite 前先做范围受限的 Stripe test-mode adapter 实验；完整 Stripe 接入和 MCP 仍在核心 MVP 后推进。
+测试使用 Mock 远端；不代表真实服务联调或跨主机网络分区验证已经完成。

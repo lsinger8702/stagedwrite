@@ -14,7 +14,7 @@
 | 修复 | 只改未完成节点字段，成功节点和拓扑不可变 |
 | pendingPatches | 不持久化；当批 changes + Run 已采用意图和当前意图对比 |
 | 锁 | 注册 DraftLockProvider，与 ManagedStore 配对；租约外置，库管理调用生命周期 |
-| 协议升级 | 默认新 API；旧 API 显式 createLegacyStagedWrite，旧表保留，不自动迁移 |
+| 公开入口 | 仅 createStagedWrite；按用户最新要求删除旧引擎及兼容层，不做旧原型迁移 |
 
 ## Draft 的逻辑列
 
@@ -82,7 +82,7 @@ Artifact 保存 id、intentDigest、完整 Draft 快照、plan、binding 和 res
 ## Run、Attempt 与 Binding
 
 - Run：id/draftId、kind=initial_create、已采用 version、初始/当前 artifactId、certificate、revision、steps、attempts、events、revisions。
-- Run state：running、blocked、unknown、published；兼容类型保留 failed，但当前拒绝暂停使用 blocked。ready 是待执行/已确认未生效的步骤，feedback 解释原因；本版没有人工 stop/close 状态。
+- Run state：running、blocked、unknown、published；拒绝暂停使用 blocked。ready 是待执行/已确认未生效的步骤，feedback 解释原因；本版没有人工 stop/close 状态。
 - Attempt：stepId、key、number、实际解析后的 input、pending/applied/no_effect/unknown 与 outcome。原尝试输入不可覆盖；恢复保留每次尝试。
 - Binding：nodeId/targetId/remoteId、runId/stepId/key/attemptNumber 与确认 input。每个节点成功立即保存，不等整图完成。同一后端、同目标的一个远端对象不能被两个自有节点重复认领。
 - revisions 保留先前的 artifactId、version、steps。成功步骤保持；已尝试请求内容改变时分配新 key，相同输入安全重试保持原 key。
@@ -134,19 +134,19 @@ ManagedStore 注册 read/findRun/transact/appendLateFact/close。`transact` 必�
 
 发布每次停下并保存事实后 finally 条件释放；失锁后的返回不能覆盖新执行者状态。晚到成功或结果提交失败会尝试追加 receipt，供下一合法执行者采纳；证据存储本身不可用时保留已有 pending attempt，后续仍需查证。锁释放异常可能让调用报错，但不会回滚已提交的效果；按 draftId/currentRunId 观察，不能开新 Draft 假装是重试。
 
-## 存储与兼容
+## 存储与单一入口
 
-管理协议使用独立 `sw_managed_*` 表（schema 1），不改旧执行 schema 5。新入口只找管理表；旧数据仍通过 `createLegacyStagedWrite` 恢复。
+只保留当前 `sw_managed_*` 表（schema 1）及其内存/SQLite 实现。旧标量/图引擎、旧 SQLite 存储、派生/import/人工裁决/旧接管代码及公共类型已删除；没有 deprecated 别名或旧数据恢复入口。
 
-旧 Draft 可能没有可证明的初始基线，可能已有多个独立 Run。**没有自动选择“最新 Run”或重建初始快照的迁移。** 新旧 planner 的输入类型不同，不能自动套壳转换后执行。旧 stop、manual adjudication、import、retention 等接口没有默认为新协议能力。
+项目所有者明确说明目前无外部使用者，要求不维护原型兼容。这次删除源码与打包产物，不打开或删除现有用户数据库。当前实验版本使用新数据库；旧原型资料可从 Git 历史查阅，不能再作为当前 API 文档。
 
 ## 已执行验证与仍未覆盖的范围
 
-当前新协议测试在 `tests/managed.test.ts`：固定 reset、三态、原子编辑、详细诊断、异步 pending/过期检查、单 Run 防重、修复保护、unknown 原请求查证、SQLite 重开、结果提交失败、跨实例互斥、跨进程租约争用、进程在远端生效后退出、失锁迟到回执与旧解锁隔离。旧协议测试明确使用 legacy 工厂，不能计为新协议行为覆盖。
+当前新协议测试在 `tests/managed.test.ts`：固定 reset、三态、原子编辑、详细诊断、异步 pending/过期检查、单 Run 防重、修复保护、unknown 原请求查证、SQLite 重开、结果提交失败、跨实例互斥、跨进程租约争用、进程在远端生效后退出、失锁迟到回执与旧解锁隔离。注册、图 OP、预检的有效回归已移到当前入口或仍在使用的纯校验模块；旧执行/迁移/派生专属测试已删除。公共导出与 tarball 检查确保只存在一套引擎。
 
 真实 walkthrough 来自 `examples/publish-resume.ts` 的执行与断言；包含 3 个节点、3 条静态规则、异步 pending、两次改名后 reset、一次 publish、修复后 resume、超时后再次 resume，以及最终 Draft/Binding/Artifact。见 [HTML](../examples/publish-resume.html) 和 [完整 JSON](../examples/publish-resume-trace.json)。
 
-仍未完成：真实跨主机后端故障验证、长期网络分区/压力验证、业务远端真实账号联调、旧协议数据迁移与管理能力移植。测试通过不是任意远端 exactly-once 的承诺。
+仍未完成：真实跨主机后端故障验证、长期网络分区/压力验证、业务远端真实账号联调、人工处置等后续能力。测试通过不是任意远端 exactly-once 的承诺。
 
 ## 长期演进
 

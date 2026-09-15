@@ -1,53 +1,20 @@
-# 第一次开源：从本地文件到 GitHub
+# 开源与发布
 
-**置顶约束：遵循 [项目原则](design/000-project-principles.md)；原则冲突必须先与项目所有者讨论并取得明确同意。publish/resume 本轮多 Run 接口已实现供评阅，长期扩展仍有未决项，详见 [006](design/006-graph-execution.md)。旧阶段完成记录不代表新目标已完成。**
+**遵循 [项目原则](design/000-project-principles.md)，只维护 `createStagedWrite` 一套引擎。**
 
-开源项目起步就是：可运行代码、说明、许可证、版本记录，加上一个别人能访问的仓库。社区运营、官网、标准委员会都不是第一步。
+当前仓库已在 GitHub，package 为 `stagedwrite@0.0.1`，仍设置 `private: true`，尚未发布 npm。GitHub 公开源码与发布可安装包是两回事。
 
-## 现在已经有的文件
+发布前运行：
 
-| 文件 | 用途 |
-|---|---|
-| README.md | 给第一次打开仓库的人介绍用途、运行方法、边界和计划 |
-| package.json | 名称、版本、依赖、运行命令；当前 private 防止误发布 npm |
-| package-lock.json | 固定依赖；别人用 npm ci 复现环境 |
-| LICENSE | 源码采用的 Apache-2.0 许可证全文 |
-| .gitignore | 排除依赖、编译产物和本地凭据 |
-| src/ | 库代码 |
-| examples/ | 让人看到库怎么用 |
-| tests/ | 防止后续修改破坏关键行为 |
-| .github/workflows/ci.yml | 上传 GitHub 后自动编译、测试、运行演示 |
+```sh
+npm ci
+npm test
+npm run demo:html
+npm run verify:package
+```
 
-## 第一次发布按这个顺序
+构建会清理输出；包验证检查唯一引擎出口、无已删除实现、隔离安装、SQLite 重开与公开 TypeScript 声明。CI 执行当前测试、演示和打包验证。
 
-1. 在项目目录运行 `npm ci`、`npm test`、`npm run demo`，确认自己能解释输出。
-2. 把仓库放进自己的 GitHub 账号，项目名可以先用 StagedWrite；无需另建组织。这里尚未检查远端名称是否可用。
-3. 本目录已准备为独立 Git 仓库。用 GitHub Desktop 添加本地目录，检查历史与提交内容，只操作 stagedwrite 目录。
-4. Publish repository，选择公开。当前材料尚未上传，这一步才会产生简历上的公开链接。
-5. 等 Actions 成功，在 Releases 创建 `v0.0.1`，标记为 pre-release，说明“内存原型、模拟远端”。
-6. 按 [开发任务](roadmap.md) 把 M1–M7 建成 issue；先做结构注册与空图创建。当前清单只在本地文档，尚未创建远端 issue。
+先让试用者按 README 跑通，再确认正式 API、发布元数据和 npm 账号/名称权限。不要把本地测试通过表述为真实远端联调或跨主机生产验证完成，也不必为了公开仓库立即发布 npm。
 
-也可以用命令行 Git；没有必要为了开源先熟练掌握所有 Git 操作。每次保存一个可以说明的改动，保持仓库能运行即可。
-
-## GitHub 发布和 npm 发布是两回事
-
-GitHub 公开代码后，别人可以 clone 并运行，这已经是开源发布。npm 是让别人通过包管理器安装，完全可以晚一点做。
-
-当前 package 名称为 `stagedwrite`，仍为 `private: true`、版本 0.0.1。2026-09-13 查询 npm registry 未找到同名包；这不是名称预留或发布权限保证。正式发布前再次确认名称与账号权限、补齐发布元数据，并决定公开版本。
-
-## 简历什么时候写、怎么写
-
-本地原型可以放在“个人项目（开发中）”。上传 GitHub 后补上可访问链接，再称为开源项目。不要把计划中的 SQLite、Stripe、MCP 写成已完成。
-
-当前实现对应的表述：
-
-> **StagedWrite｜Agent 外部写入控制库（个人项目，开发中）**
-> 使用 TypeScript 实现 draft → preflight → publish/resume 原型，支持草稿版本校验、可执行修复诊断及步骤执行记录；通过模拟远端生效后响应丢失的故障，验证先查证再恢复、跳过已完成步骤的行为。后续推进 SQLite 持久化与真实 API 接入。
-
-公开后把“个人项目”替换为“开源项目”，加实际仓库链接。后续每做完一项再更新简历，不预写效果数字。
-
-面试前至少能自己回答：为什么超时不等于失败？预检通过后修改草稿会怎样？谁保证幂等？进程退出后现在能否恢复？哪些代码是模拟的？
-
-## 不需要现在做的事
-
-不用先建官网、注册域名、发布 npm、找贡献者或追求 star 数。先让一位同事按 README 成功运行，再根据他的问题改善说明。
+简历描述可以引用已实现的图式意图、三态编辑、预检诊断、单 Run 续作、SQLite 与租约故障测试；update、drift、rollback 和生产效果留到实际完成后再写。

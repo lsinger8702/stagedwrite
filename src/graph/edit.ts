@@ -1,5 +1,5 @@
 import type { DefinitionRegistry } from "../registry/registry.js";
-import { isObject, jsonSnapshot, pointer, definitionDigest, type Json } from "../registry/json.js";
+import { isObject, jsonSnapshot, pointer } from "../registry/json.js";
 import type { Value } from "../types.js";
 import { GraphEditError, type GraphDraft, type GraphOp, type EditEvaluation, type GraphChange, type GraphIssue } from "./types.js";
 
@@ -104,10 +104,6 @@ export function evaluateGraphEdit(registry: DefinitionRegistry, draft: GraphDraf
     }
   }
   if (issues.length) throw new GraphEditError("INVALID_GRAPH", undefined, undefined, issues);
-  for (const receipt of Object.values(draft.continuation?.receipts ?? draft.imported?.receipts ?? {})) {
-    if (!candidate.nodes[receipt.nodeId] || definitionDigest(candidate.nodes[receipt.nodeId] as unknown as Json) !==
-        definitionDigest(draft.nodes[receipt.nodeId] as unknown as Json)) throw new GraphEditError("REUSED_NODE_IMMUTABLE");
-  }
   candidate.version++;
   return { candidate, changes };
 }

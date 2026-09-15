@@ -13,17 +13,5 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - run: npm run demo
-      - run: npm run demo:registry
-      - run: npm run demo:graph
-      - run: npm run demo:preflight
-      - run: npm run demo:execution
-      - run: npm run demo:dependencies
-      - run: npm run demo:manual
-      - run: npm run demo:continuation
-      - run: npm run demo:stop
-      - run: npm run demo:storage
-      - run: npm run demo:durable
-      - run: npm run demo:recovery
-      - run: npm run demo:import
+      - run: npm run demo:html
       - run: npm run verify:package

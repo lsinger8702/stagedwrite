@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
-import { createStagedWrite, createMemoryBackend, createSqliteBackend, defineDraftType, type ManagedExecutor, type ManagedOptions, type ManagedInitialIntent, type ApplyOutcome } from "../src/index.js";
+import { createStagedWrite, createMemoryBackend, createSqliteBackend, defineDraftType, type ManagedExecutor, type ManagedOptions, type ManagedInitialIntent, type ApplyOutcome, type Step } from "../src/index.js";
 const definition = defineDraftType({ id: "example.tasks", version: "1", nodeTypes: { task: { valueSchema: { type: "object", properties: { name: { type: "string" }, note: { type: ["string", "null"] } }, additionalProperties: false }, requiredAtPublish: ["name"] } }, relationTypes: {} });
 const selector = { type: definition.id, typeVersion: "1" };
 const initial = (): ManagedInitialIntent => ({ nodes: { a: { id: "a", nodeType: "task", fields: { name: "First", note: null } }, b: { id: "b", nodeType: "task", fields: { name: "Second" } } }, edges: {} });
@@ -230,7 +230,7 @@ test("managed: another registration cannot use a stored certificate to dispatch"
 });
 test("managed: executor must map every node exactly once and storage cannot omit its lock provider", async () => {
     assert.throws(() => engine(executor(), { storage: createMemoryBackend().storage }), /STORAGE_LOCK_PAIR_REQUIRED/);
-    const e = engine(executor({ plan: () => [{ id: "a", payload: {} }] })), d = await e.create(selector, initial());
+    const e = engine(executor({ plan: () => [{ id: "a", payload: {} }] as Step[] })), d = await e.create(selector, initial());
     assert.equal((await e.preflight(d.id)).status, "blocked");
     await e.close();
 });

@@ -31,14 +31,6 @@ export interface DraftTypeDefinition {
   relationTypes: Readonly<Record<string, { from: readonly string[]; to: readonly string[] }>>;
 }
 export interface DefinitionSelector { type: string; typeVersion: string }
-/** @deprecated M1 snapshot shape. Current engine snapshots use GraphDraft (with tombstones). */
-export interface EmptyGraphDraft extends DefinitionSelector {
-  id: string;
-  version: 0;
-  definitionDigest: string;
-  nodes: Record<string, never>;
-  edges: Record<string, never>;
-}
 export type DefinitionErrorCode = "INVALID_DEFINITION" | "UNSUPPORTED_SCHEMA_FEATURE"
   | "SCHEMA_REF_NOT_FOUND" | "SCHEMA_REF_CYCLE" | "DEFINITION_CONFLICT";
 export interface DefinitionIssue {
