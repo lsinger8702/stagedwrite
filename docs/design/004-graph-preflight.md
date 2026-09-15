@@ -72,9 +72,15 @@ const next = engine.preflight(updated.id);
 
 有 error 时 blocked，只有 warning 或无诊断时 passed。同步规则误返回 Promise、规则异常或非法输出导致 incomplete，仍附完整预览。该规则输出整批舍弃，不保留其部分诊断；其他规则正常运行。诊断不会自动改变图。规则错误消息指向实现问题，不能要求 LLM 通过修改用户草稿掩盖故障。
 
+## 缓存边界
+
+**每次 preflight 重新调用适用规则，不因 Draft 版本未变而跳过。库不提供缓存接口或缓存存储；规则函数可自行读取缓存，由使用方确定依赖参数、key、有效期与失效策略。缓存读取涉及 I/O 时使用 asyncRules。**
+
+规则返回仍遵循 complete/pending 与诊断协议，缓存不能把未完成检查变成 passed。预算耗尽时未启动的规则仍返回 pending。开始新检查即使旧 check 失效；新结果保存失败需要重新 preflight，不回退旧凭据。本版不新增历史 check 查询，Run 引用的 Artifact 继续保留。
+
 ## 时效、存储与升级
 
-check 绑定 draftId/version/definitionDigest/rulesDigest 和随机 checkId。返回值及 getCheck 都是独立快照，修改它们不影响草稿或缓存。SQLite 持久化同一份预览和诊断，重开后仍保持一致。
+check 绑定 draftId/version/definitionDigest/rulesDigest 和随机 checkId。返回值及 getCheck 都是独立快照，修改它们不影响草稿或已保存检查。SQLite 持久化同一份预览和诊断，重开后仍保持一致。
 
 - 重复 preflight 先使旧检查失效。成功 edit 也使旧检查失效，包括净无变化批次。
 - 失败编辑和 OP 预演保留有效检查。LLM 返回的旧版本 OP 被 CAS 拒绝。

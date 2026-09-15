@@ -137,7 +137,7 @@ export function createStagedWrite(options: ManagedOptions) {
         }
     }
     function response(s: ManagedState, r: ManagedRun, check?: ManagedCheck) {
-        const diagnostics: GraphDiagnostic[] = [];
+        const diagnostics: GraphDiagnostic[] = r.interruption ? [copy(r.interruption)] : [];
         const d = toInternal(s.draft);
         for (const step of r.steps)
             if (!["applied"].includes(step.status) && step.feedback) {
@@ -251,6 +251,31 @@ export function createStagedWrite(options: ManagedOptions) {
         return base;
     }
     async function dispatch(id: string, runId: string, l: DraftLease, signal: AbortSignal, reconcileOnly = false) {
+        try {
+            return await dispatchSteps(id, runId, l, signal, reconcileOnly);
+        }
+        catch (error) {
+            // Best effort only: the same fenced transaction must still authorize us.
+            // Never turn an unresolved dispatch into proof of no remote effect.
+            try {
+                await tx(id, l, current => {
+                    const run = current.runs[runId]!;
+                    if (run.state === "published") return;
+                    const unresolved = run.attempts.some(a => a.status === "pending" || a.status === "unknown");
+                    run.state = unresolved ? "unknown" : "blocked";
+                    run.interruption = {
+                        code: "execution.interrupted", path: "",
+                        message: unresolved
+                            ? "Execution was interrupted with an unresolved request. Resume this run to reconcile its original input before sending again."
+                            : "Execution was interrupted. Resume this run to continue unfinished steps; confirmed effects are retained."
+                    };
+                });
+            }
+            catch { /* Store outage or lost lease: preserve the original error and durable attempts. */ }
+            throw error;
+        }
+    }
+    async function dispatchSteps(id: string, runId: string, l: DraftLease, signal: AbortSignal, reconcileOnly = false) {
         let s = await need(id);
         const e = executor(s);
         validateBinding(s, s.runs[runId]!, e);
@@ -263,7 +288,7 @@ export function createStagedWrite(options: ManagedOptions) {
             if (!step) {
                 if (!reconcileOnly)
                     s = await tx(id, l, current => { const run = current.runs[runId]!; if (current.draft.version !== run.version)
-                        throw new Error("STALE_RUN_INPUT"); run.state = "published"; current.draft.status = "published"; current.draft.publishedArtifactId = run.artifactId; current.draft.lastPublishedAt ??= new Date().toISOString(); current.draft.updatedAt = new Date().toISOString(); });
+                        throw new Error("STALE_RUN_INPUT"); delete run.interruption; run.state = "published"; current.draft.status = "published"; current.draft.publishedArtifactId = run.artifactId; current.draft.lastPublishedAt ??= new Date().toISOString(); current.draft.updatedAt = new Date().toISOString(); });
                 return s;
             }
             const pending = [...r.attempts].reverse().find(a => a.stepId === step.id && ["pending", "unknown"].includes(a.status));
@@ -272,7 +297,7 @@ export function createStagedWrite(options: ManagedOptions) {
             let attempt: Attempt;
             if (pending) {
                 attempt = pending;
-                await tx(id, l, current => { event(current.runs[runId]!, step.id, "reconciling"); });
+                await tx(id, l, current => { delete current.runs[runId]!.interruption; event(current.runs[runId]!, step.id, "reconciling"); });
             }
             else {
                 const result = await tx(id, l, current => {
@@ -285,6 +310,7 @@ export function createStagedWrite(options: ManagedOptions) {
                             throw new Error("DEPENDENCY_NOT_APPLIED");
                     for (const [field, dep] of Object.entries(st.inputRefs ?? {}))
                         input[field] = run.steps.find(x => x.id === dep)!.remoteRef!;
+                    delete run.interruption;
                     st.resolvedPayload = copy(input);
                     st.status = "dispatching";
                     run.state = "running";
@@ -350,7 +376,10 @@ export function createStagedWrite(options: ManagedOptions) {
                 });
             }
             catch (error) {
-                await storage.appendLateFact(id, { runId, stepId: step.id, key: attempt.key, attemptNumber: attempt.number, outcome: observed });
+                try {
+                    await storage.appendLateFact(id, { runId, stepId: step.id, key: attempt.key, attemptNumber: attempt.number, outcome: observed });
+                }
+                catch { /* Keep the original commit error; the durable attempt still requires reconciliation. */ }
                 throw error;
             }
             if (observed.kind === "unknown" || observed.kind === "not_applied")

@@ -67,6 +67,8 @@ export interface ManagedRun {
     version: number;
     state: "running" | "blocked" | "unknown" | "published";
     artifactId: string;
+    /** Latest recoverable execution interruption; cleared when dispatch resumes. */
+    interruption?: GraphDiagnostic;
     initialArtifactId: string;
     certificate: string;
     revision: number;

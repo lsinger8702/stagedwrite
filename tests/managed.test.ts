@@ -179,6 +179,10 @@ test("managed: result persistence failure records a receipt, resume does not res
     const { d, c } = await ready(e);
     await assert.rejects(e.publish(d.id, c.certificate!, { runId: "receipt" }), /injected/);
     assert.equal((await backend.storage.read(d.id))!.lateFacts.length, 1);
+    const interrupted = await e.getRun("receipt");
+    assert.equal(interrupted.state, "unknown");
+    assert.equal(interrupted.attempts[0]?.status, "pending");
+    assert.equal(interrupted.diagnostics[0]?.code, "execution.interrupted");
     assert.equal((await e.resume("receipt")).state, "published");
     assert.equal(calls, 2);
     await e.close();
@@ -269,4 +273,112 @@ test("managed: failed renewal stops advancement, late receipt survives and next 
     assert.equal(seen, 2);
     await e.close();
     await other.close();
+});
+
+test("managed: preflight calls rules each time while application caching owns its inputs", async () => {
+    let invocations = 0, reads = 0;
+    const cache = new Map<string, { status: "complete"; diagnostics: [] }>();
+    const e = engine(executor(), { asyncRules: [{ ...selector, id: "cached.check", version: "1", check: async d => {
+        invocations++;
+        const key = String(d.graph.nodes.b!.fields.name);
+        if (!cache.has(key)) { reads++; cache.set(key, { status: "complete", diagnostics: [] }); }
+        return cache.get(key)!;
+    } }] });
+    const { d, c } = await ready(e);
+    const second = await e.preflight(d.id);
+    assert.equal(invocations, 2);
+    assert.equal(reads, 1);
+    assert.notEqual(c.certificate, second.certificate);
+    await assert.rejects(e.publish(d.id, c.certificate!), /PREFLIGHT_REQUIRED/);
+    await e.edit(d.id, 0, [{ op: "set", nodeId: "b", path: "/name", value: "Changed" }]);
+    assert.equal((await e.preflight(d.id)).status, "passed");
+    assert.equal(invocations, 3);
+    assert.equal(reads, 2);
+    await e.close();
+});
+
+test("managed: interruption before dispatch is blocked and resumes without repeating confirmed effects", async () => {
+    for (const sqlite of [false, true]) {
+        const dir = mkdtempSync(join(tmpdir(), "sw-interrupted-"));
+        const backend = sqlite ? createSqliteBackend(join(dir, "state.sqlite")) : createMemoryBackend();
+        try {
+            let inject = true;
+            const calls: string[] = [];
+            const storage = { ...backend.storage, transact: async (...args: Parameters<typeof backend.storage.transact>) => {
+                const [id, lease, update] = args;
+                return backend.storage.transact(id, lease, s => {
+                    const next = update(s), run = next.runs.interrupted;
+                    if (inject && run?.steps[1]?.status === "dispatching") {
+                        inject = false;
+                        throw new Error("before dispatch commit failed");
+                    }
+                    return next;
+                });
+            } };
+            const e = engine(executor({ apply: async s => { calls.push(s.id); return { kind: "applied", remoteRef: s.id }; } }), { storage, locks: backend.locks });
+            const { d, c } = await ready(e);
+            await assert.rejects(e.publish(d.id, c.certificate!, { runId: "interrupted" }), /before dispatch commit failed/);
+            const stopped = await e.getRun("interrupted");
+            assert.equal(stopped.state, "blocked");
+            assert.equal(stopped.diagnostics[0]?.code, "execution.interrupted");
+            assert.deepEqual(stopped.steps.map(s => s.status), ["applied", "ready"]);
+            assert.equal((await e.publish(d.id, c.certificate!)).state, "blocked");
+            assert.deepEqual(calls, ["a"]);
+            const done = await e.resume(stopped.id);
+            assert.equal(done.state, "published");
+            assert.equal(done.interruption, undefined);
+            assert.deepEqual(done.diagnostics, []);
+            assert.deepEqual(calls, ["a", "b"]);
+            await e.close();
+        } finally { rmSync(dir, { recursive: true, force: true }); }
+    }
+});
+
+test("managed: a continuing store outage preserves the original error and durable attempt", async () => {
+    const backend = createMemoryBackend();
+    let outage = false;
+    const original = new Error("store offline");
+    const storage = { ...backend.storage, transact: async (...args: Parameters<typeof backend.storage.transact>) => {
+        if (outage) throw original;
+        return backend.storage.transact(...args);
+    }, appendLateFact: async (...args: Parameters<typeof backend.storage.appendLateFact>) => {
+        if (outage) throw new Error("receipt store also offline");
+        return backend.storage.appendLateFact(...args);
+    } };
+    const calls: string[] = [];
+    const e = engine(executor({ apply: async s => {
+        calls.push(s.id);
+        if (s.id === "a") outage = true;
+        return { kind: "applied", remoteRef: s.id };
+    }, reconcile: async s => ({ kind: "applied", remoteRef: s.id }) }), { storage, locks: backend.locks });
+    const { d, c } = await ready(e);
+    await assert.rejects(e.publish(d.id, c.certificate!, { runId: "outage" }), err => err === original);
+    assert.equal((await e.getRun("outage")).attempts[0]?.status, "pending");
+    outage = false;
+    assert.equal((await e.resume("outage")).state, "published");
+    assert.deepEqual(calls, ["a", "b"]);
+    await e.close();
+});
+
+test("managed: failed preflight replacement cannot revive an earlier certificate", async () => {
+    const backend = createMemoryBackend();
+    let fail = false;
+    const storage = { ...backend.storage, transact: async (...args: Parameters<typeof backend.storage.transact>) => {
+        const [id, lease, update] = args;
+        return backend.storage.transact(id, lease, s => {
+            const next = update(s);
+            if (fail && next.check) { fail = false; throw new Error("check commit failed"); }
+            return next;
+        });
+    } };
+    const e = engine(executor(), { storage, locks: backend.locks });
+    const { d, c } = await ready(e);
+    fail = true;
+    await assert.rejects(e.preflight(d.id), /check commit failed/);
+    await assert.rejects(e.getCheck(d.id), /CHECK_NOT_CURRENT/);
+    await assert.rejects(e.publish(d.id, c.certificate!), /PREFLIGHT_REQUIRED/);
+    assert.equal((await e.getArtifact(d.id, c.artifactId!)).id, c.artifactId);
+    const next = await e.preflight(d.id);
+    assert.equal((await e.publish(d.id, next.certificate!)).state, "published");
+    await e.close();
 });

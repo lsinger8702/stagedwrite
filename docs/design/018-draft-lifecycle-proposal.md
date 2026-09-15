@@ -134,6 +134,8 @@ ManagedStore 注册 read/findRun/transact/appendLateFact/close。`transact` 必�
 
 发布每次停下并保存事实后 finally 条件释放；失锁后的返回不能覆盖新执行者状态。晚到成功或结果提交失败会尝试追加 receipt，供下一合法执行者采纳；证据存储本身不可用时保留已有 pending attempt，后续仍需查证。锁释放异常可能让调用报错，但不会回滚已提交的效果；按 draftId/currentRunId 观察，不能开新 Draft 假装是重试。
 
+执行推进异常时，在原租约仍有效且存储可写的前提下补记 `interruption` 诊断：存在 pending/unknown Attempt 则 Run 为 unknown，否则为 blocked。保留原始异常给调用方，原请求、成功回执和 Binding 不变；resume 继续推进时清除当前中断诊断。存储不可用、进程退出或失锁可能无法补记，因此持久化 running 不证明仍有活跃执行者，执行权始终由租约决定。
+
 ## 存储与单一入口
 
 只保留当前 `sw_managed_*` 表（schema 1）及其内存/SQLite 实现。旧标量/图引擎、旧 SQLite 存储、派生/import/人工裁决/旧接管代码及公共类型已删除；没有 deprecated 别名或旧数据恢复入口。
