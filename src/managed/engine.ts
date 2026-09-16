@@ -1,4 +1,5 @@
-import { updateOutcome, updateContext } from "./update-evidence.js";
+import { verifyRunUpdateReadback } from "./update-readback.js";
+import { updateOutcome, updateContext, updateRequest, satisfyNoop } from "./update-evidence.js";
 import { registeredTopology } from "../edit/registered-topology.js";
 import { validateIntentSnapshot } from "../edit/fields.js";
 import { protectIntentRepair } from "./edit-guards.js";
@@ -320,6 +321,40 @@ export function createStagedWrite(options: ManagedOptions) {
             throw error;
         }
     }
+    async function readUpdateForDispatch(s: ManagedState, runId: string, signal: AbortSignal): Promise<GraphDiagnostic[]> {
+        const e = executor(s);
+        if (!e.updateWrites) return [{ code: "update.write_capability_required", path: "", message: "This executor has not declared update write capability.", hint: "Register a confirmed-receipt update executor before continuing this Run." }];
+        let passed = false;
+        const reader = new AsyncPreflight(registry, [], [{ type: e.type, typeVersion: e.typeVersion, id: `${e.id}.dispatch.inspect`, version: e.version,
+            check: async (_draft, context) => {
+                const raw = await e.update.inspect(deepFreeze(copy(s.draft)), { signal: AbortSignal.any([signal, context.signal]), bindings: deepFreeze(copy(s.bindings)) });
+                const failures: string[] = [];
+                const data = jsonSnapshot(raw, (_path, message) => failures.push(message));
+                if (failures.length || !isObject(data)) throw Error("INVALID_UPDATE_OBSERVATION");
+                if (data.status === "pending") return data as unknown as { status: "pending"; message: string };
+                if (data.status !== "complete" || !Array.isArray(data.projections) || !Array.isArray(data.observations) ||
+                    Object.keys(data).some(k => !["status", "projections", "observations", "diagnostics"].includes(k)) ||
+                    data.diagnostics !== undefined && !Array.isArray(data.diagnostics)) throw Error("INVALID_UPDATE_OBSERVATION");
+                const projections = data.projections as unknown as UpdateProjection[], observations = data.observations as unknown as RemoteObservation[];
+                const fresh = compileUpdate(s, projections, observations);
+                let diagnostics = fresh.diagnostics;
+                if (fresh.status === "passed") {
+                    const plan = e.update.plan(deepFreeze(copy(s.draft)), deepFreeze(copy(fresh)));
+                    const result = verifyRunUpdateReadback(s, runId, projections, observations, plan);
+                    passed = result.status === "passed";
+                    diagnostics = result.status === "blocked" ? result.diagnostics : [];
+                }
+                return { status: "complete", diagnostics: [...(data.diagnostics ?? []) as unknown as GraphDiagnostic[], ...diagnostics] };
+            }
+        }], timeout);
+        const baseline = baselineOf(s), initial = preflight.run(s.draft, baseline);
+        if (initial.status !== "passed") return initial.diagnostics.map(({ source: _source, ...d }) => d);
+        const result = await reader.run(s.draft, initial, performance.now() + timeout, baseline);
+        if (signal.aborted) throw Error("LEASE_LOST");
+        if (passed && result.status === "passed") return [];
+        return [...result.diagnostics.map(({ source: _source, ...d }) => d), ...(result.pendingRules ?? []).map(p => ({ code: "update.readback_pending", path: "", message: p.message, hint: "Resume this Run after the remote inspection completes." }))]
+            .map(d => ({ ...d, hint: d.hint ?? "Resume after resolving this readback failure; no new request was dispatched." }));
+    }
     async function dispatchSteps(id: string, runId: string, l: DraftLease, signal: AbortSignal, reconcileOnly = false) {
         let s = await need(id);
         const e = executor(s);
@@ -329,7 +364,8 @@ export function createStagedWrite(options: ManagedOptions) {
                 throw new Error("LEASE_LOST");
             s = await need(id);
             const r = s.runs[runId]!;
-            const step = r.steps.find(x => !["applied", "satisfied"].includes(x.status));
+            const unresolved = r.attempts.find(a => ["pending", "unknown"].includes(a.status));
+            const step = unresolved ? r.steps.find(x => x.id === unresolved.stepId) : r.steps.find(x => !["applied", "satisfied"].includes(x.status));
             if (!step) {
                 if (!reconcileOnly)
                     s = await tx(id, l, current => { const run = current.runs[runId]!; if (current.draft.version !== run.version)
@@ -345,10 +381,26 @@ export function createStagedWrite(options: ManagedOptions) {
                 await tx(id, l, current => { delete current.runs[runId]!.interruption; event(current.runs[runId]!, step.id, "reconciling"); });
             }
             else {
+                if (r.kind === "update") {
+                    const diagnostics = await readUpdateForDispatch(s, runId, signal);
+                    if (diagnostics.length) return tx(id, l, current => {
+                        const run = current.runs[runId]!;
+                        run.state = run.attempts.some(a => ["pending", "unknown"].includes(a.status)) ? "unknown" : "blocked";
+                        run.steps.find(st => st.id === step.id)!.feedback = { diagnostics };
+                    });
+                }
                 const result = await tx(id, l, current => {
                     const run = current.runs[runId]!, st = run.steps.find(x => x.id === step.id)!;
                     if (run.attempts.some(a => a.stepId === st.id && ["pending", "unknown"].includes(a.status)))
                         throw new Error("UNRESOLVED_EXECUTION");
+                    if (run.kind === "update") {
+                        if (current.draft.currentRunId !== runId || current.draft.version !== s.draft.version || current.resourceRevision !== s.resourceRevision ||
+                            !same(run, s.runs[runId]) || !same(snapshot(current.draft), snapshot(s.draft))) throw Error("STALE_UPDATE_READBACK");
+                        if (st.effect.kind === "noop") {
+                            satisfyNoop(current, runId, st.id, new Date().toISOString());
+                            return;
+                        }
+                    }
                     const input = copy(st.payload);
                     for (const dep of st.dependsOn ?? [])
                         if (!["applied", "satisfied"].includes(run.steps.find(x => x.id === dep)?.status ?? ""))
@@ -359,9 +411,10 @@ export function createStagedWrite(options: ManagedOptions) {
                     st.resolvedPayload = copy(input);
                     st.status = "dispatching";
                     run.state = "running";
-                    run.attempts.push({ stepId: st.id, key: st.key, number: run.attempts.length + 1, input, request: { step: { ...copy(declaration(st)), payload: copy(input) }, target: e.target, executorId: e.id, executorVersion: e.version }, status: "pending" });
+                    run.attempts.push({ stepId: st.id, key: st.key, number: run.attempts.length + 1, input, request: run.kind === "update" ? updateRequest(current.artifacts[run.artifactId]!, st.id, current.bindings) : { step: { ...copy(declaration(st)), payload: copy(input) }, target: e.target, executorId: e.id, executorVersion: e.version }, status: "pending" });
                     event(run, st.id, "dispatching");
                 });
+                if (result.runs[runId]!.steps.find(st => st.id === step.id)!.status === "satisfied") continue;
                 attempt = result.runs[runId]!.attempts.at(-1)!;
             }
             let observed: ApplyOutcome | ReconcileOutcome;

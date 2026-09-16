@@ -202,3 +202,11 @@ Artifact.update 保存通过检查的 UpdateCompilation，包含基线、槽位�
 ExecutionStep.satisfied 表示以观察证据确认无需写入，satisfaction 引用 Artifact/observation/RemoteFact。它与 applied 一样满足依赖并保护完整节点，但不产生 Attempt。存储拒绝缺失、错配或被改写的满意证据。内部 satisfyNoop 在事务中追加观察事实、推进 revision 并完成槽位；幂等重入不重复追加。
 
 当前共用恢复已能消费满意槽位以及原 update 请求条件。公开派发尚未调用 satisfyNoop，update 新请求仍未开放；持锁读取、原子认领及新派发的完整接线继续由 U3 账本跟踪。测试使用预置 update Run/证据，不能视为真实远端更新验收。
+
+## 17. U3.3 已认领 Run 的共用派发
+
+每个 ready update/noop 槽位在租约内重新 inspect、编译和映射。verifyRunUpdateReadback 校验本 Run 已完成节点的最新确认事实，再调用 verifyUpdateReadback 严格核对剩余原条件和原计划；不允许静默换 payload、条件令牌或写入范围。读取 pending/失败/超时均不创建新 Attempt。
+
+派发事务验证读取后的本地 Run、version、意图和 resourceRevision 未变，再持久化原 update 请求；noop 则原子保存观察来源事实与 satisfied，不发远端请求。apply/reconcile 使用相同调用流程和原条件上下文。存在任何未知 Attempt 时优先查证，不能因前方 ready 槽位抢先派发。
+
+两后端的实际 resume 回归覆盖变化时零写入、条件恢复后一次派发、自动 noop、连续 update 的部分成功处理。此处使用测试预置的认领状态；公开 update 凭据、认领、全图无写入采用和编辑修复接线仍属后续任务。

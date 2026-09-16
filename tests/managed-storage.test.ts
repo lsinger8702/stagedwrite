@@ -431,3 +431,105 @@ for (const sqlite of [false, true]) test(`${sqlite ? "sqlite" : "memory"}: updat
         assert.deepEqual(await f.engine.getBindings(f.draft.id), bindings);
     } finally { await f.cleanup(); }
 });
+
+for (const sqlite of [false, true]) test(`${sqlite ? "sqlite" : "memory"}: live readback blocks drift before any update attempt then dispatches original request`, async () => {
+    let observed = "C", writes = 0, reads = 0, token = "v1", pendingRead = false, changedPlan = false;
+    const implementation: import("../src/index.js").ManagedUpdateExecutor = { ...executor, updateWrites: true,
+        reconcile: { unsupported: "Not needed" },
+        update: {
+            inspect: async (d, context) => { reads++; if (pendingRead) return { status: "pending", message: "Remote read is still pending" }; const node = Object.values(d.graph.nodes)[0]!;
+                assert.ok(Object.isFrozen(context.bindings));
+                return { status: "complete", projections: [{ nodeId: node.id, projectionDigest: "title-v1", fields: { title: { path: "/title", writable: true, desired: { kind: "value", value: node.fields.title as string } } } }],
+                    observations: [{ id: `fresh:${reads}`, nodeId: node.id, targetId: "test", remoteId: "remote:a", projectionDigest: "title-v1", values: { title: { kind: "value", value: observed } }, observedAt: "2026-09-17T00:00:02Z", remoteVersion: token }] };
+            },
+            plan: (_d, c) => c.slots.map((slot): import("../src/types.js").Step => ({ id: "a", payload: slot.kind === "update" ? { title: changedPlan ? "other" : "B" } : {}, effect: { kind: slot.kind, nodeId: slot.nodeId, remoteId: slot.remoteId } }))
+        },
+        apply: async (step, _key, context) => {
+            if (step.effect.kind === "update") { writes++; assert.equal(context.update?.observation.remoteVersion, "v1"); assert.equal(step.payload.title, "B"); observed = "B"; }
+            return { kind: "applied", remoteRef: "remote:a", confirmed: { projectionDigest: "title-v1", values: { title: { kind: "value", value: step.effect.kind === "create" ? "A" : "B" } } } };
+        }
+    };
+    const f = await fixture(sqlite, implementation);
+    try {
+        await f.edit(s => { const n = Object.values(s.draft.graph.nodes)[0]!; n.fields.title = "B"; s.draft.fieldIntents[n.id]!["/title"] = { kind: "set", value: "B" }; s.draft.version++; addUpdate(s, "dispatch-update"); });
+        const bindings = await f.engine.getBindings(f.draft.id);
+        await f.lease.release();
+        const rejected = await f.engine.resume("dispatch-update");
+        assert.equal(rejected.state, "blocked"); assert.equal(writes, 0); assert.equal(rejected.attempts.length, 0);
+        assert.ok(rejected.diagnostics.some(d => d.code === "update.drift"), JSON.stringify(rejected.diagnostics));
+        observed = "A"; token = "v2";
+        const staleToken = await f.engine.resume("dispatch-update");
+        assert.ok(staleToken.diagnostics.some(d => d.code === "update.readback_changed"));
+        assert.equal(writes, 0); assert.equal(staleToken.attempts.length, 0);
+        token = "v1"; changedPlan = true;
+        const remapped = await f.engine.resume("dispatch-update");
+        assert.ok(remapped.diagnostics.some(d => d.code === "update.plan_changed"));
+        assert.equal(writes, 0); assert.equal(remapped.attempts.length, 0);
+        changedPlan = false; pendingRead = true;
+        const waiting = await f.engine.resume("dispatch-update");
+        assert.ok(waiting.diagnostics.some(d => d.code === "update.readback_pending"));
+        assert.equal(writes, 0); assert.equal(waiting.attempts.length, 0);
+        pendingRead = false;
+        const transact = f.backend.storage.transact.bind(f.backend.storage);
+        let inject = true;
+        f.backend.storage.transact = (id, lease, change) => transact(id, lease, current => {
+            if (inject) { inject = false; current!.resourceRevision++; }
+            return change(current);
+        });
+        await assert.rejects(f.engine.resume("dispatch-update"), /STALE_UPDATE_READBACK/);
+        f.backend.storage.transact = transact;
+        assert.equal(writes, 0);
+        assert.equal((await f.engine.getRun("dispatch-update")).attempts.length, 0);
+        const completed = await f.engine.resume("dispatch-update");
+        assert.equal(completed.state, "published"); assert.equal(writes, 1); assert.equal(reads, 6);
+        assert.equal(completed.attempts.length, 1);
+        assert.ok(completed.attempts[0]!.request.update);
+        assert.deepEqual(await f.engine.getBindings(f.draft.id), bindings);
+    } finally { await f.cleanup(); }
+});
+
+for (const sqlite of [false, true]) test(`${sqlite ? "sqlite" : "memory"}: live noop readback completes without a remote call`, async () => {
+    let writes = 0, reads = 0;
+    const f = await fixture(sqlite, { ...executor, updateWrites: true,
+        reconcile: { unsupported: "Not needed" },
+        update: {
+            inspect: async d => { reads++; const n = Object.values(d.graph.nodes)[0]!;
+                return { status: "complete", projections: [{ nodeId: n.id, projectionDigest: "title-v1", fields: { title: { path: "/title", writable: true, desired: { kind: "value", value: "A" } } } }], observations: [{ id: "fresh-noop", nodeId: n.id, targetId: "test", remoteId: "remote:a", projectionDigest: "title-v1", values: { title: { kind: "value", value: "A" } }, observedAt: "2026-09-17T00:00:02Z", remoteVersion: "v1" }] };
+            }, plan: (_d, c) => c.slots.map(slot => ({ id: "a", payload: {}, effect: { kind: slot.kind, nodeId: slot.nodeId, remoteId: slot.remoteId } }))
+        }, apply: async () => { writes++; return { kind: "applied", remoteRef: "remote:a", confirmed: { projectionDigest: "title-v1", values: { title: { kind: "value", value: "A" } } } }; }
+    });
+    try {
+        await f.edit(s => addUpdate(s, "dispatch-noop"));
+        await f.lease.release();
+        const result = await f.engine.resume("dispatch-noop");
+        assert.equal(result.state, "published"); assert.equal(reads, 1); assert.equal(writes, 1); // fixture create only
+        assert.equal(result.steps[0]!.status, "satisfied"); assert.equal(result.attempts.length, 0);
+    } finally { await f.cleanup(); }
+});
+
+for (const sqlite of [false, true]) test(`${sqlite ? "sqlite" : "memory"}: each update dispatch rechecks remaining nodes after its own partial success`, async () => {
+    const values: Record<string, string> = { a: "A", b: "A" }; let writes = 0, reads = 0;
+    const f = await fixture(sqlite, { ...executor, updateWrites: true, reconcile: { unsupported: "Unused" },
+        plan: d => Object.values(d.graph.nodes).map((n, i) => ({ id: i ? "b" : "a", payload: { title: "A" }, ...(i ? { dependsOn: ["a"] } : {}), effect: { kind: "create", nodeId: n.id } })),
+        update: {
+            inspect: async d => { reads++; const nodes = Object.values(d.graph.nodes);
+                return { status: "complete", projections: nodes.map(n => ({ nodeId: n.id, projectionDigest: "title-v1", fields: { title: { path: "/title", writable: true, desired: { kind: "value", value: n.fields.title as string } } } })),
+                    observations: nodes.map((n, i) => ({ id: `fresh:${reads}:${i}`, nodeId: n.id, targetId: "test", remoteId: `remote:${i ? "b" : "a"}`, projectionDigest: "title-v1", values: { title: { kind: "value", value: values[i ? "b" : "a"]! } }, observedAt: "2026-09-17T00:00:02Z", remoteVersion: "v1" })) };
+            },
+            plan: (d, c) => Object.values(d.graph.nodes).map((n, i): import("../src/types.js").Step => { const slot = c.slots.find(slot => slot.nodeId === n.id)!;
+                return { id: i ? "b" : "a", payload: slot.kind === "update" ? { title: "B" } : {}, ...(i ? { dependsOn: ["a"] } : {}), effect: { kind: slot.kind, nodeId: n.id, remoteId: slot.remoteId } };
+            })
+        }, apply: async step => {
+            if (step.effect.kind === "update") { writes++; values[step.id] = "B"; }
+            return { kind: "applied", remoteRef: `remote:${step.id}`, confirmed: { projectionDigest: "title-v1", values: { title: { kind: "value", value: values[step.id]! } } } };
+        }
+    }, 2);
+    try {
+        await f.edit(s => { for (const n of Object.values(s.draft.graph.nodes)) { n.fields.title = "B"; s.draft.fieldIntents[n.id]!["/title"] = { kind: "set", value: "B" }; } s.draft.version++; addUpdate(s, "two-updates"); });
+        await f.lease.release();
+        const result = await f.engine.resume("two-updates");
+        assert.equal(result.state, "published", JSON.stringify(result.diagnostics));
+        assert.equal(writes, 2); assert.equal(reads, 2); assert.equal(result.attempts.length, 2);
+        assert.deepEqual(result.steps.map(s => s.status), ["applied", "applied"]);
+    } finally { await f.cleanup(); }
+});

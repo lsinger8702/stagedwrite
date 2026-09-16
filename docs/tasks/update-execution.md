@@ -6,7 +6,7 @@
 |---|---|---|
 | U3.1 写前复核组件 | 完成（内部） | 当前本地基线/Run/事实修订一致；新观察值/令牌与已检查条件一致；不静默更换计划。未接入 publish，不是执行授权 |
 | U3.2 产物与原请求证据 | 完成（模型与存储边界） | Artifact 保存编译基线、投影/观察；Attempt 固定 update 目标/前置条件；读写边界验证完整证据 |
-| U3.3 共用执行槽位 | 进行中（回执/条件/槽位已接入） | 现有 dispatch 支持 update/noop；update 保留原 Binding，严格匹配确认值；noop 用独立满意证据，不伪造 applied Attempt |
+| U3.3 共用执行槽位 | 完成（已认领 Run 的执行路径） | 现有 dispatch 支持 update/noop；update 保留原 Binding，严格匹配确认值；noop 用独立满意证据，不伪造 applied Attempt |
 | U3.4 认领与提交 | 待做 | certificate 采用优先、单未决 Run、update Run 原子认领；全图 noop 持久采用；历史响应区分当前意图；事务失败无半提交 |
 | U3.5 edit/resume 接线 | 待做 | 成功后仅字段编辑；固定成功基线 reset；每次 update 续作重新读取；旧 unknown 原信封先查证，本 Run 成功节点保护 |
 | U3.6 故障验收与开启 | 待做 | Memory/SQLite、并发/失锁/迟到回执/收尾失败、A→B→A/无差异/历史观察；能力完整后开启公开 update |
@@ -57,3 +57,14 @@
 - 新写入与持锁复核仍待接线；此项不作为 U3.3/U3.4 完整验收。
 
 - 验证：核心 161/161（含编译期负例和 TSC）；Stripe 离线 13/13；打包、隔离安装与公开类型消费者检查通过。未发真实远端请求。本批注册契约改动尚未提交/推送。
+
+## U3.3 派发接线 — 2026-09-17
+
+- 注册契约已推送 `d6a8e56`。
+- 共用 dispatch 在每个未完成 update/noop 槽位前，持 Draft 租约调用 inspector，受检查等待预算约束；重新编译、映射，再实际调用 verifyRunUpdateReadback → verifyUpdateReadback。pending、漂移、令牌变化或请求变化均返回具体诊断，不保存 Attempt、不发送新请求。
+- 本 Run 完成节点先核对当前观察与本 Run 最新确认事实；只有这些节点可在旧凭据比较中消去自身成功造成的差异。未完成节点继续要求原事实、原观察条件和原请求一致。不能借“部分成功”掩盖剩余节点变化。
+- 事务内再核对版本、Run、意图和 resourceRevision；通过才保存 updateRequest 的原信封并复用同一 apply，或调用 satisfyNoop 原子保存观察事实与满意槽位。原观察条件进入 adapter 上下文，原 Binding 不改写。
+- 优先定位任意 pending/unknown Attempt 并查证，避免前方 ready/noop 槽位挡住后方未知请求。确认 no_effect 后仍经过新鲜读取才能继续。
+- 修复实际接线发现的诊断包装差异：检查结果的 source 包装在转换为执行反馈时去掉，保留真实 code/message/hint/metadata，避免 drift 被丢成泛化错误。
+- 验证：核心 167/167（含 TSC）；两后端实际 resume 覆盖 drift/令牌变化/映射变化/pending/事务内状态变化的零写入、自动 noop，以及两节点逐次 update 后重新检查。Stripe 离线 13/13；首次创建 walkthrough 实录对照通过。
+- **测试仍由存储 fixture 预置已认领 update Run；这次实际运行了读取/事务/派发/回执闭环，但没有证明公开 publish 的 update 认领已完成。** U3.4 负责公开凭据与认领、全图 noop 采用及收尾；U3.5 负责成功后 edit 和修复重新采用；U3.6 补齐故障矩阵后才开放。未调用真实远端服务。本批新改动未推送。

@@ -45,3 +45,41 @@ export function verifyUpdateReadback(state: ManagedState, checked: Passed, check
         return blocked("update.readback_invalid", "The checked compilation or request plan does not match the fixed-node update contract.");
     }
 }
+
+/** Revalidate an adopted Run without treating its own completed effects as drift.
+ * Completed nodes must still match this Run's confirmed facts; all unfinished
+ * requests retain the originally checked conditions and exact mapped payload. */
+export function verifyRunUpdateReadback(state: ManagedState, runId: string,
+    freshProjections: readonly UpdateProjection[], freshObservations: readonly RemoteObservation[], freshPlan: readonly Step[]): UpdateReadback {
+    try {
+        const run = state.runs[runId], artifact = run && state.artifacts[run.artifactId], checked = artifact?.update;
+        if (!run || !artifact || !checked || run.kind !== "update" || state.draft.currentRunId !== runId ||
+            state.draft.version !== run.version || run.version !== artifact.draft.version ||
+            state.draft.publishedArtifactId !== checked.context.basePublishedArtifactId ||
+            !same({ graph: state.draft.graph, fieldIntents: state.draft.fieldIntents }, { graph: artifact.draft.graph, fieldIntents: artifact.draft.fieldIntents }))
+            return blocked("update.check_stale", "The active Run no longer owns this checked intent.");
+        const fresh = compileUpdate(state, freshProjections, freshObservations);
+        if (fresh.status !== "passed") return { status: "blocked", diagnostics: fresh.diagnostics.map(d => ({ ...d, hint: d.hint ?? hint })) };
+        validateUpdatePlan(freshPlan, fresh, state);
+        const completed = new Set(run.steps.filter(s => ["applied", "satisfied"].includes(s.status)).map(s => s.effect.nodeId));
+        for (const slot of checked.slots) {
+            const factId = state.latestFactByNode[slot.nodeId], fact = factId && state.remoteFacts[factId];
+            if (!completed.has(slot.nodeId)) {
+                if (factId !== slot.factId) return blocked("update.check_stale", "An unfinished node's confirmed baseline changed after this check.");
+            } else {
+                const st = run.steps.find(s => s.effect.nodeId === slot.nodeId)!;
+                const observation = freshObservations.find(o => o.nodeId === slot.nodeId);
+                const owned = fact && (fact.source.kind === "attempt" ? fact.source.runId === runId && fact.source.stepId === st.id : st.satisfaction?.factId === factId);
+                if (!owned || !observation || !same(observation.values, fact.values) || observation.remoteId !== fact.remoteId || observation.projectionDigest !== fact.projectionDigest)
+                    return blocked("update.completed_drift", "A completed node no longer matches this Run's confirmed remote values.");
+            }
+        }
+        // The standard checker compares the original certificate context. Mask only
+        // completed effects already independently checked above, never unfinished ones.
+        const view: ManagedState = { ...state, draft: artifact.draft, resourceRevision: artifact.resourceRevision,
+            latestFactByNode: Object.fromEntries(checked.slots.map(s => [s.nodeId, s.factId])) };
+        const observationsForCheck = freshObservations.map(o => completed.has(o.nodeId) ? checked.context.observations.find(old => old.nodeId === o.nodeId)! : o);
+        const planForCheck = freshPlan.map(step => completed.has(step.effect.nodeId) ? artifact.plan.find(old => old.id === step.id)! : step);
+        return verifyUpdateReadback(view, checked, artifact.plan, freshProjections, observationsForCheck, planForCheck);
+    } catch { return blocked("update.readback_invalid", "Fresh execution evidence does not match the adopted update Run."); }
+}
