@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
-  "recordedAt": "2026-09-16T11:46:10.943Z",
+  "recordedAt": "2026-09-16T12:09:59.475Z",
   "runtime": "v24.19.0",
-  "sampleSourceDigest": "47cccb6a0d96d69e9674bd0c1e4878a3ef3d79def21ec58edd29e9fa02b5a107",
+  "sampleSourceDigest": "2574b0a89155dfbe2e8406be22139e1c1b17f942d1f3e60c666f6a751586122c",
   "scenario": "Real Stripe sandbox; injected annual receipt loss; no LLM or real payment",
   "states": [
     {

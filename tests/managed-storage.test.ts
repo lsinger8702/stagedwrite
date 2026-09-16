@@ -1,3 +1,4 @@
+import { rememberRefs, nodeRef } from "./fixtures/refs.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -10,12 +11,12 @@ import { lockResource } from "../src/managed/storage.js";
 
 const definition = defineDraftType({ id: "storage.tasks", version: "1", nodeTypes: { task: { valueSchema: { type: "object", properties: { title: { type: "string" } }, additionalProperties: false } } }, relationTypes: {} });
 const selector = { type: definition.id, typeVersion: "1" };
-const executor: ManagedExecutor = { ...selector, id: "storage.executor", version: "1", target: "test", plan: d => Object.values(d.graph.nodes).map(n => ({ id: n.id, payload: n.fields as Record<string, import("../src/index.js").Value>, effect: { kind: "create", nodeId: n.id } })), apply: async s => ({ kind: "applied", remoteRef: `remote:${s.id}`, confirmed: { projectionDigest: "title-v1", values: { title: { kind: "value", value: "A" } } } }), reconcile: { unsupported: "test" } };
+const executor: ManagedExecutor = { ...selector, id: "storage.executor", version: "1", target: "test", plan: d => Object.values(d.graph.nodes).map(n => ({ id: "a", payload: n.fields as Record<string, import("../src/index.js").Value>, effect: { kind: "create", nodeId: n.id } })), apply: async s => ({ kind: "applied", remoteRef: `remote:${s.id}`, confirmed: { projectionDigest: "title-v1", values: { title: { kind: "value", value: "A" } } } }), reconcile: { unsupported: "test" } };
 async function fixture(sqlite: boolean) {
     const dir = mkdtempSync(join(tmpdir(), "sw-model-")), path = join(dir, "state.sqlite");
     const backend = sqlite ? createSqliteBackend(path) : createMemoryBackend();
     const engine = createStagedWrite({ definitions: [definition], executors: [executor], ...backend });
-    const draft = await engine.create(selector, { nodes: { a: { id: "a", nodeType: "task", fields: { title: "A" } } }, edges: {} });
+    const draft = rememberRefs(await engine.create(selector, { roots: [{ nodeType: "task", fields: { title: "A" } }] }), ["a"]);
     const check = await engine.preflight(draft.id);
     const run = await engine.publish(draft.id, check.certificate!);
     const lease = await backend.locks.acquire(lockResource(backend.storage.namespace, draft.id), { ttlMs: 60_000 });
@@ -50,15 +51,15 @@ for (const sqlite of [false, true]) {
         try {
             const original = await f.engine.getBindings(f.draft.id);
             await f.edit(s => {
-                s.remoteFacts.fact1 = { id: "fact1", nodeId: "a", targetId: "test", remoteId: "remote:a", projectionDigest: "title-v1", values: { title: { kind: "value", value: "A" } }, source: { kind: "attempt", runId: f.run.id, stepId: "a", attemptNumber: 1 }, confirmedAt: "2026-09-16T00:00:00Z" };
-                s.latestFactByNode.a = "fact1"; s.resourceRevision++;
+                s.remoteFacts.fact1 = { id: "fact1", nodeId: nodeRef(f.draft, "a"), targetId: "test", remoteId: "remote:a", projectionDigest: "title-v1", values: { title: { kind: "value", value: "A" } }, source: { kind: "attempt", runId: f.run.id, stepId: "a", attemptNumber: 1 }, confirmedAt: "2026-09-16T00:00:00Z" };
+                s.latestFactByNode[nodeRef(f.draft, "a")] = "fact1"; s.resourceRevision++;
             });
             const before = await f.backend.storage.read(f.draft.id);
             assert.deepEqual(await f.engine.getBindings(f.draft.id), original);
             await assert.rejects(f.edit(s => { s.remoteFacts.fact1!.values.title = { kind: "value", value: "corrupt" }; }), /FACT_IMMUTABLE|FACT_EVIDENCE_MISSING/);
-            await assert.rejects(f.edit(s => { s.latestFactByNode.a = "missing"; }), /LATEST_FACT_MISMATCH/);
-            await assert.rejects(f.edit(s => { s.bindings.a!.remoteId = "another"; }), /BINDING_IMMUTABLE|FACT_IDENTITY/);
-            await assert.rejects(f.edit(s => { s.remoteFacts.fact2 = { ...s.remoteFacts.fact1!, id: "fact2" }; s.latestFactByNode.a = "fact2"; }), /FACT_REVISION_REQUIRED/);
+            await assert.rejects(f.edit(s => { s.latestFactByNode[nodeRef(f.draft, "a")] = "missing"; }), /LATEST_FACT_MISMATCH/);
+            await assert.rejects(f.edit(s => { s.bindings[nodeRef(f.draft, "a")]!.remoteId = "another"; }), /BINDING_IMMUTABLE|FACT_IDENTITY/);
+            await assert.rejects(f.edit(s => { s.remoteFacts.fact2 = { ...s.remoteFacts.fact1!, id: "fact2" }; s.latestFactByNode[nodeRef(f.draft, "a")] = "fact2"; }), /FACT_REVISION_REQUIRED/);
             await assert.rejects(f.edit(s => { s.remoteFacts.fact2 = { ...s.remoteFacts.fact1!, id: "fact2", source: { kind: "attempt", runId: "missing", stepId: "a", attemptNumber: 1 } }; }), /FACT_EVIDENCE_MISSING/);
             assert.deepEqual(await f.backend.storage.read(f.draft.id), before);
         } finally { await f.cleanup(); }
@@ -75,7 +76,7 @@ for (const sqlite of [false, true]) {
                 try { assert.deepEqual(await other.storage.read(f.draft.id), before); } finally { await other.storage.close(); }
             }
             assert.deepEqual(await f.backend.storage.read(f.draft.id), before);
-            await assert.rejects(f.engine.edit(f.draft.id, 0, { patches: [{ op: "set", ref: "a", scope: "canonical", path: "/title", value: "B" }] }), /DRAFT_BUSY/);
+            await assert.rejects(f.engine.edit(f.draft.id, 0, { patches: [{ op: "set", ref: nodeRef(f.draft, "a"), scope: "canonical", path: "/title", value: "B" }] }), /DRAFT_BUSY/);
         } finally { await f.cleanup(); }
     });
 }
@@ -97,22 +98,22 @@ for (const sqlite of [false, true]) {
         try {
             const before = await f.backend.storage.read(f.draft.id);
             const corruptions: ((s: ManagedState) => void)[] = [
-                s => { s.draft.graph.nodes.a!.fields.title = "not declared"; },
+                s => { s.draft.graph.nodes[nodeRef(f.draft, "a")]!.fields.title = "not declared"; },
                 s => { s.draft.fieldIntents.ghost = { "/title": { kind: "remove" } }; },
-                s => { s.draft.fieldIntents.a!["/title/child"] = { kind: "remove" }; },
-                s => { s.draft.fieldIntents.a!["/title"] = { kind: "remove" }; },
+                s => { s.draft.fieldIntents[nodeRef(f.draft, "a")]!["/title/child"] = { kind: "remove" }; },
+                s => { s.draft.fieldIntents[nodeRef(f.draft, "a")]!["/title"] = { kind: "remove" }; },
                 s => { s.draft.graph.edges.bad = { id: "bad", relationType: "uses", from: "a", to: "missing" }; }
             ];
             for (const corrupt of corruptions) {
                 await assert.rejects(f.edit(corrupt), /STATE_INTENT_INVALID/);
                 assert.deepEqual(await f.backend.storage.read(f.draft.id), before);
             }
-            await assert.rejects(f.edit(s => { s.draft.initialSnapshot.graph.nodes.a!.fields.title = "corrupt baseline"; }), /INITIAL_SNAPSHOT_IMMUTABLE/);
-            await assert.rejects(f.edit(s => { s.artifacts[f.run.artifactId]!.draft.graph.nodes.a!.fields.title = "corrupt artifact"; }), /ARTIFACT_IMMUTABLE/);
+            await assert.rejects(f.edit(s => { s.draft.initialSnapshot.graph.nodes[nodeRef(f.draft, "a")]!.fields.title = "corrupt baseline"; }), /INITIAL_SNAPSHOT_IMMUTABLE/);
+            await assert.rejects(f.edit(s => { s.artifacts[f.run.artifactId]!.draft.graph.nodes[nodeRef(f.draft, "a")]!.fields.title = "corrupt artifact"; }), /ARTIFACT_IMMUTABLE/);
             await assert.rejects(f.edit(s => { delete s.artifacts[f.run.artifactId]; }), /ARTIFACT_IMMUTABLE/);
             await assert.rejects(f.edit(s => {
                 const a = structuredClone(s.artifacts[f.run.artifactId]!);
-                a.id = "new-corrupt"; a.draft.graph.nodes.a!.fields.title = "not declared";
+                a.id = "new-corrupt"; a.draft.graph.nodes[nodeRef(f.draft, "a")]!.fields.title = "not declared";
                 s.artifacts[a.id] = a;
             }), /STATE_INTENT_INVALID/);
             assert.deepEqual(await f.backend.storage.read(f.draft.id), before);
@@ -131,7 +132,7 @@ test("sqlite: reopening independently corrupted intent data refuses it without r
     try {
         const row = db.prepare("SELECT body FROM sw_managed_drafts WHERE id=?").get(f.draft.id)!;
         const data = JSON.parse(row.body as string);
-        data.draft.graph.nodes.a.fields.title = "corrupt outside the library";
+        data.draft.graph.nodes[nodeRef(f.draft, "a")].fields.title = "corrupt outside the library";
         const damaged = JSON.stringify(data);
         db.prepare("UPDATE sw_managed_drafts SET body=? WHERE id=?").run(damaged, f.draft.id);
         const reopened = createSqliteBackend(f.path);
@@ -149,7 +150,7 @@ test("sqlite: historical artifact corruption is still checked on read and transa
         for (const baseline of [false, true]) {
             const data = JSON.parse(row.body as string);
             const snapshot = baseline ? data.draft.initialSnapshot : data.draft;
-            snapshot.graph.nodes.a.fields.title = "external corruption";
+            snapshot.graph.nodes[nodeRef(f.draft, "a")].fields.title = "external corruption";
             const damaged = JSON.stringify(data);
             db.prepare("UPDATE sw_managed_artifacts SET body=? WHERE id=?").run(damaged, f.run.artifactId);
             let invoked = false;

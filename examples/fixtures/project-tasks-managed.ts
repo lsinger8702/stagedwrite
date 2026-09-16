@@ -88,30 +88,17 @@ export const rules: ManagedRule[] = [
             return issues;
         } }
 ];
-export const initial: ManagedInitialIntent = {
-    nodes: {
-        "project-1": { id: "project-1", nodeType: "project", fields: {
-                name: "文档发布", capacityHours: 16, deadlineDay: 20
-            } },
-        "task-1": { id: "task-1", nodeType: "task", fields: {
-                name: "编写快速入门", estimateHours: 12,
-                dueDay: 22, priority: "urgent", owner: null
-            } },
-        "task-2": { id: "task-2", nodeType: "task", fields: {
-                name: "评审使用示例", estimateHours: 10,
-                dueDay: 18, priority: "normal", owner: "chen"
-            } }
-    },
-    edges: {
-        "contains-1": { id: "contains-1", relationType: "contains", from: "project-1", to: "task-1" },
-        "contains-2": { id: "contains-2", relationType: "contains", from: "project-1", to: "task-2" }
-    }
-};
+export const initial: ManagedInitialIntent = { roots: [{ nodeType: "project", fields: {
+    name: "文档发布", capacityHours: 16, deadlineDay: 20
+}, relations: { contains: [
+    { nodeType: "task", fields: { name: "编写快速入门", estimateHours: 12, dueDay: 22, priority: "urgent", owner: null } },
+    { nodeType: "task", fields: { name: "评审使用示例", estimateHours: 10, dueDay: 18, priority: "normal", owner: "chen" } }
+] } }] };
 // Fictional user context for choosing edits. This does not come from the registered rules.
 export const userIntent = "项目容量保持 16 小时，截止日保持第 20 天；两个任务本期各交付 8 小时范围的最小版本；快速入门仍为紧急任务，由林负责并在第 20 天完成。";
-export const chosen: EditBatch = { patches: [
-    { op: "set", ref: "task-1", scope: "canonical", path: "/estimateHours", value: 8 },
-    { op: "set", ref: "task-2", scope: "canonical", path: "/estimateHours", value: 8 },
-    { op: "set", ref: "task-1", scope: "canonical", path: "/dueDay", value: 20 },
-    { op: "set", ref: "task-1", scope: "canonical", path: "/owner", value: "lin" }
-] };
+export const chooseEdits = (refs: Record<string, string>): EditBatch => ({ patches: [
+    { op: "set", ref: refs["task-1"]!, scope: "canonical", path: "/estimateHours", value: 8 },
+    { op: "set", ref: refs["task-2"]!, scope: "canonical", path: "/estimateHours", value: 8 },
+    { op: "set", ref: refs["task-1"]!, scope: "canonical", path: "/dueDay", value: 20 },
+    { op: "set", ref: refs["task-1"]!, scope: "canonical", path: "/owner", value: "lin" }
+] });

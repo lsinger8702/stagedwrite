@@ -222,8 +222,4 @@ export interface ManagedOptions {
     leaseTtlMs?: number;
     preflightTimeoutMs?: number;
 }
-/** Temporary scalar create input; roots/spec migration is tracked in M05. */
-export interface ManagedInitialIntent {
-    nodes: Record<string, { id: string; nodeType: string; fields: Record<string, Value> }>;
-    edges: Record<string, GraphEdge>;
-}
+export type ManagedInitialIntent = import("../edit/protocol.js").InitialIntent;

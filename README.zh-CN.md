@@ -40,7 +40,7 @@ Draft 从创建时就带有实际工作意图，发布后仍保留自身身份�
 
 ---
 
-早期原型 v0.0.1 · Node.js 22.13+（`node:sqlite`）· 尚未发布 npm 包。公开 edit/preview 与候选修复已接入三态双通道协议及嵌套字段；create 仍接受初始图，roots/spec 初始化尚待迁移。[迁移账本](docs/tasks/three-state-op-migration.md) · [项目原则](docs/design/000-project-principles.md)。
+早期原型 v0.0.1 · Node.js 22.13+（`node:sqlite`）· 尚未发布 npm 包。公开 edit/preview 与候选修复已接入三态双通道协议及嵌套字段；create 通过非空 roots/spec 初始化，返回 Draft 和服务端分配的节点 ref。[迁移账本](docs/tasks/three-state-op-migration.md) · [项目原则](docs/design/000-project-principles.md)。
 
 ## 快速开始
 
@@ -69,7 +69,10 @@ const engine = createStagedWrite({
   executors: [executor],// plan(draft), apply(step, key, context), reconcile(...).
   ...backend,           // Paired storage and authoritative lease provider.
 });
-const draft = await engine.create(selector, initialGraph);
+const { draft, createdRefs } = await engine.create(selector, {
+  roots: [{ nodeType: "task", fields: { name: "初始工作" } }],
+});
+const nodeRef = createdRefs.find(r => r.path === "/roots/0").ref;
 const check = await engine.preflight(draft.id);
 if (check.status === "passed" && check.certificate) {
   const run = await engine.publish(draft.id, check.certificate);
@@ -88,7 +91,7 @@ await engine.close();
 - 节点成功立即保存 Binding；pending 可能已经有部分远端资源，全量成功才标 published。
 - 所有管理 API 都是异步。未注册执行器时预检只诊断；未注册后端时，存储和锁仅在进程内。
 
-预检响应使用 `formatVersion: 3`。preview 的字段键是节点内的 JSON Pointer（如 `fields["/profile/name"]`），展示重建后的对象值与子字段三态；数组仍为整值。旧检查需要重新预检。公开 edit/preview 和候选修复使用 EditBatch；create 的 roots/spec 迁移仍未完成。
+预检响应使用 `formatVersion: 3`。preview 的字段键是节点内的 JSON Pointer（如 `fields["/profile/name"]`），展示重建后的对象值与子字段三态；数组仍为整值。旧检查需要重新预检。公开 edit/preview 和候选修复使用 EditBatch；create 接收 `InitialIntent`（`{roots: [...]}`），返回 `{draft, createdRefs}`。
 
 编辑现有节点时，使用 Draft/preview 返回的 ref：
 

@@ -82,10 +82,10 @@ test('real engine with offline transport repairs and reconciles without duplicat
   };
   const engine = createStagedWrite({ definitions: [definition], executors: [create(request, { loseAnnualReceipt: true })] });
   try {
-    const d = await engine.create(selector, initialIntent('test'));
+    const { draft: d, createdRefs } = await engine.create(selector, initialIntent('test'));
     const check = await engine.preflight(d.id);
     const blocked = await engine.publish(d.id, check.certificate); assert.equal(blocked.state, 'blocked');
-    assert.equal(blocked.preview.nodes.monthly.fields["/currency"].value, 'zzz');
+    assert.equal(blocked.preview.nodes[createdRefs.find(r => r.path === '/roots/0/relations/pricedBy/0').ref].fields["/currency"].value, 'zzz');
     await engine.edit(d.id, d.version, blocked.diagnostics[0].candidates[0].repairOps);
     const unknown = await engine.resume(blocked.id); assert.equal(unknown.state, 'unknown');
     const posts = requests.filter(r => r.method === 'POST').length;

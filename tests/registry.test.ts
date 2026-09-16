@@ -1,3 +1,4 @@
+import { rememberRefs, nodeRef } from "./fixtures/refs.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash } from "node:crypto";
@@ -48,10 +49,10 @@ test("helper and ordinary JSON have the same identity; current entry requires in
     const registry = assemble({ definitions: [helper, json] });
     assert.equal(registry.getDefinition(selector).digest, assemble({ definitions: [json] }).getDefinition(selector).digest);
     const engine = createStagedWrite({ definitions: [helper, json] });
-    const draft = await engine.create(selector, { nodes: { one: { id: "one", nodeType: "project", fields: { capacity: 1 } } }, edges: {} });
+    const draft = rememberRefs(await engine.create(selector, { roots: [{ nodeType: "project", fields: { capacity: 1 } }] }), ["one"]);
     assert.equal(draft.definitionDigest, registry.getDefinition(selector).digest);
     assert.equal(draft.version, 0);
-    assert.equal(draft.graph.nodes.one!.fields.capacity, 1);
+    assert.equal(draft.graph.nodes[nodeRef(draft, "one")]!.fields.capacity, 1);
     const check = await engine.preflight(draft.id);
     assert.equal(check.scope, "draft");
     assert.equal(check.status, "blocked");
@@ -72,8 +73,8 @@ test("versions remain explicit; current drafts retain their selected definition"
     const v2 = definition("2");
     v2.nodeTypes.project.valueSchema.$defs.quantity.minimum = 20;
     const engine = createStagedWrite({ definitions: [definition(), v2] });
-    const initial = { nodes: { one: { id: "one", nodeType: "project", fields: { name: "Work", capacity: 20 } } }, edges: {} };
-    const one = await engine.create(selector, initial), two = await engine.create({ ...selector, typeVersion: "2" }, initial);
+    const initial = { roots: [{ nodeType: "project", fields: { name: "Work", capacity: 20 } }] };
+    const one = rememberRefs(await engine.create(selector, initial), ["one"]), two = rememberRefs(await engine.create({ ...selector, typeVersion: "2" }, initial), ["one"]);
     assert.notEqual(one.id, two.id);
     assert.notEqual(one.definitionDigest, two.definitionDigest);
     assert.equal((await engine.getDraft(one.id)).definitionDigest, one.definitionDigest);

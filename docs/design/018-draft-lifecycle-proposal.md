@@ -97,7 +97,7 @@ Artifact 保存 id、intentDigest、完整 Draft 快照、plan、binding 和 res
 
 全部管理 API 为 async，详见 `src/managed/types.ts` 与 `src/managed/engine.ts`。
 
-1. `create(selector, initialGraph)`：保存非空初始意图与固定基线；结构合法即可，不要求业务规则全通过。
+1. `create(selector, {roots: [...]})`：展开初始 spec、分配节点身份，原子保存非空初始意图与固定基线，返回 `{draft, createdRefs}`；结构合法即可，不要求业务规则全通过。
 2. `preflight(draftId)`：短锁开始检查轮次，锁外运行检查，短锁以 version/checkEpoch/resourceRevision 校验提交；过期结果 STALE_CHECK。没有执行器时 scope=draft，无发布凭据。
 3. `publish(draftId, certificate, {runId}?)`：获取 Draft 锁。已有 currentRunId 则只观察；明确不同 ID 返回 RUN_ID_CONFLICT。否则验证凭据和注册身份，同事务建立 Run+归属+目标，再发送。
 4. `edit(draftId, expectedVersion, ops)`：短锁与版本 CAS。认领前可改结构；认领后只允许未成功节点字段。成功节点包括 planner 未使用的字段都受保护。成功后 UPDATE_NOT_SUPPORTED。

@@ -1,3 +1,4 @@
+import { rememberRefs, nodeRef } from "./fixtures/refs.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -8,43 +9,43 @@ import { setTimeout as delay } from "node:timers/promises";
 import { createStagedWrite, createMemoryBackend, createSqliteBackend, defineDraftType, type ManagedExecutor, type ManagedOptions, type ManagedInitialIntent, type ApplyOutcome, type Step } from "../src/index.js";
 const definition = defineDraftType({ id: "example.tasks", version: "1", nodeTypes: { task: { valueSchema: { type: "object", properties: { name: { type: "string" }, note: { type: ["string", "null"] } }, additionalProperties: false }, requiredAtPublish: ["name"] } }, relationTypes: { children: { from: ["task"], to: ["task"], ownership: "owned", cardinality: "many" } } });
 const selector = { type: definition.id, typeVersion: "1" };
-const initial = (): ManagedInitialIntent => ({ nodes: { a: { id: "a", nodeType: "task", fields: { name: "First", note: null } }, b: { id: "b", nodeType: "task", fields: { name: "Second" } } }, edges: {} });
-function executor(overrides: Partial<ManagedExecutor> = {}): ManagedExecutor { return { ...selector, id: "tasks.create", version: "1", target: "mock:test", plan: d => Object.values(d.graph.nodes).map(n => ({ id: n.id, payload: { ...n.fields } as Record<string, import("../src/index.js").Value>, effect: { kind: "create", nodeId: n.id } })), apply: async (s) => ({ kind: "applied", remoteRef: `remote:${s.id}` }), reconcile: async () => ({ kind: "unknown", reason: "No evidence" }), ...overrides }; }
+const initial = (): ManagedInitialIntent => ({ roots: [{ nodeType: "task", fields: { name: "First", note: null } }, { nodeType: "task", fields: { name: "Second" } }] });
+function executor(overrides: Partial<ManagedExecutor> = {}): ManagedExecutor { return { ...selector, id: "tasks.create", version: "1", target: "mock:test", plan: d => Object.values(d.graph.nodes).map((n, i) => ({ id: ["a", "b"][i]!, payload: { ...n.fields } as Record<string, import("../src/index.js").Value>, effect: { kind: "create", nodeId: n.id } })), apply: async (s) => ({ kind: "applied", remoteRef: `remote:${s.id}` }), reconcile: async () => ({ kind: "unknown", reason: "No evidence" }), ...overrides }; }
 function engine(e = executor(), options: Partial<ManagedOptions> = {}) { return createStagedWrite({ definitions: [definition], executors: [e], ...options }); }
-async function ready(e = engine()) { const d = await e.create(selector, initial()), c = await e.preflight(d.id); assert.equal(c.status, "passed"); return { e, d, c }; }
+async function ready(e = engine()) { const d = rememberRefs(await e.create(selector, initial()), ["a","b"]), c = await e.preflight(d.id); assert.equal(c.status, "passed"); return { e, d, c }; }
 test("managed: initial intent is required, plain values and fixed reset baseline survive many edits", async () => {
     const e = engine(), input = initial();
-    const d = await e.create(selector, input);
-    input.nodes.a!.fields.name = "mutated";
-    assert.equal(d.graph.nodes.a!.fields.name, "First");
-    assert.deepEqual(d.fieldIntents.a!["/note"], { kind: "set", value: null });
-    let next = await e.edit(d.id, 0, { patches: [{ op: "set", ref: "a", scope: "canonical" as const, path: "/name", value: "v1" }] });
-    next = await e.edit(d.id, next.version, { patches: [{ op: "set", ref: "a", scope: "canonical" as const, path: "/name", value: "v2" }, { op: "remove", ref: "a", scope: "canonical" as const, path: "/note" }, { op: "set", ref: "b", scope: "canonical" as const, path: "/note", value: "new" }] });
+    const d = rememberRefs(await e.create(selector, input), ["a","b"]);
+    (input.roots[0] as { fields: Record<string, unknown> }).fields.name = "mutated";
+    assert.equal(d.graph.nodes[nodeRef(d, "a")]!.fields.name, "First");
+    assert.deepEqual(d.fieldIntents[nodeRef(d, "a")]!["/note"], { kind: "set", value: null });
+    let next = await e.edit(d.id, 0, { patches: [{ op: "set", ref: nodeRef(d, "a"), scope: "canonical" as const, path: "/name", value: "v1" }] });
+    next = await e.edit(d.id, next.version, { patches: [{ op: "set", ref: nodeRef(d, "a"), scope: "canonical" as const, path: "/name", value: "v2" }, { op: "remove", ref: nodeRef(d, "a"), scope: "canonical" as const, path: "/note" }, { op: "set", ref: nodeRef(d, "b"), scope: "canonical" as const, path: "/note", value: "new" }] });
     let stored = await e.getDraft(d.id);
-    assert.equal("note" in stored.graph.nodes.a!.fields, false);
-    assert.deepEqual(stored.fieldIntents.a!["/note"], { kind: "remove" });
-    next = await e.edit(d.id, next.version, { patches: [{ op: "reset", ref: "a", scope: "canonical" as const, path: "/name" }, { op: "reset", ref: "a", scope: "canonical" as const, path: "/note" }, { op: "reset", ref: "b", scope: "canonical" as const, path: "/note" }] });
+    assert.equal("note" in stored.graph.nodes[nodeRef(d, "a")]!.fields, false);
+    assert.deepEqual(stored.fieldIntents[nodeRef(d, "a")]!["/note"], { kind: "remove" });
+    next = await e.edit(d.id, next.version, { patches: [{ op: "reset", ref: nodeRef(d, "a"), scope: "canonical" as const, path: "/name" }, { op: "reset", ref: nodeRef(d, "a"), scope: "canonical" as const, path: "/note" }, { op: "reset", ref: nodeRef(d, "b"), scope: "canonical" as const, path: "/note" }] });
     stored = await e.getDraft(d.id);
-    assert.deepEqual(stored.graph, initial());
-    assert.equal(stored.fieldIntents.b!["/note"], undefined);
+    assert.deepEqual(stored.graph, d.graph);
+    assert.equal(stored.fieldIntents[nodeRef(d, "b")]!["/note"], undefined);
     assert.deepEqual(stored.initialSnapshot, d.initialSnapshot);
-    await assert.rejects(e.create(selector, { nodes: {}, edges: {} }), /INITIAL_INTENT_REQUIRED/);
-    await assert.rejects(e.edit(d.id, 0, { patches: [{ op: "remove", ref: "a", scope: "canonical" as const, path: "/name" }] }));
+    await assert.rejects(e.create(selector, { roots: [] }), /nonempty roots/);
+    await assert.rejects(e.edit(d.id, 0, { patches: [{ op: "remove", ref: nodeRef(d, "a"), scope: "canonical" as const, path: "/name" }] }));
     await e.close();
 });
 test("managed: atomic batches and preview neither mutate the draft nor turn reset into undo", async () => {
     const { e, d } = await ready();
-    await assert.rejects(e.preview(d.id, 0, { patches: [{ op: "set", ref: "a", scope: "canonical", path: "/name", value: "edited" }, { op: "reset", ref: "a", scope: "canonical", path: "/name" }] }), /same field/);
-    const p = await e.preview(d.id, 0, { patches: [{ op: "set", ref: "b", scope: "canonical", path: "/name", value: "edited" }, { op: "reset", ref: "a", scope: "canonical", path: "/name" }] });
-    assert.equal(p.candidate.graph.nodes.a!.fields.name, "First");
+    await assert.rejects(e.preview(d.id, 0, { patches: [{ op: "set", ref: nodeRef(d, "a"), scope: "canonical", path: "/name", value: "edited" }, { op: "reset", ref: nodeRef(d, "a"), scope: "canonical", path: "/name" }] }), /same field/);
+    const p = await e.preview(d.id, 0, { patches: [{ op: "set", ref: nodeRef(d, "b"), scope: "canonical", path: "/name", value: "edited" }, { op: "reset", ref: nodeRef(d, "a"), scope: "canonical", path: "/name" }] });
+    assert.equal(p.candidate.graph.nodes[nodeRef(d, "a")]!.fields.name, "First");
     assert.equal((await e.getDraft(d.id)).version, 0);
-    await assert.rejects(e.edit(d.id, 0, { patches: [{ op: "set", ref: "a", scope: "canonical" as const, path: "/name", value: "edited" }, { op: "set", ref: "b", scope: "canonical" as const, path: "/nope", value: "bad" }] }));
+    await assert.rejects(e.edit(d.id, 0, { patches: [{ op: "set", ref: nodeRef(d, "a"), scope: "canonical" as const, path: "/name", value: "edited" }, { op: "set", ref: nodeRef(d, "b"), scope: "canonical" as const, path: "/nope", value: "bad" }] }));
     assert.deepEqual(await e.getDraft(d.id), d);
     await e.close();
 });
 test("managed: partial create is owned by one run, repairs resume only unfinished effects", async () => {
     const calls: string[] = [], keys: string[] = [];
-    const e = engine(executor({ apply: async (s, k) => { calls.push(`${s.id}:${s.payload.name}`); keys.push(k); return s.payload.name === "Second" ? { kind: "not_applied", reason: "Name reserved", diagnostics: [{ code: "name.reserved", path: "/nodes/b/fields/name", message: "Choose another name", candidates: [{ value: "Fixed", repairOps: { patches: [{ op: "set", ref: "b", scope: "canonical" as const, path: "/name", value: "Fixed" }] } }] }] } : { kind: "applied", remoteRef: `remote:${s.id}` }; } }));
+    const e = engine(executor({ apply: async (s, k) => { calls.push(`${s.id}:${s.payload.name}`); keys.push(k); return s.payload.name === "Second" ? { kind: "not_applied", reason: "Name reserved", diagnostics: [{ code: "name.reserved", path: `/nodes/${nodeRef(d, "b")}/fields/name`, message: "Choose another name", candidates: [{ value: "Fixed", repairOps: { patches: [{ op: "set", ref: nodeRef(d, "b"), scope: "canonical" as const, path: "/name", value: "Fixed" }] } }] }] } : { kind: "applied", remoteRef: `remote:${s.id}` }; } }));
     const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!, { runId: "initial-create" });
     assert.equal(r.state, "blocked");
     assert.equal(r.diagnostics[0]?.message, "Choose another name");
@@ -56,9 +57,9 @@ test("managed: partial create is owned by one run, repairs resume only unfinishe
     assert.equal((await e.publish(d.id, "stale certificate")).id, r.id);
     assert.equal(calls.length, 2);
     await assert.rejects(e.publish(d.id, c.certificate!, { runId: "another" }), /RUN_ID_CONFLICT/);
-    await assert.rejects(e.edit(d.id, 0, { patches: [{ op: "set", ref: "a", scope: "canonical" as const, path: "/name", value: "changed" }] }), /APPLIED_STEP_IMMUTABLE/);
-    await assert.rejects(e.edit(d.id, 0, { graphPatches: [{ op: "set", parentRef: "a", path: "/children", value: { nodeType: "task", fields: { name: "C" } } }] }), /REPAIR_TOPOLOGY_CHANGED/);
-    await e.edit(d.id, 0, { patches: [{ op: "set", ref: "b", scope: "canonical" as const, path: "/name", value: "Fixed" }] });
+    await assert.rejects(e.edit(d.id, 0, { patches: [{ op: "set", ref: nodeRef(d, "a"), scope: "canonical" as const, path: "/name", value: "changed" }] }), /APPLIED_STEP_IMMUTABLE/);
+    await assert.rejects(e.edit(d.id, 0, { graphPatches: [{ op: "set", parentRef: nodeRef(d, "a"), path: "/children", value: { nodeType: "task", fields: { name: "C" } } }] }), /REPAIR_TOPOLOGY_CHANGED/);
+    await e.edit(d.id, 0, { patches: [{ op: "set", ref: nodeRef(d, "b"), scope: "canonical" as const, path: "/name", value: "Fixed" }] });
     const checked = await e.preflight(d.id);
     assert.deepEqual(checked.executionHint, { runId: r.id, nextAction: "resume" });
     const done = await e.resume(r.id);
@@ -72,7 +73,7 @@ test("managed: partial create is owned by one run, repairs resume only unfinishe
     assert.equal((await e.publish(d.id, "ignored")).id, r.id);
     assert.equal((await e.resume(r.id)).state, "published");
     assert.equal(calls.length, 3);
-    await assert.rejects(e.edit(d.id, 1, { patches: [{ op: "set", ref: "b", scope: "canonical" as const, path: "/name", value: "Update" }] }), /UPDATE_NOT_SUPPORTED/);
+    await assert.rejects(e.edit(d.id, 1, { patches: [{ op: "set", ref: nodeRef(d, "b"), scope: "canonical" as const, path: "/name", value: "Update" }] }), /UPDATE_NOT_SUPPORTED/);
     await e.close();
 });
 test("managed: unknown is reconciled with original payload before adopting edits", async () => {
@@ -80,7 +81,7 @@ test("managed: unknown is reconciled with original payload before adopting edits
     let calls = 0;
     const e = engine(executor({ apply: async (s, k) => { calls++; keys.push(k); return s.id === "b" && calls === 2 ? { kind: "unknown", reason: "Timeout" } : { kind: "applied", remoteRef: s.id }; }, reconcile: async (s, k) => { inputs.push(String(s.payload.name)); assert.equal(k, keys[1]); return { kind: "no_effect", reason: "Cancelled before acceptance" }; } }));
     const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!);
-    await e.edit(d.id, 0, { patches: [{ op: "set", ref: "b", scope: "canonical" as const, path: "/name", value: "Repaired" }] });
+    await e.edit(d.id, 0, { patches: [{ op: "set", ref: nodeRef(d, "b"), scope: "canonical" as const, path: "/name", value: "Repaired" }] });
     const done = await e.resume(r.id);
     assert.equal(done.state, "published");
     assert.deepEqual(inputs, ["Second"]);
@@ -92,11 +93,11 @@ test("managed: unknown that resolves applied blocks contradictory repair until i
     let calls = 0;
     const e = engine(executor({ apply: async (s) => { calls++; return s.id === "b" ? { kind: "unknown", reason: "Timeout" } : { kind: "applied", remoteRef: s.id }; }, reconcile: async (s) => ({ kind: "applied", remoteRef: s.id }) }));
     const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!);
-    await e.edit(d.id, 0, { patches: [{ op: "set", ref: "b", scope: "canonical" as const, path: "/name", value: "Different" }] });
+    await e.edit(d.id, 0, { patches: [{ op: "set", ref: nodeRef(d, "b"), scope: "canonical" as const, path: "/name", value: "Different" }] });
     const blocked = await e.resume(r.id);
     assert.equal(blocked.check?.status, "blocked");
     assert.equal(calls, 2);
-    await e.edit(d.id, 1, { patches: [{ op: "reset", ref: "b", scope: "canonical" as const, path: "/name" }] });
+    await e.edit(d.id, 1, { patches: [{ op: "reset", ref: nodeRef(d, "b"), scope: "canonical" as const, path: "/name" }] });
     assert.equal((await e.resume(r.id)).state, "published");
     assert.equal(calls, 2);
     await e.close();
@@ -113,12 +114,12 @@ test("managed: same-input refusal can resume without edit, same request key and 
 });
 test("managed: rich diagnostics and async pending do not issue a publish certificate", async () => {
     let done = false;
-    const e = engine(executor(), { rules: [{ ...selector, id: "note", version: "1", check: d => d.graph.nodes.b!.fields.note ? [] : [{ code: "note.missing", path: "/nodes/b/fields/note", message: "Add context", severity: "warning", hint: "Be specific", repairs: [{ message: "Example", ops: { patches: [{ op: "set", ref: "b", scope: "canonical" as const, path: "/note", value: "Review" }] } }], metadata: { origin: "test" } }] }], asyncRules: [{ ...selector, id: "remote.ready", version: "1", check: async () => done ? { status: "complete", diagnostics: [] } : { status: "pending", message: "Still checking", retryAfterSeconds: 1 } }] });
-    const d = await e.create(selector, initial()), pending = await e.preflight(d.id);
+    const e = engine(executor(), { rules: [{ ...selector, id: "note", version: "1", check: d => d.graph.nodes[nodeRef(d, "b")]!.fields.note ? [] : [{ code: "note.missing", path: `/nodes/${nodeRef(d, "b")}/fields/note`, message: "Add context", severity: "warning", hint: "Be specific", repairs: [{ message: "Example", ops: { patches: [{ op: "set", ref: nodeRef(d, "b"), scope: "canonical" as const, path: "/note", value: "Review" }] } }], metadata: { origin: "test" } }] }], asyncRules: [{ ...selector, id: "remote.ready", version: "1", check: async () => done ? { status: "complete", diagnostics: [] } : { status: "pending", message: "Still checking", retryAfterSeconds: 1 } }] });
+    const d = rememberRefs(await e.create(selector, initial()), ["a","b"]), pending = await e.preflight(d.id);
     assert.equal(pending.status, "pending");
     assert.equal(pending.certificate, undefined);
     assert.equal(pending.diagnostics[0]?.repairs?.length, 1);
-    assert.ok(pending.preview.nodes.b);
+    assert.ok(pending.preview.nodes[nodeRef(d, "b")]);
     await assert.rejects(e.publish(d.id, "none"), /PREFLIGHT_REQUIRED/);
     done = true;
     assert.equal((await e.preflight(d.id)).status, "passed");
@@ -128,10 +129,10 @@ test("managed: stale async completion cannot certify an edited draft; close reje
     let finish!: () => void, entered!: () => void;
     const started = new Promise<void>(r => entered = r);
     const e = engine(executor(), { asyncRules: [{ ...selector, id: "wait", version: "1", check: () => new Promise(resolve => { finish = () => resolve({ status: "complete", diagnostics: [] }); entered(); }) }] });
-    const d = await e.create(selector, initial()), checking = e.preflight(d.id);
+    const d = rememberRefs(await e.create(selector, initial()), ["a","b"]), checking = e.preflight(d.id);
     await started;
     await assert.rejects(e.close(), /DRAFT_BUSY/);
-    await e.edit(d.id, 0, { patches: [{ op: "set", ref: "b", scope: "canonical" as const, path: "/name", value: "Later" }] });
+    await e.edit(d.id, 0, { patches: [{ op: "set", ref: nodeRef(d, "b"), scope: "canonical" as const, path: "/name", value: "Later" }] });
     finish();
     await assert.rejects(checking, /STALE_CHECK/);
     await assert.rejects(e.getCheck(d.id), /CHECK_NOT_CURRENT/);
@@ -146,7 +147,7 @@ test("managed: shared lock excludes publish, edit and resume across engine insta
     await assert.rejects(other.publish(d.id, c.certificate!), /DRAFT_BUSY/);
     await assert.rejects(other.edit(d.id, 0, { patches: [] }), /DRAFT_BUSY/);
     await assert.rejects(other.resume("concurrent"), /DRAFT_BUSY/);
-    const independent = await other.create(selector, initial());
+    const independent = rememberRefs(await other.create(selector, initial()), ["a","b"]);
     assert.notEqual(independent.id, d.id);
     finish({ kind: "applied", remoteRef: "a" });
     assert.equal((await work).state, "published");
@@ -164,7 +165,7 @@ test("managed: SQLite reopen restores partial facts, baseline, run pointer and s
         assert.equal((await next.getDraft(d.id)).currentRunId, r.id);
         assert.equal((await next.resume(r.id)).state, "published");
         assert.equal(calls, 0);
-        assert.deepEqual((await next.getDraft(d.id)).initialSnapshot.graph, initial());
+        assert.deepEqual((await next.getDraft(d.id)).initialSnapshot.graph, d.graph);
         await next.close();
     }
     finally {
@@ -237,14 +238,14 @@ test("managed: another registration cannot use a stored certificate to dispatch"
 });
 test("managed: executor must map every node exactly once and storage cannot omit its lock provider", async () => {
     assert.throws(() => engine(executor(), { storage: createMemoryBackend().storage }), /STORAGE_LOCK_PAIR_REQUIRED/);
-    const e = engine(executor({ plan: () => [{ id: "a", payload: {} }] as Step[] })), d = await e.create(selector, initial());
+    const e = engine(executor({ plan: () => [{ id: "a", payload: {} }] as Step[] })), d = rememberRefs(await e.create(selector, initial()), ["a","b"]);
     assert.equal((await e.preflight(d.id)).status, "blocked");
     await e.close();
 });
 test("managed: process exit after remote creation resumes from durable original attempt", async () => {
     const dir = mkdtempSync(join(tmpdir(), "sw-crash-")), path = join(dir, "state.sqlite"), receipts = join(dir, "remote.json");
     try {
-        const code = `import {createStagedWrite,createSqliteBackend} from ${JSON.stringify(new URL("../src/index.js", import.meta.url).href)};import{writeFileSync}from'node:fs';const e=createStagedWrite({definitions:[${JSON.stringify(definition)}],...createSqliteBackend(${JSON.stringify(path)}),leaseTtlMs:60,executors:[{...${JSON.stringify(selector)},id:'tasks.create',version:'1',target:'mock:test',plan:d=>Object.values(d.graph.nodes).map(n=>({id:n.id,payload:{...n.fields},effect:{kind:'create',nodeId:n.id}})),apply:async(s,k)=>{if(s.id==='b'){writeFileSync(${JSON.stringify(receipts)},JSON.stringify({key:k,input:s.payload,remoteRef:'b'}));process.exit(0);}return{kind:'applied',remoteRef:s.id};},reconcile:async()=>({kind:'unknown',reason:'no evidence'})}]});const d=await e.create(${JSON.stringify(selector)},${JSON.stringify(initial())});const c=await e.preflight(d.id);await e.publish(d.id,c.certificate,{runId:'crash'});process.exit(1);`;
+        const code = `import {createStagedWrite,createSqliteBackend} from ${JSON.stringify(new URL("../src/index.js", import.meta.url).href)};import{writeFileSync}from'node:fs';const e=createStagedWrite({definitions:[${JSON.stringify(definition)}],...createSqliteBackend(${JSON.stringify(path)}),leaseTtlMs:60,executors:[{...${JSON.stringify(selector)},id:'tasks.create',version:'1',target:'mock:test',plan:d=>Object.values(d.graph.nodes).map((n,i)=>({id:["a","b"][i],payload:{...n.fields},effect:{kind:'create',nodeId:n.id}})),apply:async(s,k)=>{if(s.id==='b'){writeFileSync(${JSON.stringify(receipts)},JSON.stringify({key:k,input:s.payload,remoteRef:'b'}));process.exit(0);}return{kind:'applied',remoteRef:s.id};},reconcile:async()=>({kind:'unknown',reason:'no evidence'})}]});const {draft:d}=await e.create(${JSON.stringify(selector)},${JSON.stringify(initial())});const c=await e.preflight(d.id);await e.publish(d.id,c.certificate,{runId:'crash'});process.exit(1);`;
         await new Promise<void>((resolve, reject) => { const p = spawn(process.execPath, ["--input-type=module", "-e", code]); let err = ""; p.stderr.on("data", d => err += d); p.on("error", reject); p.on("exit", c => c === 0 ? resolve() : reject(Error(err))); });
         await delay(90);
         const { readFileSync } = await import("node:fs"), receipt = JSON.parse(readFileSync(receipts, "utf8"));
@@ -283,7 +284,7 @@ test("managed: preflight calls rules each time while application caching owns it
     const cache = new Map<string, { status: "complete"; diagnostics: [] }>();
     const e = engine(executor(), { asyncRules: [{ ...selector, id: "cached.check", version: "1", check: async d => {
         invocations++;
-        const key = String(d.graph.nodes.b!.fields.name);
+        const key = String(d.graph.nodes[nodeRef(d, "b")]!.fields.name);
         if (!cache.has(key)) { reads++; cache.set(key, { status: "complete", diagnostics: [] }); }
         return cache.get(key)!;
     } }] });
@@ -293,7 +294,7 @@ test("managed: preflight calls rules each time while application caching owns it
     assert.equal(reads, 1);
     assert.notEqual(c.certificate, second.certificate);
     await assert.rejects(e.publish(d.id, c.certificate!), /PREFLIGHT_REQUIRED/);
-    await e.edit(d.id, 0, { patches: [{ op: "set", ref: "b", scope: "canonical" as const, path: "/name", value: "Changed" }] });
+    await e.edit(d.id, 0, { patches: [{ op: "set", ref: nodeRef(d, "b"), scope: "canonical" as const, path: "/name", value: "Changed" }] });
     assert.equal((await e.preflight(d.id)).status, "passed");
     assert.equal(invocations, 3);
     assert.equal(reads, 2);
@@ -393,17 +394,17 @@ test("managed: edit acknowledges only its batch and invalidates check without ex
         try {
             const e = engine(executor(), backend);
             const { d, c } = await ready(e);
-            const receipt = await e.edit(d.id, d.version, { patches: [{ op: "set", ref: "b", scope: "canonical" as const, path: "/name", value: "Fixed" }] });
+            const receipt = await e.edit(d.id, d.version, { patches: [{ op: "set", ref: nodeRef(d, "b"), scope: "canonical" as const, path: "/name", value: "Fixed" }] });
             assert.deepEqual(Object.keys(receipt).sort(), ["changes", "createdRefs", "draftId", "preflightRequired", "version"]);
             assert.equal(receipt.draftId, d.id);
             assert.equal(receipt.version, 1);
             assert.equal(receipt.preflightRequired, true);
-            assert.deepEqual(receipt.changes, [{ inputPath: "/patches/0", op: "set", scope: "canonical", target: "field", ref: "b", path: "/name", before: { kind: "set", value: "Second" }, after: { kind: "set", value: "Fixed" } }]);
+            assert.deepEqual(receipt.changes, [{ inputPath: "/patches/0", op: "set", scope: "canonical", target: "field", ref: nodeRef(d, "b"), path: "/name", before: { kind: "set", value: "Second" }, after: { kind: "set", value: "Fixed" } }]);
             await assert.rejects(e.getCheck(d.id), /CHECK_NOT_CURRENT/);
             await assert.rejects(e.publish(d.id, c.certificate!), /PREFLIGHT_REQUIRED/);
             if (receipt.changes[0]?.target === "field") receipt.changes[0].after = { kind: "set", value: "tampered" };
             const stored = await e.getDraft(d.id);
-            assert.equal(stored.graph.nodes.b!.fields.name, "Fixed");
+            assert.equal(stored.graph.nodes[nodeRef(d, "b")]!.fields.name, "Fixed");
             assert.deepEqual(stored.initialSnapshot, d.initialSnapshot);
             const check = await e.preflight(receipt.draftId);
             assert.equal(check.version, receipt.version);
@@ -429,11 +430,11 @@ test("managed: confirmed remote values persist with creation evidence and origin
         const done = await e.resume(r.id); assert.equal(done.state, "published");
         const s = (await backend.storage.read(d.id))!;
         assert.equal(Object.keys(s.remoteFacts).length, 2);
-        assert.deepEqual(s.remoteFacts[s.latestFactByNode.a!]!.values, confirmed.values);
-        assert.equal(s.bindings.a!.input.name, "First"); // Request intent is not overwritten by normalized receipt values.
+        assert.deepEqual(s.remoteFacts[s.latestFactByNode[nodeRef(d, "a")]!]!.values, confirmed.values);
+        assert.equal(s.bindings[nodeRef(d, "a")]!.input.name, "First"); // Request intent is not overwritten by normalized receipt values.
         confirmed.values.name.value = "MUTATED";
-        assert.equal((await backend.storage.read(d.id))!.remoteFacts[s.latestFactByNode.a!]!.values.name!.kind, "value");
-        assert.deepEqual(s.remoteFacts[s.latestFactByNode.a!]!.values.name, { kind: "value", value: "REMOTE" });
+        assert.equal((await backend.storage.read(d.id))!.remoteFacts[s.latestFactByNode[nodeRef(d, "a")]!]!.values.name!.kind, "value");
+        assert.deepEqual(s.remoteFacts[s.latestFactByNode[nodeRef(d, "a")]!]!.values.name, { kind: "value", value: "REMOTE" });
     } finally { await e.close(); }
 });
 test("managed: malformed optional confirmation does not erase an applied creation", async () => {
@@ -469,7 +470,7 @@ test("managed: initial and repair certificates durably adopt the same run", asyn
     const e = engine(executor({ apply: async s => { calls++; return s.payload.name === "Second" ? { kind: "not_applied", reason: "repair" } : { kind: "applied", remoteRef: s.id }; } }), backend);
     try {
         const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!);
-        await e.edit(d.id, 0, { patches: [{ op: "set", ref: "b", scope: "canonical" as const, path: "/name", value: "Fixed" }] });
+        await e.edit(d.id, 0, { patches: [{ op: "set", ref: nodeRef(d, "b"), scope: "canonical" as const, path: "/name", value: "Fixed" }] });
         const done = await e.resume(r.id); assert.equal(done.state, "published");
         const s = (await backend.storage.read(d.id))!;
         assert.equal(Object.keys(s.publications).length, 2);
@@ -498,23 +499,23 @@ test("managed: preview enforces the same publication and successful-node repair 
         ? { kind: "applied", remoteRef: "remote:a" }
         : { kind: "not_applied", reason: "Fix the second node" } }));
     try {
-        const d = await e.create(selector, initial()), check = await e.preflight(d.id);
+        const d = rememberRefs(await e.create(selector, initial()), ["a","b"]), check = await e.preflight(d.id);
         const run = await e.publish(d.id, check.certificate!);
         assert.equal(run.state, "blocked");
         const before = await e.getDraft(d.id);
-        const changeA = { patches: [{ op: "set" as const, ref: "a", scope: "canonical" as const, path: "/name", value: "Changed" }] };
+        const changeA = { patches: [{ op: "set" as const, ref: nodeRef(d, "a"), scope: "canonical" as const, path: "/name", value: "Changed" }] };
         await assert.rejects(e.preview(d.id, 0, changeA), /APPLIED_STEP_IMMUTABLE/);
         await assert.rejects(e.edit(d.id, 0, changeA), /APPLIED_STEP_IMMUTABLE/);
-        await assert.rejects(e.preview(d.id, 0, { graphPatches: [{ op: "set", parentRef: "a", path: "/children", value: { nodeType: "task", fields: { name: "Extra" } } }] }), /REPAIR_TOPOLOGY_CHANGED/);
-        const allowed = await e.preview(d.id, 0, { patches: [{ op: "set", ref: "b", scope: "canonical" as const, path: "/name", value: "Repaired" }] });
-        assert.equal(allowed.candidate.graph.nodes.b!.fields.name, "Repaired");
+        await assert.rejects(e.preview(d.id, 0, { graphPatches: [{ op: "set", parentRef: nodeRef(d, "a"), path: "/children", value: { nodeType: "task", fields: { name: "Extra" } } }] }), /REPAIR_TOPOLOGY_CHANGED/);
+        const allowed = await e.preview(d.id, 0, { patches: [{ op: "set", ref: nodeRef(d, "b"), scope: "canonical" as const, path: "/name", value: "Repaired" }] });
+        assert.equal(allowed.candidate.graph.nodes[nodeRef(d, "b")]!.fields.name, "Repaired");
         assert.deepEqual(await e.getDraft(d.id), before);
         assert.deepEqual(await e.getCheck(d.id), check);
     } finally { await e.close(); }
     const { e: completed, d, c } = await ready();
     try {
         await completed.publish(d.id, c.certificate!);
-        const patch = { patches: [{ op: "set" as const, ref: "a", scope: "canonical" as const, path: "/name", value: "Update" }] };
+        const patch = { patches: [{ op: "set" as const, ref: nodeRef(d, "a"), scope: "canonical" as const, path: "/name", value: "Update" }] };
         await assert.rejects(completed.preview(d.id, 0, patch), /UPDATE_NOT_SUPPORTED/);
         await assert.rejects(completed.edit(d.id, 0, patch), /UPDATE_NOT_SUPPORTED/);
     } finally { await completed.close(); }

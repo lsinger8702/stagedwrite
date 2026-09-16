@@ -145,4 +145,4 @@ resume 接受修复后的 Draft 时会重新执行本节预检；未通过则响
 
 公开 edit/preview 与候选修复已切换双通道 EditBatch；嵌套 preview 已接通，准确状态见 [任务账本](../tasks/three-state-op-migration.md)。规则注册复用不代表检查结果缓存；每次 preflight 仍执行适用规则。
 
-当前 ManagedDraft 的 graph.fields 与 set 声明值使用 Json，Step.payload 与远端归一化事实仍保持独立类型。公开 create 的 roots/spec 输入尚待迁移；edit/preview 已接入三态批次与真实存储事务。
+当前 ManagedDraft 的 graph.fields 与 set 声明值使用 Json，Step.payload 与远端归一化事实仍保持独立类型。公开 create 接收 roots/spec 并返回服务端 createdRefs；edit/preview 已接入三态批次与真实存储事务。

@@ -1,3 +1,4 @@
+import { rememberRefs, nodeRef } from "./fixtures/refs.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createStagedWrite, defineDraftType, type GraphDiagnostic } from "../src/index.js";
@@ -15,11 +16,11 @@ test("preflight: candidate reset validation uses the fixed baseline in both rule
     const selector = { type: definition.id, typeVersion: definition.version };
     const engine = createStagedWrite({ definitions: [definition] });
     try {
-        const created = await engine.create(selector, { nodes: { a: { id: "a", nodeType: "item", fields: { name: "original", note: null } } }, edges: {} });
-        await engine.edit(created.id, 0, { patches: [{ op: "set", ref: "a", scope: "canonical" as const, path: "/name", value: "edited" }, { op: "remove", ref: "a", scope: "canonical" as const, path: "/note" }] });
+        const created = rememberRefs(await engine.create(selector, { roots: [{ nodeType: "item", fields: { name: "original", note: null } }] }), ["a"]);
+        await engine.edit(created.id, 0, { patches: [{ op: "set", ref: nodeRef(created, "a"), scope: "canonical" as const, path: "/name", value: "edited" }, { op: "remove", ref: nodeRef(created, "a"), scope: "canonical" as const, path: "/note" }] });
         const draft = await engine.getDraft(created.id);
-        const ops = { patches: [{ op: "reset" as const, ref: "a", scope: "canonical" as const, path: "/name" }, { op: "reset" as const, ref: "a", scope: "canonical" as const, path: "/note" }] };
-        const expected = (await engine.preview(draft.id, draft.version, ops)).candidate.graph.nodes.a!.fields;
+        const ops = { patches: [{ op: "reset" as const, ref: nodeRef(created, "a"), scope: "canonical" as const, path: "/name" }, { op: "reset" as const, ref: nodeRef(created, "a"), scope: "canonical" as const, path: "/note" }] };
+        const expected = (await engine.preview(draft.id, draft.version, ops)).candidate.graph.nodes[nodeRef(created, "a")]!.fields;
         const diagnostic: GraphDiagnostic = { code: "example.restore", path: "/nodes/a", message: "Consider restoring the original intent.", repairs: [{ message: "Restore initial values.", ops }] };
         const registry = new DefinitionRegistry([definition]);
         const observed: unknown[] = [];

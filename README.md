@@ -86,7 +86,7 @@ of correctness for every integration.
 
 Early prototype, v0.0.1 · Node.js 22.13+ (`node:sqlite`) · no npm package yet.
 Public edit/preview and suggested repairs use the three-state, dual-channel protocol.
-Create still accepts an initial graph; roots/spec initialization is the remaining migration.
+Create accepts nonempty roots/spec initial work and returns the Draft plus server-assigned node refs.
 [Migration ledger](docs/tasks/three-state-op-migration.md) ·
 [Project principles](docs/design/000-project-principles.md).
 
@@ -121,7 +121,10 @@ const engine = createStagedWrite({
   executors: [executor],// plan(draft), apply(step, key, context), reconcile(...).
   ...backend,           // Paired storage and authoritative lease provider.
 });
-const draft = await engine.create(selector, initialGraph);
+const { draft, createdRefs } = await engine.create(selector, {
+  roots: [{ nodeType: "task", fields: { name: "Initial work" } }],
+});
+const nodeRef = createdRefs.find(r => r.path === "/roots/0").ref;
 const check = await engine.preflight(draft.id);
 if (check.status === "passed" && check.certificate) {
   const run = await engine.publish(draft.id, check.certificate);
@@ -152,7 +155,7 @@ See the [complete registered schema and rules](examples/fixtures/project-tasks-m
 - Bindings are saved as individual nodes succeed. `pending` may already have remote resources; only full success marks the Draft `published`.
 - All managed APIs are asynchronous. Without executors, preflight is diagnostic-only. Without a registered backend, storage and locking are in-process memory only.
 
-Preflight responses use `formatVersion: 3`. Preview fields are keyed by node-relative JSON Pointers (`fields["/profile/name"]`), with reconstructed object values and explicit child states. Arrays remain whole values. Older saved checks require a fresh preflight. Public edit/preview and repair suggestions use `EditBatch`; create roots/spec migration is still in progress.
+Preflight responses use `formatVersion: 3`. Preview fields are keyed by node-relative JSON Pointers (`fields["/profile/name"]`), with reconstructed object values and explicit child states. Arrays remain whole values. Older saved checks require a fresh preflight. Public edit/preview and repair suggestions use `EditBatch`; create accepts `InitialIntent` (`{roots: [...]}`) and returns `{draft, createdRefs}`.
 
 ## Recovery boundary
 

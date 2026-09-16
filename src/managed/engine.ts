@@ -1,3 +1,4 @@
+import { registeredTopology } from "../edit/registered-topology.js";
 import { validateIntentSnapshot } from "../edit/fields.js";
 import { protectIntentRepair } from "./edit-guards.js";
 import { compileUpdate, validateUpdatePlan, type UpdateProjection } from "./update-plan.js";
@@ -18,7 +19,7 @@ import { prepareEdit } from "./prepare-edit.js";
 import type { Step, ApplyOutcome, ReconcileOutcome, Event } from "../types.js";
 import type { GraphDiagnostic } from "../preflight/types.js";
 import { createMemoryBackend, lockResource } from "./storage.js";
-import { initialize, snapshot, same } from "./intent.js";
+import { snapshot, same } from "./intent.js";
 import type { ManagedOptions, ManagedEditResult, ManagedDraft, ManagedInitialIntent, ManagedState, ManagedRun, ManagedExecutor, ManagedCheck, Artifact, DraftLease, Attempt } from "./types.js";
 const key = (s: DefinitionSelector) => JSON.stringify([s.type, s.typeVersion]);
 const copy = <T>(v: T): T => structuredClone(v);
@@ -435,12 +436,14 @@ export function createStagedWrite(options: ManagedOptions) {
         }
     }
     const api = {
-        async create(selector: DefinitionSelector, initial: ManagedInitialIntent): Promise<ManagedDraft> {
-            const id = randomUUID(), time = new Date().toISOString(), empty = { graph: { nodes: {}, edges: {} }, fieldIntents: {} };
-            const draft = initialize(registry, { ...copy(empty), formatVersion: 3, id, version: 0, ...selector, definitionDigest: registry.getDefinition(selector).digest, status: "pending", currentRunId: null, targetId: null, initialSnapshot: copy(empty), publishedArtifactId: null, lastPublishedAt: null, tombstones: { nodes: [], edges: [] }, createdAt: time, updatedAt: time }, initial);
+        async create(selector: DefinitionSelector, initial: ManagedInitialIntent): Promise<import("../edit/results.js").CreateReceipt<ManagedDraft>> {
+            const id = randomUUID(), time = new Date().toISOString();
+            const expanded = registeredTopology(registry, selector).initialize(initial);
+            const initialSnapshot = snapshot(expanded.candidate);
+            const draft: ManagedDraft = { ...expanded.candidate, formatVersion: 3, id, version: 0, ...selector, definitionDigest: registry.getDefinition(selector).digest, status: "pending", currentRunId: null, targetId: null, initialSnapshot, publishedArtifactId: null, lastPublishedAt: null, tombstones: { nodes: [], edges: [] }, createdAt: time, updatedAt: time };
             await withLease(id, l => storage.transact(id, l, prior => { if (prior)
                 throw new Error("DRAFT_EXISTS"); return { draft, checkEpoch: 0, check: null, artifacts: {}, runs: {}, bindings: {}, resourceRevision: 0, lateFacts: [], remoteFacts: {}, latestFactByNode: {}, publications: {} }; }));
-            return copy(draft);
+            return { draft: copy(draft), createdRefs: copy(expanded.createdRefs) };
         },
         async getDraft(id: string) { return copy((await need(id)).draft); },
         async getBindings(id: string) { return copy((await need(id)).bindings); },

@@ -2,7 +2,7 @@
 
 **2026-09-16 用户明确决定：所有对外 OP 只能为 set/remove/reset；反对 node.add、node.remove、edge.add、edge.remove 等专用动作名。拓扑与字段分通道，创建/复制通过 set 的 value spec 表达。此决定替代原七动作混合数组协议。**
 
-**当前运行时尚未迁移。本文记录目标和实施顺序；细节未决项不得被当作已实现或已批准的额外能力。唯一进度来源是 [迁移账本](../tasks/three-state-op-migration.md)。优先完成本迁移，再恢复 update 派发开发。**
+**公开 create/edit/preview 与候选修复已切换新协议。本文记录迁移目标和实施顺序，最终验收仍按账本逐项完成；细节未决项不得被当作已实现或已批准的额外能力。唯一进度来源是 [迁移账本](../tasks/three-state-op-migration.md)。优先完成本迁移，再恢复 update 派发开发。**
 
 ## 1. 保留与替换
 

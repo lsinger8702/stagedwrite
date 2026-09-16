@@ -141,3 +141,6 @@ export function parseEditBatch(raw: unknown): EditBatch {
   if (issues.length) throw new EditInputError(issues);
   return input as unknown as EditBatch;
 }
+
+/** Nonempty initial work; node identities are allocated by the engine. */
+export interface InitialIntent { roots: NodeSpec[] }

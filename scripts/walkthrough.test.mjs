@@ -8,7 +8,8 @@ const trace = JSON.parse(readFileSync(new URL('../docs/examples/publish-resume-t
 test('walkthrough: fresh real execution matches committed semantics', () => {
   const fresh = JSON.parse(readFileSync(new URL('../dist/walkthrough-raw.json', import.meta.url), 'utf8'));
   assert.notEqual(fresh.recordedAt, trace.recordedAt);
-  assert.notEqual(fresh.steps[0].output.id, trace.steps[0].output.id);
+  assert.deepEqual(fresh.steps[0].output.createdRefs, trace.steps[0].output.createdRefs);
+  assert.equal(fresh.steps[0].output.draft.id, trace.steps[0].output.draft.id);
   verifyTrace(trace, fresh);
 });
 
@@ -17,8 +18,10 @@ test('walkthrough: changed diagnostics, versions, effects and business dates fai
     t => { t.steps.find(s => s.method === 'preflight').output.diagnostics[0].message += ' changed'; },
     t => { t.steps.find(s => s.method === 'edit').output.version++; },
     t => { t.effects.pop(); },
-    t => { t.steps[0].output.graph.nodes['project-1'].fields.name = 'changed'; },
-    t => { t.steps[0].output.graph.nodes['project-1'].fields.createdAt = '2027-01-01T00:00:00.000Z'; },
+    t => { t.steps[0].output.draft.graph.nodes[t.steps[0].output.createdRefs[0].ref].fields.name = 'changed'; },
+    t => { t.steps[0].output.draft.graph.nodes[t.steps[0].output.createdRefs[0].ref].fields.createdAt = '2027-01-01T00:00:00.000Z'; },
+    t => { t.steps[0].output.createdRefs[0].ref = t.steps[0].output.createdRefs[1].ref; },
+    t => { const edges = t.steps[0].output.draft.graph.edges; Object.values(edges)[0].to = t.steps[0].output.createdRefs[0].ref; },
     t => { t.steps.reverse(); },
     t => { t.steps.find(s => s.method === 'edit').input[0] = '11111111-1111-4111-8111-111111111111'; },
   ]) {
@@ -73,6 +76,8 @@ test('walkthrough: pointer-keyed previews render titles, nested values and diagn
   };
   runInNewContext(script, context);
   assert.ok(elements.get('main').innerHTML.length > 100);
+  const creation = context.stepPage(0);
+  assert.match(creation, /createdRefs/); assert.match(creation, /文档发布/); assert.match(creation, /roots/);
   const rendered = context.graph({ nodes: { 'a/b~c': { id: 'a/b~c', nodeType: 'task', fields: {
     '/name': { kind: 'value', value: 'Nested task' }, '/profile': { kind: 'value', value: { title: 'A' } },
     '/profile/note': { kind: 'clear' }

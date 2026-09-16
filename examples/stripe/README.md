@@ -52,11 +52,13 @@ node --env-file=.env.stripe examples/stripe/run.mjs \
 
 ```js
 await engine.edit(draft.id, draft.version, {
-  patches: [{ op: 'set', ref: 'monthly', scope: 'canonical', path: '/currency', value: 'hkd' }],
+  patches: [{ op: 'set', ref: catalogRefs(draft).monthly, scope: 'canonical', path: '/currency', value: 'hkd' }],
 });
 ```
 
-这里的 monthly 是本例当前初始图中的节点 ref。关系注册显式声明 ownership/cardinality；create 的 roots/spec 与服务端初始 ID 迁移尚未完成。此次录制已用新 EditBatch 在真实 sandbox 重新运行，未沿用旧样例摘要。
+`create(selector, initialIntent(experiment))` 接收一个 Product root 和两个嵌套 Price spec，返回 `{draft, createdRefs}`。例如 `/roots/0/relations/pricedBy/0` 对应月付节点的服务端 ref。`catalogRefs` 从当前图的类型、关系和本例唯一的周期字段找回业务角色；它不是硬编码节点 ID。
+
+步骤 ID `product/monthly/annual` 属于 adapter 的计划身份，`Step.effect.nodeId` 则使用真实节点 ref。远端报错和候选 repairOps 定位后者；重开 SQLite 后也不依赖某次进程内保存的别名表。关系注册显式声明 ownership/cardinality。
 
 ## 中断后继续
 

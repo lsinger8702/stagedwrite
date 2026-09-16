@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from '
 import { randomUUID } from 'node:crypto';
 import { resolve, join, dirname } from 'node:path';
 import { createStagedWrite, createSqliteBackend } from '../../dist/src/index.js';
-import { definition, selector, initialIntent } from './schema.mjs';
+import { definition, selector, initialIntent, catalogRefs } from './schema.mjs';
 import { createCatalogExecutor } from './adapter.mjs';
 import { assertTestKey, createTransport, listAll, requestKey } from './transport.mjs';
 import { sourceDigest, publicSummary } from './report.mjs';
@@ -62,7 +62,7 @@ try {
   if (!manifest.draftId) {
     if (continuing) throw new Error('Initialization interrupted before recording Draft identity; no publish was started. Inspect the local database.');
     const initial = initialIntent(manifest.experiment);
-    const draft = await call('create', [selector, initial], () => engine.create(selector, initial));
+    const { draft } = await call('create', [selector, initial], () => engine.create(selector, initial));
     manifest.draftId = draft.id; writeJson(manifestPath, manifest);
   }
   let draft = await engine.getDraft(manifest.draftId);
@@ -83,11 +83,11 @@ try {
   for (let turn = 0; turn < 4 && run.state !== 'published'; turn++) {
     draft = await engine.getDraft(draft.id);
     if (run.state === 'blocked') {
-      if (draft.graph.nodes.monthly.fields.currency !== 'zzz' || !run.diagnostics.some(d => d.code === 'STRIPE_CURRENCY_VALIDATION')) {
+      if (draft.graph.nodes[catalogRefs(draft).monthly].fields.currency !== 'zzz' || !run.diagnostics.some(d => d.code === 'STRIPE_CURRENCY_VALIDATION')) {
         throw new Error('Unexpected refusal: inspect trace and repair the original Draft; do not create a replacement');
       }
       report.refusedKey = run.steps.find(s => s.id === 'monthly').key;
-      const ops = { patches: [{ op: 'set', ref: 'monthly', scope: "canonical", path: '/currency', value: 'hkd' }] };
+      const ops = { patches: [{ op: 'set', ref: catalogRefs(draft).monthly, scope: "canonical", path: '/currency', value: 'hkd' }] };
       await call('edit', [draft.id, draft.version, ops], () => engine.edit(draft.id, draft.version, ops));
     }
     await reopen();

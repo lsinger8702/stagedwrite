@@ -2,7 +2,7 @@
 
 **唯一进度账本。2026-09-16 用户要求：先方案、任务拆分，再逐项完成并及时更新。方案见 [022](../design/022-three-state-op-migration.md)。**
 
-**已确认：所有编辑 OP 只允许 set/remove/reset；移除 node/edge 专用动作；双通道；新建携带内容/复制来源；固定基线 reset 与执行保护保留。公开 edit/preview 与候选修复已切换双通道；create 仍待 roots/spec 迁移，不能宣称全项完成。**
+**已确认：所有编辑 OP 只允许 set/remove/reset；移除 node/edge 专用动作；双通道；新建携带内容/复制来源；固定基线 reset 与执行保护保留。公开 create 已切换非空 roots/spec 与 createdRefs；edit/preview 与候选修复已切换双通道。M05 完成；M06–M09 仍按后续验收清单推进，不宣称全部结项。**
 
 ## 记账规则
 
@@ -21,8 +21,8 @@
 | M02 | 完成 | M01 | 新 PatchOp、EditBatch、TopologySpec、回执和工具 schema | 静态/运行时只接受三种 op，互斥字段验证；不保留旧公开别名 |
 | M03 | 完成 | M02 | 拓扑通道求值、初始内容展开、服务端身份及 createdRefs | 引用按请求前图；全批失败不写；无幽灵 refs；图的关系/共享引用正确 |
 | M04 | 完成 | M03 | 嵌套 Schema/三态字段求值/显式 scope | 父子路径优先级、null/remove/未声明、固定基线 reset、非法 scope 测试通过 |
-| M05 | 进行中 | M04 | create 与 edit/preview 单入口接线、复制 spec | 非空初始意图；复制只带意图、不带 Binding/Run；输入位置映射；CAS/租约/成功保护保持 |
-| M06 | 待做 | M05 | 诊断候选修复、preview、SDK/示例调用全部迁移 | message-only 仍可用；候选批次可预演；模型不需要 node.op 或真实远端 payload |
+| M05 | 完成 | M04 | create 与 edit/preview 单入口接线、复制 spec | 非空初始意图；复制只带意图、不带 Binding/Run；输入位置映射；CAS/租约/成功保护保持 |
+| M06 | 进行中 | M05 | 诊断候选修复、preview、SDK/示例调用全部迁移 | message-only 仍可用；候选批次可预演；模型不需要 node.op 或真实远端 payload |
 | M07 | 待做 | M06 | 核心/存储/恢复回归、隔离包验证及文档清理 | 旧动作只出现在迁移说明与拒绝测试；合法批次/失败原子性/unknown/成功保护测试通过 |
 | M08 | 待做 | M07 | walkthrough HTML/ZIP、Stripe 样例与证据刷新 | walkthrough 闸门、Stripe 离线闸门通过；样例源码变化后需真实重录，不能仅改 digest。缺凭证标待外部条件 |
 | M09 | 待做 | M08 | 迁移总结、账本结项、恢复 update 派发 | 明确已实现/限制，检查无兼容残留；恢复 U3 前确认 OP 新入口稳定 |
@@ -228,3 +228,22 @@
 - 本轮新增修改尚未提交/推送；私有评审目录未纳入。
 
 - 最终验证：核心 133/133（TSC 干净）；walkthrough 6/6；Stripe 离线 13/13（含新真实录制的源码摘要、字节和场景闸门）；隔离安装/TypeScript 包消费通过；git diff --check 通过。HTML/JSON/Markdown/ZIP 已由实际执行生成并复验。
+
+
+### M05 — 公开 create 接线完成
+
+- 上一批 edit/preview 与候选诊断已推送：3d63fa1。
+- create 现在只接收非空 roots/spec（InitialIntent），在保存前展开并校验完整初始图/声明，一次租约事务保存 Draft 和固定 initialSnapshot；返回 `{draft, createdRefs}`，服务端节点 ref 对应输入路径。拒绝旧 nodes/edges、调用方 ID、空 roots、创建时 clone/ref 及非法后代；错误有 message/hint，失败不保存半个 Draft。
+- 删除 src/graph/edit.ts、GraphOp/GraphChange/GraphEditError 和旧 initialize/toInternal/fromInternal；没有旧入口或协议转换兼容层。
+- 公开嵌套 create → edit → preflight → publish → repair → resume，以及公开 clone spec 已通过真实引擎回归；固定基线、原请求 unknown 查证、成功节点保护、SQLite 重开和并发租约测试继续通过。
+- 测试通过 create 回执记录实际 ref，仅将输入位置与测试业务别名对应，不改真实节点身份或转换请求。纯 diff 的转义节点 fixture 是脱离存储的人工测试快照，未写回引擎。
+- Walkthrough 和 Stripe 改用 roots/spec。adapter 的稳定步骤 ID 与实际节点 ref 分开；Stripe 的错误坐标来自 Step.effect.nodeId，重开后从当前图找回本例唯一角色。
+- 独立 Mock 演示启动器固定 UUID 序列，便于节点身份、图摘要、计划和引用的重跑比较；不进入 npm 包，也不被真实 Stripe 使用。HTML 展示启动器源码。时间仍来自真实运行，只在语义复验中归一；字节闸门继续检查生成文件，反例覆盖 createdRefs/边目标篡改。
+- 新真实 Stripe 录制：2026-09-16T12:09:59.475Z，blocked → unknown → published，1 Product / 2 Prices / 3 Bindings，单 Run，两次 SQLite 重开，unknown 恢复无 POST。审阅白名单摘要后更新公开 JSON 与 SHA-256，未改旧摘要冒充新运行。
+- 验证：核心 136/136（含 TSC）；walkthrough 6/6；Stripe 离线 13/13；隔离包安装/TypeScript 消费通过；git diff --check 通过。
+- 中英文 README、018/004、Stripe 接入指南及 HTML/JSON/Markdown/ZIP 已同步。update 派发仍未开启。
+
+### M06 — 收尾清单
+
+- 诊断候选与实际示例调用方已经迁移；继续核对工具 schema 的包级接入、类型消费和所有面对 Agent 的说明，不能把内部 editBatchSchema 测试当作公开 SDK 已交付。
+- 随后 M07 做全仓旧协议残留和最终回归验收，M08 复核生成产物/真实证据，M09 结账后才恢复 update 派发。以上阶段尚未勾完成。

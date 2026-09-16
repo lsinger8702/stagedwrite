@@ -7,10 +7,12 @@ const value = (v: string | number | boolean | null): NormalizedValue => ({ kind:
 async function setup(B = value("A"), D = value("B"), O = value("A")) {
     const definition = defineDraftType({ id: "plan.tasks", version: "1", nodeTypes: { task: { valueSchema: { type: "object", properties: { title: { type: ["string", "null"] }, note: { type: "string" } }, additionalProperties: false } } }, relationTypes: {} });
     const selector = { type: definition.id, typeVersion: "1" }, backend = createMemoryBackend();
-    const e = createStagedWrite({ definitions: [definition], ...backend, executors: [{ ...selector, id: "tasks", version: "1", target: "test", plan: d => Object.values(d.graph.nodes).map(n => ({ id: n.id, payload: n.fields as Record<string, import("../src/index.js").Value>, effect: { kind: "create", nodeId: n.id } })), apply: async () => ({ kind: "applied", remoteRef: "remote-a" }), reconcile: { unsupported: "no evidence" } }] });
-    const draft = await e.create(selector, { nodes: { "a/b": { id: "a/b", nodeType: "task", fields: { title: "A" } } }, edges: {} });
+    const e = createStagedWrite({ definitions: [definition], ...backend, executors: [{ ...selector, id: "tasks", version: "1", target: "test", plan: d => Object.values(d.graph.nodes).map(n => ({ id: "a/b", payload: n.fields as Record<string, import("../src/index.js").Value>, effect: { kind: "create", nodeId: n.id } })), apply: async () => ({ kind: "applied", remoteRef: "remote-a" }), reconcile: { unsupported: "no evidence" } }] });
+    const { draft, createdRefs } = await e.create(selector, { roots: [{ nodeType: "task", fields: { title: "A" } }] });
     const check = await e.preflight(draft.id), run = await e.publish(draft.id, check.certificate!);
-    const s = (await backend.storage.read(draft.id))!; await e.close();
+    // Deliberately give this detached pure-compiler fixture an escaped identity.
+    // The live engine and its store retain the server-generated ref.
+    const s: NonNullable<Awaited<ReturnType<typeof backend.storage.read>>> = JSON.parse(JSON.stringify((await backend.storage.read(draft.id))!).replaceAll(createdRefs[0]!.ref, "a/b")); await e.close();
     // Compiler fixtures are detached copies; the public update entry remains disabled.
     s.draft.version++; s.draft.status = "pending";
     s.draft.fieldIntents["a/b"]!["/title"] = D.kind === "value" ? { kind: "set", value: D.value } : { kind: "remove" };

@@ -3,26 +3,28 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createStagedWrite, createSqliteBackend, type ManagedExecutor, type ManagedAsyncRule, type Step, type ApplyOutcome, type EditBatch } from "../src/index.js";
-import { definition, selector, rules, initial, userIntent, chosen, value } from "./fixtures/project-tasks-managed.js";
+import { definition, selector, rules, initial, userIntent, chooseEdits, value } from "./fixtures/project-tasks-managed.js";
 // Actual library and SQLite execution. The remote service and user choices are fictional.
 const effects = new Map<string, {
     id: string;
     body: Step["payload"];
 }>();
 const remoteCalls: unknown[] = [], checkCalls: unknown[] = [];
+let refs: Record<string, string>;
+const stepId = (ref: string) => { const id = Object.keys(refs).find(id => refs[id] === ref); assert.ok(id); return id; };
 const executor: ManagedExecutor = { ...selector, id: "example.project-service", version: "5", target: "mock:local",
     plan: draft => Object.values(draft.graph.nodes).map((node): Step => {
         const parent = Object.values(draft.graph.edges).find(edge => edge.to === node.id)?.from;
-        return { id: node.id, effect: { kind: "create", nodeId: node.id }, payload: node.nodeType === "project"
+        return { id: stepId(node.id), effect: { kind: "create", nodeId: node.id }, payload: node.nodeType === "project"
                 ? { title: value(node, "name"), capacity_hours: value(node, "capacityHours"), deadline_day: value(node, "deadlineDay") }
                 : { title: value(node, "name"), estimate_hours: value(node, "estimateHours"), due_day: value(node, "dueDay"), priority: value(node, "priority"), assignee: value(node, "owner") },
-            ...(parent ? { dependsOn: [parent], inputRefs: { projectId: parent } } : {}) };
+            ...(parent ? { dependsOn: [stepId(parent)], inputRefs: { projectId: stepId(parent) } } : {}) };
     }),
     apply: async (step, key) => {
         let output: ApplyOutcome;
         if (step.id === "task-1" && step.payload.assignee === "lin")
             output = { kind: "not_applied", reason: "Owner unavailable; request rejected before creation", code: "OWNER_UNAVAILABLE", message: "负责人暂不可用，任务未创建。",
-                diagnostics: [{ code: "task.owner_unavailable", path: "/nodes/task-1/fields/owner", message: "林无法接手，请选择其他负责人后续作。", candidates: [{ value: "chen", label: "陈", message: "目前可接手（虚构候选）", repairOps: { patches: [{ op: "set", ref: "task-1", scope: "canonical", path: "/owner", value: "chen" }] } }] }] };
+                diagnostics: [{ code: "task.owner_unavailable", path: `/nodes/${step.effect.nodeId}/fields/owner`, message: "林无法接手，请选择其他负责人后续作。", candidates: [{ value: "chen", label: "陈", message: "目前可接手（虚构候选）", repairOps: { patches: [{ op: "set", ref: step.effect.nodeId, scope: "canonical", path: "/owner", value: "chen" }] } }] }] };
         else {
             let resource = effects.get(key);
             if (!resource) {
@@ -64,17 +66,21 @@ async function call<T>(method: string, note: string, input: unknown[], action: (
     return output;
 }
 try {
-    let draft: { id: string; version: number } = await call("create", "创建就有初始工作意图。Graph 为普通值，fieldIntents 保存三态，initialSnapshot 固定初始基线。", [selector, initial], () => engine.create(selector, initial));
+    const created = await call("create", "创建就有初始工作意图。Graph 为普通值，fieldIntents 保存三态，initialSnapshot 固定初始基线。", [selector, initial], () => engine.create(selector, initial));
+    const byPath = (path: string) => { const entry = created.createdRefs.find(r => r.path === path); assert.ok(entry); return entry.ref; };
+    refs = { "project-1": byPath("/roots/0"), "task-1": byPath("/roots/0/relations/contains/0"), "task-2": byPath("/roots/0/relations/contains/1") };
+    const chosen = chooseEdits(refs);
+    let draft: { id: string; version: number } = created.draft;
     assert.equal(draft.version, 0);
-    assert.deepEqual((await engine.getDraft(draft.id)).graph, initial);
-    const editName = (text: string): EditBatch => ({ patches: [{ op: "set", ref: "project-1", scope: "canonical", path: "/name", value: text }] });
+    assert.deepEqual((await engine.getDraft(draft.id)).graph, created.draft.graph);
+    const editName = (text: string): EditBatch => ({ patches: [{ op: "set", ref: refs["project-1"]!, scope: "canonical", path: "/name", value: text }] });
     for (const name of ["临时名称 A", "临时名称 B"]) {
         const ops = editName(name);
         draft = await call("edit", "先连续修改名称，供下一步验证 reset 的固定基线。", [draft.id, draft.version, ops], () => engine.edit(draft.id, draft.version, ops)).then(receipt => ({ id: receipt.draftId, version: receipt.version }));
     }
-    const reset: EditBatch = { patches: [{ op: "reset", ref: "project-1", scope: "canonical", path: "/name" }] };
+    const reset: EditBatch = { patches: [{ op: "reset", ref: refs["project-1"]!, scope: "canonical", path: "/name" }] };
     draft = await call("edit", "reset 回到 create 时的“文档发布”，不会回到上一版的“临时名称 A”。", [draft.id, draft.version, reset], () => engine.edit(draft.id, draft.version, reset)).then(receipt => ({ id: receipt.draftId, version: receipt.version }));
-    assert.equal((await engine.getDraft(draft.id)).graph.nodes["project-1"]!.fields.name, "文档发布");
+    assert.equal((await engine.getDraft(draft.id)).graph.nodes[refs["project-1"]!]!.fields.name, "文档发布");
     const pending = await call("preflight", "静态规则给出 3 条具体诊断；异步检查返回 pending，无发布凭据。", [draft.id], () => engine.preflight(draft.id));
     assert.equal(pending.status, "pending");
     assert.equal(pending.diagnostics.length, 3);

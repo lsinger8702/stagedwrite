@@ -22,7 +22,7 @@ export interface EditReceipt {
   changes: EditChange[];
   createdRefs: CreatedRef[];
 }
-/** Generic only to keep the migration module independent of the old scalar Draft. */
+/** Created intent plus the input-position mapping for server-assigned identities. */
 export interface CreateReceipt<Draft> { draft: Draft; createdRefs: CreatedRef[] }
 export interface EditPreview<Draft> {
   preview: true;

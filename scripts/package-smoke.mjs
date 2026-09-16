@@ -19,13 +19,13 @@ try {
 import assert from 'node:assert/strict';
 import * as api from 'stagedwrite';
 const {createStagedWrite,createSqliteBackend}=api;
-assert.deepEqual(Object.keys(api).sort(),['DefinitionAssemblyError','EditInputError','GraphEditError','createMemoryBackend','createSqliteBackend','createStagedWrite','defineDraftType'].sort());
+assert.deepEqual(Object.keys(api).sort(),['DefinitionAssemblyError','EditInputError','createMemoryBackend','createSqliteBackend','createStagedWrite','defineDraftType'].sort());
 const definition={id:'managed',version:'1',nodeTypes:{task:{valueSchema:{type:'object',properties:{name:{type:'string'}},additionalProperties:false},requiredAtPublish:['name']}},relationTypes:{}};
 const selector={type:'managed',typeVersion:'1'};let sends=0;
 const executor={...selector,id:'mock',version:'1',target:'managed:test',plan:d=>Object.values(d.graph.nodes).map(n=>({id:n.id,payload:n.fields,effect:{kind:'create',nodeId:n.id}})),apply:async()=>{sends++;return{kind:'applied',remoteRef:'managed-one'}},reconcile:async()=>({kind:'unknown',reason:'fixture'})};
 const open=()=>createStagedWrite({definitions:[definition],executors:[executor],...createSqliteBackend('managed.sqlite')});
-let e=open();const d=await e.create(selector,{nodes:{one:{id:'one',nodeType:'task',fields:{name:'initial'}}},edges:{}});
-const edit=await e.edit(d.id,0,{patches:[{op:'set',ref:'one',scope:'canonical',path:'/name',value:'changed'}]});assert.deepEqual(Object.keys(edit).sort(),['changes','createdRefs','draftId','preflightRequired','version']);assert.equal(edit.draftId,d.id);assert.equal(edit.preflightRequired,true);await e.edit(d.id,1,{patches:[{op:'reset',ref:'one',scope:'canonical',path:'/name'}]});assert.equal((await e.getDraft(d.id)).graph.nodes.one.fields.name,'initial');
+let e=open();const {draft:d,createdRefs}=await e.create(selector,{roots:[{nodeType:'task',fields:{name:'initial'}}]});const ref=createdRefs[0].ref;assert.equal(createdRefs[0].path,'/roots/0');
+const edit=await e.edit(d.id,0,{patches:[{op:'set',ref,scope:'canonical',path:'/name',value:'changed'}]});assert.deepEqual(Object.keys(edit).sort(),['changes','createdRefs','draftId','preflightRequired','version']);assert.equal(edit.draftId,d.id);assert.equal(edit.preflightRequired,true);await e.edit(d.id,1,{patches:[{op:'reset',ref,scope:'canonical',path:'/name'}]});assert.equal((await e.getDraft(d.id)).graph.nodes[ref].fields.name,'initial');
 const c=await e.preflight(d.id);const r=await e.publish(d.id,c.certificate);await e.close();e=open();assert.equal((await e.getDraft(d.id)).currentRunId,r.id);assert.equal((await e.resume(r.id)).state,'published');assert.equal((await e.publish(d.id,c.certificate)).id,r.id);assert.equal(sends,1);await e.close();
 `);
   execFileSync(process.execPath, ['managed.mjs'], { cwd: dir, stdio: 'pipe' });

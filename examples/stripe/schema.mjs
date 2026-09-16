@@ -22,15 +22,26 @@ export const selector = { type: definition.id, typeVersion: definition.version }
 
 export function initialIntent(experiment) {
   return {
-    nodes: {
-      product: { id: 'product', nodeType: 'product', fields: { name: `StagedWrite test ${experiment}` } },
-      // Deliberately valid local shape but invalid remote currency, to exercise repair.
-      monthly: { id: 'monthly', nodeType: 'price', fields: { currency: 'zzz', amount: 1000, interval: 'month' } },
-      annual: { id: 'annual', nodeType: 'price', fields: { currency: 'hkd', amount: 10000, interval: 'year' } },
-    },
-    edges: {
-      monthly: { id: 'monthly', relationType: 'pricedBy', from: 'product', to: 'monthly' },
-      annual: { id: 'annual', relationType: 'pricedBy', from: 'product', to: 'annual' },
-    },
+    roots: [{ nodeType: 'product', fields: { name: `StagedWrite test ${experiment}` }, relations: { pricedBy: [
+      // Valid local shape, deliberately invalid remote currency, to exercise repair.
+      { nodeType: 'price', fields: { currency: 'zzz', amount: 1000, interval: 'month' } },
+      { nodeType: 'price', fields: { currency: 'hkd', amount: 10000, interval: 'year' } },
+    ] } }],
   };
+}
+
+// Business roles are separate from generated node refs. This sample has exactly
+// one Product and one Price for each immutable interval; ambiguity is rejected.
+export function catalogRefs(draft) {
+  const nodes = Object.values(draft.graph.nodes);
+  const one = predicate => { const found = nodes.filter(predicate); if (found.length !== 1) throw new Error('Unexpected sample graph'); return found[0].id; };
+  const product = one(n => n.nodeType === 'product');
+  const monthly = one(n => n.nodeType === 'price' && n.fields.interval === 'month');
+  const annual = one(n => n.nodeType === 'price' && n.fields.interval === 'year');
+  if (nodes.length !== 3) throw new Error('Unexpected sample graph');
+  for (const ref of [monthly, annual]) {
+    const edges = Object.values(draft.graph.edges).filter(e => e.to === ref);
+    if (edges.length !== 1 || edges[0].from !== product || edges[0].relationType !== 'pricedBy') throw new Error('Price must reference the Product');
+  }
+  return { product, monthly, annual };
 }

@@ -6,10 +6,9 @@ export type { Value, Step, ExecutionStep, Event, ApplyOutcome, ReconcileOutcome,
 export { defineDraftType } from "./registry/types.js";
 export { DefinitionAssemblyError } from "./registry/registry.js";
 export type * from "./registry/types.js";
-export { GraphEditError } from "./graph/types.js";
-export type { GraphEdge, GraphIssue } from "./graph/types.js";
+export type { GraphEdge } from "./graph/types.js";
 export type { GraphDiagnostic, GraphCandidate, GraphRepair, SourcedGraphDiagnostic, PendingRule, GraphDraftPreview, PreviewField } from "./preflight/types.js";
 export type { PublishOptions } from "./execution/publication.js";
-export type { EditBatch, FieldPatch, TopologyPatch, NodeSpec, NodeInput, CreatedRef } from "./edit/protocol.js";
+export type { EditBatch, FieldPatch, TopologyPatch, NodeSpec, NodeInput, CreatedRef, InitialIntent } from "./edit/protocol.js";
 export { EditInputError } from "./edit/protocol.js";
-export type { EditReceipt, EditPreview, EditChange } from "./edit/results.js";
+export type { EditReceipt, EditPreview, EditChange, CreateReceipt } from "./edit/results.js";
