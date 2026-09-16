@@ -35,6 +35,8 @@ export interface Step {
 type Applied = {
     kind: "applied";
     remoteRef: string;
+    /** Adapter-confirmed remote values, not guessed from the request. */
+    confirmed?: { projectionDigest: string; values: Record<string, import("./managed/types.js").NormalizedValue> };
 };
 type Unknown = {
     kind: "unknown";

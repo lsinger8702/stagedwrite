@@ -45,6 +45,8 @@ export interface ManagedEditResult {
     changes: GraphChange[];
 }
 export interface ManagedCheck extends GraphCheck {
+    /** Diagnostic-only until the update execution path is enabled. Never a certificate. */
+    updatePreview?: { slots: readonly import("./update-plan.js").UpdateSlot[] };
     artifactId?: string;
     executionHint?: {
         runId: string;
@@ -65,6 +67,7 @@ export interface Attempt {
     key: string;
     number: number;
     input: Step["payload"];
+    request: { step: Step; target: string; executorId: string; executorVersion: string };
     status: "pending" | "applied" | "no_effect" | "unknown";
     outcome?: ApplyOutcome | ReconcileOutcome;
 }
@@ -189,7 +192,15 @@ export interface ManagedAsyncRule extends DefinitionSelector {
         diagnostics?: readonly GraphDiagnostic[];
     }>;
 }
+export interface ManagedUpdateInspector {
+    /** Read-only; the host owns pending work. Registration changes require an executor version bump. */
+    inspect(draft: ManagedDraft, context: { signal: AbortSignal; bindings: Readonly<Record<string, ResourceBinding>> }): Promise<
+        | { status: "complete"; projections: readonly import("./update-plan.js").UpdateProjection[]; observations: readonly RemoteObservation[]; diagnostics?: readonly GraphDiagnostic[] }
+        | { status: "pending"; message: string; retryAfterSeconds?: number; diagnostics?: readonly GraphDiagnostic[] }
+    >;
+}
 export interface ManagedExecutor extends DefinitionSelector {
+    update?: ManagedUpdateInspector;
     id: string;
     version: string;
     target: string;

@@ -143,3 +143,30 @@ SQLite：去掉 runs.draft_id 的 UNIQUE，增加 kind/state 索引字段；可�
 编译上下文保留 Draft version、resourceRevision、原成功 Artifact/currentRun、目标、投影与观察；各槽位引用确认 fact ID。普通编译不推进 latestFactByNode，避免把漂移读成新的成功基线。
 
 新增 11 项纯编译测试，核心累计 72/72。测试通过不意味着远端 update 已开放。下批仍需接 adapter 异步读取、受预算约束的预检、写前观察验证、真实 update/noop 派发和原请求查证。
+
+## 11. U2 异步检查接线
+
+新增可选 `executor.update.inspect(draft, { signal, bindings })`。注册函数在引擎装配时绑定；变更实现需提升 executor.version。输入 Draft/Bindings 是冻结快照；只能读取远端，不得派发创建/更新。
+
+返回值：
+
+- `{status:"pending", message, retryAfterSeconds?, diagnostics?}`：由宿主管理异步任务，上游重试 preflight。
+- `{status:"complete", projections, observations, diagnostics?}`：交给纯编译器输出字段差异和具体诊断。
+
+成功过的 Draft 且注册了 inspector 时，公开 preflight 在普通规则通过后执行该检查。同步规则、异步规则和 inspector 共用本轮等待预算；已超预算不启动 inspector，已启动超时返回 incomplete 并 abort。检查提交仍验证 version/checkEpoch/resourceRevision，较早结果不能覆盖较新检查。
+
+**当前只返回 `scope:"draft"` 的诊断检查，passed 时可附 `updatePreview.slots`；没有 certificate/执行 Artifact。** 成功后的 edit 仍拒绝，publish 仍观察原 Run。未注册 inspector 的接入与首次 create 路径保持原有行为。
+
+本批测试走真实 create/preflight/publish 后的公开 preflight，验证 frozen 输入、pending、drift 具体值、超时迟到、非法诊断和并发检查；RemoteFact 由测试明确注入，不代表自动回执提取已实现。核心 77/77；下一批需接成功回执提取、update/noop 执行槽位与原请求信封，才可开放 edit/publish。
+
+## 12. 回执事实与请求信封
+
+`apply/reconcile` 的 applied 结果新增可选 `confirmed: {projectionDigest, values}`。adapter 从真实成功响应提取规范值，引擎验证形状后在同一事务保存 Attempt outcome、Binding、RemoteFact、latest 指针与 resourceRevision。不从请求目标猜测远端值；确认规范值可与创建请求字段形式不同。
+
+无 confirmed 的旧接入仍可完成创建，但没有 update 的事实基线；非法 confirmed 保留已确认的创建成功，返回 CONFIRMED_FACT_INVALID warning，不生成事实，也不会因此重发。存储要求 attempt 来源事实的 remoteId、projectionDigest、values 与原 applied outcome 完整匹配。
+
+每个 Attempt 在发送前持久保存 request（原 Step、解析后 payload、target、executorId/version），并校验 payload 与原 input 一致。恢复调用读取原 request，不从新计划重建。原信封不可覆盖；相同资源 ID 的迟到回执如果规范值矛盾，保持 unknown。
+
+存储 schema 升至 3，schema 1/2 文件只读检测后拒绝，不做静默迁移。原因是旧 Attempt 缺少完整请求信封，不能靠当前计划猜测补齐。旧实验库应配合匹配的旧代码观察/恢复，不为重试另建资源。
+
+预检测试已经使用真实 apply 返回 confirmed 自动生成事实，删除原手工注入。新增事实提交失败→采用迟到回执的测试，以及 unknown 查证后保存事实、非法确认值不抹掉效果的测试。walkthrough 已按新增的真实 Attempt 输出重新生成；仍未开放成功后 edit/update/noop 执行。

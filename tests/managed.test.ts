@@ -413,3 +413,52 @@ test("managed: edit acknowledges only its batch and invalidates check without ex
         } finally { rmSync(dir, { recursive: true, force: true }); }
     }
 });
+
+test("managed: confirmed remote values persist with creation evidence and original request", async () => {
+    const backend = createMemoryBackend();
+    const confirmed = { projectionDigest: "tasks-v1", values: { name: { kind: "value" as const, value: "REMOTE" }, note: { kind: "absent" as const } } };
+    let first = true;
+    const e = engine(executor({ apply: async s => first ? (first = false, { kind: "unknown", reason: "lost" }) : { kind: "applied", remoteRef: `remote:${s.id}`, confirmed },
+        reconcile: async (s, _key) => { assert.deepEqual(s.payload, { name: "First", note: null }); return { kind: "applied", remoteRef: "remote:a", confirmed }; } }), backend);
+    try {
+        const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!);
+        const unknown = (await backend.storage.read(d.id))!;
+        assert.equal(Object.keys(unknown.remoteFacts).length, 0);
+        assert.equal(unknown.runs[r.id]!.attempts[0]!.request.target, "mock:test");
+        const done = await e.resume(r.id); assert.equal(done.state, "published");
+        const s = (await backend.storage.read(d.id))!;
+        assert.equal(Object.keys(s.remoteFacts).length, 2);
+        assert.deepEqual(s.remoteFacts[s.latestFactByNode.a!]!.values, confirmed.values);
+        assert.equal(s.bindings.a!.input.name, "First"); // Request intent is not overwritten by normalized receipt values.
+        confirmed.values.name.value = "MUTATED";
+        assert.equal((await backend.storage.read(d.id))!.remoteFacts[s.latestFactByNode.a!]!.values.name!.kind, "value");
+        assert.deepEqual(s.remoteFacts[s.latestFactByNode.a!]!.values.name, { kind: "value", value: "REMOTE" });
+    } finally { await e.close(); }
+});
+test("managed: malformed optional confirmation does not erase an applied creation", async () => {
+    const backend = createMemoryBackend(); let calls = 0;
+    const e = engine(executor({ apply: async s => { calls++; return { kind: "applied", remoteRef: s.id, confirmed: { projectionDigest: "v1", values: { name: { kind: "value", value: NaN } } } }; } }), backend);
+    try {
+        const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!);
+        assert.equal(r.state, "published"); assert.equal(calls, 2);
+        assert.equal(r.diagnostics.length, 2);
+        assert.ok(r.diagnostics.every(d => d.code === "CONFIRMED_FACT_INVALID" && d.severity === "warning"));
+        assert.equal(Object.keys((await backend.storage.read(d.id))!.remoteFacts).length, 0);
+        await e.resume(r.id); assert.equal(calls, 2);
+    } finally { await e.close(); }
+});
+test("managed: failed fact commit recovers a durable receipt without another apply", async () => {
+    const backend = createMemoryBackend(); let fail = true, calls = 0;
+    const storage = { ...backend.storage, transact: async (...args: Parameters<typeof backend.storage.transact>) => {
+        const [id, lease, fn] = args;
+        return backend.storage.transact(id, lease, s => { const next = fn(s); if (fail && Object.keys(next.remoteFacts).length) { fail = false; throw new Error("FACT_COMMIT_FAILED"); } return next; });
+    } };
+    const e = engine(executor({ apply: async s => { calls++; return { kind: "applied", remoteRef: s.id, confirmed: { projectionDigest: "v1", values: { name: { kind: "value", value: s.payload.name! } } } }; }, reconcile: async () => { throw new Error("must use durable late receipt"); } }), { storage, locks: backend.locks });
+    try {
+        const { d, c } = await ready(e); await assert.rejects(e.publish(d.id, c.certificate!), /FACT_COMMIT_FAILED/);
+        const failed = (await backend.storage.read(d.id))!;
+        assert.equal(Object.keys(failed.bindings).length, 0); assert.equal(Object.keys(failed.remoteFacts).length, 0);
+        const r = await e.resume(failed.draft.currentRunId!); assert.equal(r.state, "published"); assert.equal(calls, 2);
+        assert.equal(Object.keys((await backend.storage.read(d.id))!.remoteFacts).length, 2);
+    } finally { await e.close(); }
+});

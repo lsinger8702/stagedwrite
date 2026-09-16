@@ -10,7 +10,7 @@ import { lockResource } from "../src/managed/storage.js";
 
 const definition = defineDraftType({ id: "storage.tasks", version: "1", nodeTypes: { task: { valueSchema: { type: "object", properties: { title: { type: "string" } }, additionalProperties: false } } }, relationTypes: {} });
 const selector = { type: definition.id, typeVersion: "1" };
-const executor: ManagedExecutor = { ...selector, id: "storage.executor", version: "1", target: "test", plan: d => Object.values(d.graph.nodes).map(n => ({ id: n.id, payload: n.fields, effect: { kind: "create", nodeId: n.id } })), apply: async s => ({ kind: "applied", remoteRef: `remote:${s.id}` }), reconcile: { unsupported: "test" } };
+const executor: ManagedExecutor = { ...selector, id: "storage.executor", version: "1", target: "test", plan: d => Object.values(d.graph.nodes).map(n => ({ id: n.id, payload: n.fields, effect: { kind: "create", nodeId: n.id } })), apply: async s => ({ kind: "applied", remoteRef: `remote:${s.id}`, confirmed: { projectionDigest: "title-v1", values: { title: { kind: "value", value: "A" } } } }), reconcile: { unsupported: "test" } };
 async function fixture(sqlite: boolean) {
     const dir = mkdtempSync(join(tmpdir(), "sw-model-")), path = join(dir, "state.sqlite");
     const backend = sqlite ? createSqliteBackend(path) : createMemoryBackend();
@@ -39,7 +39,7 @@ for (const sqlite of [false, true]) {
             const before = await f.backend.storage.read(f.draft.id);
             await assert.rejects(f.edit(s => addUpdate(s, "update-2")), /UNRESOLVED_RUN_ALREADY_EXISTS/);
             assert.deepEqual(await f.backend.storage.read(f.draft.id), before);
-            await assert.rejects(f.edit(s => { delete s.runs[f.run.id]; }), /RUN_HISTORY_IMMUTABLE/);
+            await assert.rejects(f.edit(s => { delete s.runs[f.run.id]; }), /RUN_HISTORY_IMMUTABLE|FACT_EVIDENCE_MISSING/);
             await assert.rejects(f.edit(s => { s.runs[f.run.id]!.state = "blocked"; }), /COMPLETED_RUN_IMMUTABLE|UNRESOLVED_RUN_ALREADY_EXISTS/);
             await assert.rejects(f.edit(s => { s.draft.currentRunId = f.run.id; }), /RUN_POINTER/);
             assert.deepEqual(await f.backend.storage.read(f.draft.id), before);
@@ -55,7 +55,7 @@ for (const sqlite of [false, true]) {
             });
             const before = await f.backend.storage.read(f.draft.id);
             assert.deepEqual(await f.engine.getBindings(f.draft.id), original);
-            await assert.rejects(f.edit(s => { s.remoteFacts.fact1!.values.title = { kind: "value", value: "corrupt" }; }), /FACT_IMMUTABLE/);
+            await assert.rejects(f.edit(s => { s.remoteFacts.fact1!.values.title = { kind: "value", value: "corrupt" }; }), /FACT_IMMUTABLE|FACT_EVIDENCE_MISSING/);
             await assert.rejects(f.edit(s => { s.latestFactByNode.a = "missing"; }), /LATEST_FACT_MISMATCH/);
             await assert.rejects(f.edit(s => { s.bindings.a!.remoteId = "another"; }), /BINDING_IMMUTABLE|FACT_IDENTITY/);
             await assert.rejects(f.edit(s => { s.remoteFacts.fact2 = { ...s.remoteFacts.fact1!, id: "fact2" }; s.latestFactByNode.a = "fact2"; }), /FACT_REVISION_REQUIRED/);

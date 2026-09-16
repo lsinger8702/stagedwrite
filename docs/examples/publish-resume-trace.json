@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-09-15T07:40:05.483Z",
+  "recordedAt": "2026-09-16T07:00:33.383Z",
   "runtime": "v24.19.0",
   "environment": "Real library + temporary SQLite; simulated remote; no HTTP or LLM calls.",
   "registration": {
@@ -321,7 +321,7 @@
           }
         },
         "formatVersion": 3,
-        "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+        "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
         "version": 0,
         "type": "example.project-tasks",
         "typeVersion": "2",
@@ -446,8 +446,8 @@
           "nodes": [],
           "edges": []
         },
-        "createdAt": "2026-09-15T07:40:05.460Z",
-        "updatedAt": "2026-09-15T07:40:05.460Z"
+        "createdAt": "2026-09-16T07:00:33.359Z",
+        "updatedAt": "2026-09-16T07:00:33.359Z"
       },
       "remoteCalls": [],
       "checkCalls": [],
@@ -457,7 +457,7 @@
       "method": "edit",
       "note": "先连续修改名称，供下一步验证 reset 的固定基线。",
       "input": [
-        "b28e089d-b66e-4c66-b580-306f99afa659",
+        "70a102a9-1007-4159-8aeb-80d03f797a69",
         0,
         [
           {
@@ -469,7 +469,7 @@
         ]
       ],
       "output": {
-        "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+        "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
         "version": 1,
         "preflightRequired": true,
         "changes": [
@@ -497,7 +497,7 @@
       "method": "edit",
       "note": "先连续修改名称，供下一步验证 reset 的固定基线。",
       "input": [
-        "b28e089d-b66e-4c66-b580-306f99afa659",
+        "70a102a9-1007-4159-8aeb-80d03f797a69",
         1,
         [
           {
@@ -509,7 +509,7 @@
         ]
       ],
       "output": {
-        "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+        "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
         "version": 2,
         "preflightRequired": true,
         "changes": [
@@ -537,7 +537,7 @@
       "method": "edit",
       "note": "reset 回到 create 时的“文档发布”，不会回到上一版的“临时名称 A”。",
       "input": [
-        "b28e089d-b66e-4c66-b580-306f99afa659",
+        "70a102a9-1007-4159-8aeb-80d03f797a69",
         2,
         [
           {
@@ -548,7 +548,7 @@
         ]
       ],
       "output": {
-        "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+        "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
         "version": 3,
         "preflightRequired": true,
         "changes": [
@@ -576,18 +576,18 @@
       "method": "preflight",
       "note": "静态规则给出 3 条具体诊断；异步检查返回 pending，无发布凭据。",
       "input": [
-        "b28e089d-b66e-4c66-b580-306f99afa659"
+        "70a102a9-1007-4159-8aeb-80d03f797a69"
       ],
       "output": {
         "formatVersion": 2,
         "scope": "execution",
-        "checkId": "d27772e3-86bd-4dc3-a565-46b607222fbb",
-        "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+        "checkId": "b49077a6-d0bf-43d0-82e5-f4674180a516",
+        "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
         "version": 3,
         "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
         "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
         "preview": {
-          "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+          "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
           "version": 3,
           "type": "example.project-tasks",
           "typeVersion": "2",
@@ -860,7 +860,7 @@
         {
           "method": "queryExport",
           "input": {
-            "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+            "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
             "version": 3
           },
           "output": {
@@ -876,18 +876,18 @@
       "method": "preflight",
       "note": "外部检查完成，仍有 3 条业务问题。完整 preview、message、候选值和 repair OP 都来自实际检查。",
       "input": [
-        "b28e089d-b66e-4c66-b580-306f99afa659"
+        "70a102a9-1007-4159-8aeb-80d03f797a69"
       ],
       "output": {
         "formatVersion": 2,
         "scope": "execution",
-        "checkId": "8ecbe06b-59cd-400a-ba3d-f811a0b8330b",
-        "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+        "checkId": "202963c5-046c-42a1-89a8-e1fc84198522",
+        "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
         "version": 3,
         "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
         "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
         "preview": {
-          "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+          "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
           "version": 3,
           "type": "example.project-tasks",
           "typeVersion": "2",
@@ -1153,7 +1153,7 @@
         {
           "method": "queryExport",
           "input": {
-            "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+            "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
             "version": 3
           },
           "output": {
@@ -1168,7 +1168,7 @@
       "method": "edit",
       "note": "调用方依据用户意图选定 4 个 OP。规则建议不自动执行。",
       "input": [
-        "b28e089d-b66e-4c66-b580-306f99afa659",
+        "70a102a9-1007-4159-8aeb-80d03f797a69",
         3,
         [
           {
@@ -1198,7 +1198,7 @@
         ]
       ],
       "output": {
-        "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+        "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
         "version": 4,
         "preflightRequired": true,
         "changes": [
@@ -1268,18 +1268,18 @@
       "method": "preflight",
       "note": "检查通过，保存不可变 Artifact。执行器的 plan 将图映射成请求参数。",
       "input": [
-        "b28e089d-b66e-4c66-b580-306f99afa659"
+        "70a102a9-1007-4159-8aeb-80d03f797a69"
       ],
       "output": {
         "formatVersion": 2,
         "scope": "execution",
-        "checkId": "12affdc0-6d7f-4f2d-a2c4-da3743cbb796",
-        "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+        "checkId": "963d8d91-2b0b-47b9-b878-0fa8c5c7cf64",
+        "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
         "version": 4,
         "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
         "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
         "preview": {
-          "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+          "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
           "version": 4,
           "type": "example.project-tasks",
           "typeVersion": "2",
@@ -1378,10 +1378,10 @@
         "status": "passed",
         "diagnostics": [],
         "pendingRules": [],
-        "certificate": "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
-        "artifactId": "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
+        "certificate": "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
+        "artifactId": "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
         "execution": {
-          "checkId": "12affdc0-6d7f-4f2d-a2c4-da3743cbb796",
+          "checkId": "963d8d91-2b0b-47b9-b878-0fa8c5c7cf64",
           "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
           "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
           "executorId": "example.project-service",
@@ -1395,7 +1395,7 @@
         {
           "method": "queryExport",
           "input": {
-            "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+            "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
             "version": 4
           },
           "output": {
@@ -1410,21 +1410,21 @@
       "method": "publish",
       "note": "同事务建立 Run 和 currentRunId。项目创建成功，任务 1 明确拒绝，任务 2 尚未发送。Draft 仍 pending。",
       "input": [
-        "b28e089d-b66e-4c66-b580-306f99afa659",
-        "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
+        "70a102a9-1007-4159-8aeb-80d03f797a69",
+        "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
         {
           "runId": "demo-run-1"
         }
       ],
       "output": {
         "id": "demo-run-1",
-        "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+        "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
         "kind": "initial_create",
         "version": 4,
         "state": "blocked",
-        "artifactId": "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
-        "initialArtifactId": "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
-        "certificate": "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
+        "artifactId": "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
+        "initialArtifactId": "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
+        "certificate": "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
         "revision": 0,
         "revisions": [],
         "attempts": [
@@ -1436,6 +1436,23 @@
               "title": "文档发布",
               "capacity_hours": 16,
               "deadline_day": 20
+            },
+            "request": {
+              "step": {
+                "id": "project-1",
+                "payload": {
+                  "title": "文档发布",
+                  "capacity_hours": 16,
+                  "deadline_day": 20
+                },
+                "effect": {
+                  "kind": "create",
+                  "nodeId": "project-1"
+                }
+              },
+              "target": "mock:local",
+              "executorId": "example.project-service",
+              "executorVersion": "5"
             },
             "status": "applied",
             "outcome": {
@@ -1454,6 +1471,32 @@
               "priority": "urgent",
               "assignee": "lin",
               "projectId": "resource-1"
+            },
+            "request": {
+              "step": {
+                "id": "task-1",
+                "payload": {
+                  "title": "编写快速入门",
+                  "estimate_hours": 8,
+                  "due_day": 20,
+                  "priority": "urgent",
+                  "assignee": "lin",
+                  "projectId": "resource-1"
+                },
+                "dependsOn": [
+                  "project-1"
+                ],
+                "inputRefs": {
+                  "projectId": "project-1"
+                },
+                "effect": {
+                  "kind": "create",
+                  "nodeId": "task-1"
+                }
+              },
+              "target": "mock:local",
+              "executorId": "example.project-service",
+              "executorVersion": "5"
             },
             "status": "no_effect",
             "outcome": {
@@ -1492,25 +1535,25 @@
             "sequence": 1,
             "stepId": "project-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-15T07:40:05.472Z"
+            "recordedAt": "2026-09-16T07:00:33.370Z"
           },
           {
             "sequence": 2,
             "stepId": "project-1",
             "kind": "applied",
-            "recordedAt": "2026-09-15T07:40:05.472Z"
+            "recordedAt": "2026-09-16T07:00:33.371Z"
           },
           {
             "sequence": 3,
             "stepId": "task-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-15T07:40:05.473Z"
+            "recordedAt": "2026-09-16T07:00:33.372Z"
           },
           {
             "sequence": 4,
             "stepId": "task-1",
             "kind": "not_applied",
-            "recordedAt": "2026-09-15T07:40:05.473Z",
+            "recordedAt": "2026-09-16T07:00:33.372Z",
             "reason": "Owner unavailable; request rejected before creation"
           }
         ],
@@ -1618,7 +1661,7 @@
         ],
         "previewVersion": 4,
         "preview": {
-          "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+          "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
           "version": 4,
           "type": "example.project-tasks",
           "typeVersion": "2",
@@ -1823,7 +1866,7 @@
       "method": "getDraft",
       "note": "失败后 currentRunId 保留；pending 不意味着远端没有资源。",
       "input": [
-        "b28e089d-b66e-4c66-b580-306f99afa659"
+        "70a102a9-1007-4159-8aeb-80d03f797a69"
       ],
       "output": {
         "graph": {
@@ -1936,7 +1979,7 @@
           }
         },
         "formatVersion": 3,
-        "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+        "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
         "version": 4,
         "type": "example.project-tasks",
         "typeVersion": "2",
@@ -2061,8 +2104,8 @@
           "nodes": [],
           "edges": []
         },
-        "createdAt": "2026-09-15T07:40:05.460Z",
-        "updatedAt": "2026-09-15T07:40:05.468Z"
+        "createdAt": "2026-09-16T07:00:33.359Z",
+        "updatedAt": "2026-09-16T07:00:33.367Z"
       },
       "remoteCalls": [],
       "checkCalls": [],
@@ -2072,7 +2115,7 @@
       "method": "edit",
       "note": "假设用户同意改由陈接手，只修复未完成任务。成功项目不允许修改。",
       "input": [
-        "b28e089d-b66e-4c66-b580-306f99afa659",
+        "70a102a9-1007-4159-8aeb-80d03f797a69",
         4,
         [
           {
@@ -2084,7 +2127,7 @@
         ]
       ],
       "output": {
-        "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+        "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
         "version": 5,
         "preflightRequired": true,
         "changes": [
@@ -2116,17 +2159,17 @@
       ],
       "output": {
         "id": "demo-run-1",
-        "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+        "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
         "kind": "initial_create",
         "version": 5,
         "state": "unknown",
-        "artifactId": "36a7276f-855f-4682-b834-c0a7ca051c15",
-        "initialArtifactId": "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
-        "certificate": "36a7276f-855f-4682-b834-c0a7ca051c15",
+        "artifactId": "62fcb5f5-f4a6-48c1-8b4d-1ccfd475dabb",
+        "initialArtifactId": "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
+        "certificate": "62fcb5f5-f4a6-48c1-8b4d-1ccfd475dabb",
         "revision": 1,
         "revisions": [
           {
-            "artifactId": "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
+            "artifactId": "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
             "version": 4,
             "steps": [
               {
@@ -2242,6 +2285,23 @@
               "capacity_hours": 16,
               "deadline_day": 20
             },
+            "request": {
+              "step": {
+                "id": "project-1",
+                "payload": {
+                  "title": "文档发布",
+                  "capacity_hours": 16,
+                  "deadline_day": 20
+                },
+                "effect": {
+                  "kind": "create",
+                  "nodeId": "project-1"
+                }
+              },
+              "target": "mock:local",
+              "executorId": "example.project-service",
+              "executorVersion": "5"
+            },
             "status": "applied",
             "outcome": {
               "kind": "applied",
@@ -2259,6 +2319,32 @@
               "priority": "urgent",
               "assignee": "lin",
               "projectId": "resource-1"
+            },
+            "request": {
+              "step": {
+                "id": "task-1",
+                "payload": {
+                  "title": "编写快速入门",
+                  "estimate_hours": 8,
+                  "due_day": 20,
+                  "priority": "urgent",
+                  "assignee": "lin",
+                  "projectId": "resource-1"
+                },
+                "dependsOn": [
+                  "project-1"
+                ],
+                "inputRefs": {
+                  "projectId": "project-1"
+                },
+                "effect": {
+                  "kind": "create",
+                  "nodeId": "task-1"
+                }
+              },
+              "target": "mock:local",
+              "executorId": "example.project-service",
+              "executorVersion": "5"
             },
             "status": "no_effect",
             "outcome": {
@@ -2303,6 +2389,32 @@
               "assignee": "chen",
               "projectId": "resource-1"
             },
+            "request": {
+              "step": {
+                "id": "task-1",
+                "payload": {
+                  "title": "编写快速入门",
+                  "estimate_hours": 8,
+                  "due_day": 20,
+                  "priority": "urgent",
+                  "assignee": "chen",
+                  "projectId": "resource-1"
+                },
+                "dependsOn": [
+                  "project-1"
+                ],
+                "inputRefs": {
+                  "projectId": "project-1"
+                },
+                "effect": {
+                  "kind": "create",
+                  "nodeId": "task-1"
+                }
+              },
+              "target": "mock:local",
+              "executorId": "example.project-service",
+              "executorVersion": "5"
+            },
             "status": "applied",
             "outcome": {
               "kind": "applied",
@@ -2321,6 +2433,32 @@
               "assignee": "chen",
               "projectId": "resource-1"
             },
+            "request": {
+              "step": {
+                "id": "task-2",
+                "payload": {
+                  "title": "评审使用示例",
+                  "estimate_hours": 8,
+                  "due_day": 18,
+                  "priority": "normal",
+                  "assignee": "chen",
+                  "projectId": "resource-1"
+                },
+                "dependsOn": [
+                  "project-1"
+                ],
+                "inputRefs": {
+                  "projectId": "project-1"
+                },
+                "effect": {
+                  "kind": "create",
+                  "nodeId": "task-2"
+                }
+              },
+              "target": "mock:local",
+              "executorId": "example.project-service",
+              "executorVersion": "5"
+            },
             "status": "unknown",
             "outcome": {
               "kind": "unknown",
@@ -2335,56 +2473,56 @@
             "sequence": 1,
             "stepId": "project-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-15T07:40:05.472Z"
+            "recordedAt": "2026-09-16T07:00:33.370Z"
           },
           {
             "sequence": 2,
             "stepId": "project-1",
             "kind": "applied",
-            "recordedAt": "2026-09-15T07:40:05.472Z"
+            "recordedAt": "2026-09-16T07:00:33.371Z"
           },
           {
             "sequence": 3,
             "stepId": "task-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-15T07:40:05.473Z"
+            "recordedAt": "2026-09-16T07:00:33.372Z"
           },
           {
             "sequence": 4,
             "stepId": "task-1",
             "kind": "not_applied",
-            "recordedAt": "2026-09-15T07:40:05.473Z",
+            "recordedAt": "2026-09-16T07:00:33.372Z",
             "reason": "Owner unavailable; request rejected before creation"
           },
           {
             "sequence": 5,
             "stepId": "",
             "kind": "plan_repaired",
-            "recordedAt": "2026-09-15T07:40:05.477Z"
+            "recordedAt": "2026-09-16T07:00:33.376Z"
           },
           {
             "sequence": 6,
             "stepId": "task-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-15T07:40:05.477Z"
+            "recordedAt": "2026-09-16T07:00:33.377Z"
           },
           {
             "sequence": 7,
             "stepId": "task-1",
             "kind": "applied",
-            "recordedAt": "2026-09-15T07:40:05.478Z"
+            "recordedAt": "2026-09-16T07:00:33.377Z"
           },
           {
             "sequence": 8,
             "stepId": "task-2",
             "kind": "dispatching",
-            "recordedAt": "2026-09-15T07:40:05.479Z"
+            "recordedAt": "2026-09-16T07:00:33.378Z"
           },
           {
             "sequence": 9,
             "stepId": "task-2",
             "kind": "unknown",
-            "recordedAt": "2026-09-15T07:40:05.479Z",
+            "recordedAt": "2026-09-16T07:00:33.378Z",
             "reason": "Response timed out; creation outcome requires lookup"
           }
         ],
@@ -2481,7 +2619,7 @@
         ],
         "previewVersion": 5,
         "preview": {
-          "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+          "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
           "version": 5,
           "type": "example.project-tasks",
           "typeVersion": "2",
@@ -2655,7 +2793,7 @@
         {
           "method": "queryExport",
           "input": {
-            "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+            "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
             "version": 5
           },
           "output": {
@@ -2674,17 +2812,17 @@
       ],
       "output": {
         "id": "demo-run-1",
-        "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+        "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
         "kind": "initial_create",
         "version": 5,
         "state": "published",
-        "artifactId": "36a7276f-855f-4682-b834-c0a7ca051c15",
-        "initialArtifactId": "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
-        "certificate": "36a7276f-855f-4682-b834-c0a7ca051c15",
+        "artifactId": "62fcb5f5-f4a6-48c1-8b4d-1ccfd475dabb",
+        "initialArtifactId": "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
+        "certificate": "62fcb5f5-f4a6-48c1-8b4d-1ccfd475dabb",
         "revision": 1,
         "revisions": [
           {
-            "artifactId": "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
+            "artifactId": "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
             "version": 4,
             "steps": [
               {
@@ -2800,6 +2938,23 @@
               "capacity_hours": 16,
               "deadline_day": 20
             },
+            "request": {
+              "step": {
+                "id": "project-1",
+                "payload": {
+                  "title": "文档发布",
+                  "capacity_hours": 16,
+                  "deadline_day": 20
+                },
+                "effect": {
+                  "kind": "create",
+                  "nodeId": "project-1"
+                }
+              },
+              "target": "mock:local",
+              "executorId": "example.project-service",
+              "executorVersion": "5"
+            },
             "status": "applied",
             "outcome": {
               "kind": "applied",
@@ -2817,6 +2972,32 @@
               "priority": "urgent",
               "assignee": "lin",
               "projectId": "resource-1"
+            },
+            "request": {
+              "step": {
+                "id": "task-1",
+                "payload": {
+                  "title": "编写快速入门",
+                  "estimate_hours": 8,
+                  "due_day": 20,
+                  "priority": "urgent",
+                  "assignee": "lin",
+                  "projectId": "resource-1"
+                },
+                "dependsOn": [
+                  "project-1"
+                ],
+                "inputRefs": {
+                  "projectId": "project-1"
+                },
+                "effect": {
+                  "kind": "create",
+                  "nodeId": "task-1"
+                }
+              },
+              "target": "mock:local",
+              "executorId": "example.project-service",
+              "executorVersion": "5"
             },
             "status": "no_effect",
             "outcome": {
@@ -2861,6 +3042,32 @@
               "assignee": "chen",
               "projectId": "resource-1"
             },
+            "request": {
+              "step": {
+                "id": "task-1",
+                "payload": {
+                  "title": "编写快速入门",
+                  "estimate_hours": 8,
+                  "due_day": 20,
+                  "priority": "urgent",
+                  "assignee": "chen",
+                  "projectId": "resource-1"
+                },
+                "dependsOn": [
+                  "project-1"
+                ],
+                "inputRefs": {
+                  "projectId": "project-1"
+                },
+                "effect": {
+                  "kind": "create",
+                  "nodeId": "task-1"
+                }
+              },
+              "target": "mock:local",
+              "executorId": "example.project-service",
+              "executorVersion": "5"
+            },
             "status": "applied",
             "outcome": {
               "kind": "applied",
@@ -2879,6 +3086,32 @@
               "assignee": "chen",
               "projectId": "resource-1"
             },
+            "request": {
+              "step": {
+                "id": "task-2",
+                "payload": {
+                  "title": "评审使用示例",
+                  "estimate_hours": 8,
+                  "due_day": 18,
+                  "priority": "normal",
+                  "assignee": "chen",
+                  "projectId": "resource-1"
+                },
+                "dependsOn": [
+                  "project-1"
+                ],
+                "inputRefs": {
+                  "projectId": "project-1"
+                },
+                "effect": {
+                  "kind": "create",
+                  "nodeId": "task-2"
+                }
+              },
+              "target": "mock:local",
+              "executorId": "example.project-service",
+              "executorVersion": "5"
+            },
             "status": "applied",
             "outcome": {
               "kind": "applied",
@@ -2891,69 +3124,69 @@
             "sequence": 1,
             "stepId": "project-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-15T07:40:05.472Z"
+            "recordedAt": "2026-09-16T07:00:33.370Z"
           },
           {
             "sequence": 2,
             "stepId": "project-1",
             "kind": "applied",
-            "recordedAt": "2026-09-15T07:40:05.472Z"
+            "recordedAt": "2026-09-16T07:00:33.371Z"
           },
           {
             "sequence": 3,
             "stepId": "task-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-15T07:40:05.473Z"
+            "recordedAt": "2026-09-16T07:00:33.372Z"
           },
           {
             "sequence": 4,
             "stepId": "task-1",
             "kind": "not_applied",
-            "recordedAt": "2026-09-15T07:40:05.473Z",
+            "recordedAt": "2026-09-16T07:00:33.372Z",
             "reason": "Owner unavailable; request rejected before creation"
           },
           {
             "sequence": 5,
             "stepId": "",
             "kind": "plan_repaired",
-            "recordedAt": "2026-09-15T07:40:05.477Z"
+            "recordedAt": "2026-09-16T07:00:33.376Z"
           },
           {
             "sequence": 6,
             "stepId": "task-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-15T07:40:05.477Z"
+            "recordedAt": "2026-09-16T07:00:33.377Z"
           },
           {
             "sequence": 7,
             "stepId": "task-1",
             "kind": "applied",
-            "recordedAt": "2026-09-15T07:40:05.478Z"
+            "recordedAt": "2026-09-16T07:00:33.377Z"
           },
           {
             "sequence": 8,
             "stepId": "task-2",
             "kind": "dispatching",
-            "recordedAt": "2026-09-15T07:40:05.479Z"
+            "recordedAt": "2026-09-16T07:00:33.378Z"
           },
           {
             "sequence": 9,
             "stepId": "task-2",
             "kind": "unknown",
-            "recordedAt": "2026-09-15T07:40:05.479Z",
+            "recordedAt": "2026-09-16T07:00:33.378Z",
             "reason": "Response timed out; creation outcome requires lookup"
           },
           {
             "sequence": 10,
             "stepId": "task-2",
             "kind": "reconciling",
-            "recordedAt": "2026-09-15T07:40:05.480Z"
+            "recordedAt": "2026-09-16T07:00:33.380Z"
           },
           {
             "sequence": 11,
             "stepId": "task-2",
             "kind": "applied",
-            "recordedAt": "2026-09-15T07:40:05.481Z"
+            "recordedAt": "2026-09-16T07:00:33.381Z"
           }
         ],
         "steps": [
@@ -3046,7 +3279,7 @@
         ],
         "previewVersion": 5,
         "preview": {
-          "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+          "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
           "version": 5,
           "type": "example.project-tasks",
           "typeVersion": "2",
@@ -3184,7 +3417,7 @@
       "method": "getDraft",
       "note": "全部成功才设置 published、publishedArtifactId 和 lastPublishedAt。currentRunId 仍保留。",
       "input": [
-        "b28e089d-b66e-4c66-b580-306f99afa659"
+        "70a102a9-1007-4159-8aeb-80d03f797a69"
       ],
       "output": {
         "graph": {
@@ -3297,7 +3530,7 @@
           }
         },
         "formatVersion": 3,
-        "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+        "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
         "version": 5,
         "type": "example.project-tasks",
         "typeVersion": "2",
@@ -3416,14 +3649,14 @@
             }
           }
         },
-        "publishedArtifactId": "36a7276f-855f-4682-b834-c0a7ca051c15",
-        "lastPublishedAt": "2026-09-15T07:40:05.482Z",
+        "publishedArtifactId": "62fcb5f5-f4a6-48c1-8b4d-1ccfd475dabb",
+        "lastPublishedAt": "2026-09-16T07:00:33.382Z",
         "tombstones": {
           "nodes": [],
           "edges": []
         },
-        "createdAt": "2026-09-15T07:40:05.460Z",
-        "updatedAt": "2026-09-15T07:40:05.482Z"
+        "createdAt": "2026-09-16T07:00:33.359Z",
+        "updatedAt": "2026-09-16T07:00:33.382Z"
       },
       "remoteCalls": [],
       "checkCalls": [],
@@ -3433,7 +3666,7 @@
       "method": "getBindings",
       "note": "每个成功节点都已绑定远端资源；这些是确认事实，不是远端实时漂移检测。",
       "input": [
-        "b28e089d-b66e-4c66-b580-306f99afa659"
+        "70a102a9-1007-4159-8aeb-80d03f797a69"
       ],
       "output": {
         "project-1": {
@@ -3496,7 +3729,7 @@
         "demo-run-1"
       ],
       "output": {
-        "id": "36a7276f-855f-4682-b834-c0a7ca051c15",
+        "id": "62fcb5f5-f4a6-48c1-8b4d-1ccfd475dabb",
         "intentDigest": "sha256:stagedwrite-json-v1:733962fd9cbccc460c1183cc4a07667ccdcb077d314378610d91408a5756706f",
         "draft": {
           "graph": {
@@ -3609,7 +3842,7 @@
             }
           },
           "formatVersion": 3,
-          "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+          "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
           "version": 5,
           "type": "example.project-tasks",
           "typeVersion": "2",
@@ -3734,8 +3967,8 @@
             "nodes": [],
             "edges": []
           },
-          "createdAt": "2026-09-15T07:40:05.460Z",
-          "updatedAt": "2026-09-15T07:40:05.474Z"
+          "createdAt": "2026-09-16T07:00:33.359Z",
+          "updatedAt": "2026-09-16T07:00:33.373Z"
         },
         "plan": [
           {
@@ -3792,7 +4025,7 @@
           }
         ],
         "binding": {
-          "checkId": "87d1280e-e718-415c-ab2b-8fc2791195d3",
+          "checkId": "356757b3-5e72-4ff2-8cc8-e6b2f1634e20",
           "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
           "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
           "executorId": "example.project-service",

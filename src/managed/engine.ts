@@ -1,6 +1,8 @@
+import { compileUpdate, type UpdateProjection } from "./update-plan.js";
+import type { RemoteObservation } from "./types.js";
 import { randomUUID } from "node:crypto";
 import { DefinitionRegistry } from "../registry/registry.js";
-import { deepFreeze, definitionDigest, type Json } from "../registry/json.js";
+import { deepFreeze, definitionDigest, jsonSnapshot, isObject, type Json } from "../registry/json.js";
 import { GraphPreflight } from "../preflight/check.js";
 import { AsyncPreflight } from "../preflight/async.js";
 import { previewDraft } from "../preflight/preview.js";
@@ -41,7 +43,9 @@ export function createStagedWrite(options: ManagedOptions) {
         registry.getDefinition(e);
         if (executors.has(key(e)) || ![e.id, e.version, e.target].every(v => typeof v === "string" && v.trim()) || typeof e.plan !== "function" || typeof e.apply !== "function" || !(typeof e.reconcile === "function" || typeof e.reconcile?.unsupported === "string" && e.reconcile.unsupported.trim()))
             throw new Error("INVALID_EXECUTOR");
-        executors.set(key(e), { ...e, plan: e.plan.bind(e), apply: e.apply.bind(e), reconcile: typeof e.reconcile === "function" ? e.reconcile.bind(e) : { ...e.reconcile } });
+        if (e.update !== undefined && (!e.update || typeof e.update.inspect !== "function"))
+            throw new Error("INVALID_UPDATE_INSPECTOR");
+        executors.set(key(e), { ...e, ...(e.update ? { update: { inspect: e.update.inspect.bind(e.update) } } : {}), plan: e.plan.bind(e), apply: e.apply.bind(e), reconcile: typeof e.reconcile === "function" ? e.reconcile.bind(e) : { ...e.reconcile } });
     }
     if (executors.size)
         for (const s of registry.selectors())
@@ -140,11 +144,11 @@ export function createStagedWrite(options: ManagedOptions) {
         const diagnostics: GraphDiagnostic[] = r.interruption ? [copy(r.interruption)] : [];
         const d = toInternal(s.draft);
         for (const step of r.steps)
-            if (!["applied"].includes(step.status) && step.feedback) {
+            if ((step.status !== "applied" || step.feedback?.code === "CONFIRMED_FACT_INVALID") && step.feedback) {
                 const f = step.feedback, accepted = (f.diagnostics ?? []).filter(x => validDiagnostic(x as unknown as Json, registry, d));
                 diagnostics.push(...copy(accepted));
                 if (!accepted.length)
-                    diagnostics.push({ code: f.code ?? `execution.${step.status}`, path: `/nodes/${step.effect!.nodeId.replaceAll("~", "~0").replaceAll("/", "~1")}`, message: f.message ?? f.reason ?? "Execution needs attention" });
+                    diagnostics.push({ code: f.code ?? `execution.${step.status}`, path: `/nodes/${step.effect!.nodeId.replaceAll("~", "~0").replaceAll("/", "~1")}`, message: f.message ?? f.reason ?? "Execution needs attention", ...(step.status === "applied" ? { severity: "warning" as const } : {}) });
             }
         return { ...copy(r), previewVersion: s.draft.version, preview: check?.preview ?? previewDraft(d, registry.getDefinition(s.draft).definition), diagnostics: check?.diagnostics ?? diagnostics, ...(check ? { check } : {}) };
     }
@@ -166,6 +170,7 @@ export function createStagedWrite(options: ManagedOptions) {
         check: ManagedCheck;
         artifact?: Artifact;
     }> {
+        const deadline = performance.now() + timeout;
         const draft = copy(s.draft), internal = toInternal(draft), frozen = deepFreeze(copy(draft));
         const mapped = rules.map(r => ({ ...r, check: () => r.check(frozen) }));
         const preflight = new GraphPreflight(registry, mapped);
@@ -175,12 +180,38 @@ export function createStagedWrite(options: ManagedOptions) {
         let check: ManagedCheck = preflight.run(internal);
         check.rulesDigest = asyncCheck.digest(internal, preflight.rulesDigest(internal));
         if (asyncRules.length)
-            check = await asyncCheck.run(internal, check, performance.now() + timeout);
+            check = await asyncCheck.run(internal, check, deadline);
         if (draft.currentRunId)
             check.executionHint = { runId: draft.currentRunId, nextAction: s.runs[draft.currentRunId]?.state === "published" ? "observe" : "resume" };
         const e = executors.get(key(draft));
         if (!e)
             return { check };
+        if (e.update && draft.publishedArtifactId) {
+            // Inspection is public and read-only; no create-shaped certificate for an update.
+            check.scope = "draft";
+            if (check.status !== "passed") return { check };
+            let slots: ManagedCheck["updatePreview"];
+            const inspector = e.update;
+            const reader = new AsyncPreflight(registry, [], [{
+                ...{ type: e.type, typeVersion: e.typeVersion }, id: `${e.id}.update.inspect`, version: e.version,
+                check: async (_draft, context) => {
+                    const raw = await inspector.inspect(frozen, { signal: context.signal, bindings: deepFreeze(copy(s.bindings)) });
+                    const failures: string[] = [];
+                    const data = jsonSnapshot(raw, (_path, message) => failures.push(message));
+                    if (failures.length || !isObject(data)) throw new Error("INVALID_UPDATE_OBSERVATION");
+                    if (data.status === "pending") return data as unknown as { status: "pending"; message: string };
+                    if (data.status !== "complete" || !Array.isArray(data.projections) || !Array.isArray(data.observations) ||
+                        Object.keys(data).some(k => !["status", "projections", "observations", "diagnostics"].includes(k)) ||
+                        data.diagnostics !== undefined && !Array.isArray(data.diagnostics)) throw new Error("INVALID_UPDATE_OBSERVATION");
+                    const compiled = compileUpdate(s, data.projections as unknown as UpdateProjection[], data.observations as unknown as RemoteObservation[]);
+                    if (compiled.status === "passed") slots = { slots: compiled.slots };
+                    return { status: "complete" as const, diagnostics: [...(data.diagnostics ?? []) as unknown as GraphDiagnostic[], ...compiled.diagnostics] };
+                },
+            }], timeout);
+            check = await reader.run(internal, check, deadline);
+            if (check.status === "passed" && slots) check.updatePreview = copy(slots);
+            return { check };
+        }
         check.scope = "execution";
         if (check.status !== "passed")
             return { check };
@@ -227,6 +258,7 @@ export function createStagedWrite(options: ManagedOptions) {
             code?: string;
             message?: string;
             diagnostics?: GraphDiagnostic[];
+            confirmed?: unknown;
         };
         let base: ApplyOutcome | ReconcileOutcome = { kind: "unknown", reason: "No conclusive adapter outcome" };
         if (obj && obj.kind === "applied" && typeof obj.remoteRef === "string" && obj.remoteRef.trim())
@@ -248,6 +280,21 @@ export function createStagedWrite(options: ManagedOptions) {
                 base.diagnostics = JSON.parse(JSON.stringify(obj.diagnostics));
         }
         catch { /* optional feedback cannot erase an effect */ }
+        if (base.kind === "applied" && obj?.confirmed !== undefined) {
+            try {
+                const failures: string[] = [];
+                const confirmed = jsonSnapshot(obj.confirmed, (_p, message) => failures.push(message));
+                if (failures.length || !isObject(confirmed) || Object.keys(confirmed).some(k => !["projectionDigest", "values"].includes(k)) ||
+                    typeof confirmed.projectionDigest !== "string" || !confirmed.projectionDigest.trim() || !isObject(confirmed.values) ||
+                    !Object.values(confirmed.values).every(v => isObject(v) && (v.kind === "absent" && Object.keys(v).length === 1 || v.kind === "value" && Object.keys(v).length === 2 && Object.hasOwn(v, "value") && (v.value === null || ["string", "number", "boolean"].includes(typeof v.value)))))
+                    throw new Error("INVALID_CONFIRMED_FACT");
+                base.confirmed = confirmed as unknown as NonNullable<Extract<ApplyOutcome, { kind: "applied" }>["confirmed"]>;
+            } catch {
+                // Preserve the conclusive creation receipt; malformed optional facts cannot justify another create.
+                base.code = "CONFIRMED_FACT_INVALID";
+                base.message = "Remote effect was applied, but normalized confirmation values were invalid; update requires valid evidence.";
+            }
+        }
         return base;
     }
     async function dispatch(id: string, runId: string, l: DraftLease, signal: AbortSignal, reconcileOnly = false) {
@@ -314,22 +361,26 @@ export function createStagedWrite(options: ManagedOptions) {
                     st.resolvedPayload = copy(input);
                     st.status = "dispatching";
                     run.state = "running";
-                    run.attempts.push({ stepId: st.id, key: st.key, number: run.attempts.length + 1, input, status: "pending" });
+                    run.attempts.push({ stepId: st.id, key: st.key, number: run.attempts.length + 1, input, request: { step: { ...copy(declaration(st)), payload: copy(input) }, target: e.target, executorId: e.id, executorVersion: e.version }, status: "pending" });
                     event(run, st.id, "dispatching");
                 });
                 attempt = result.runs[runId]!.attempts.at(-1)!;
             }
             let observed: ApplyOutcome | ReconcileOutcome;
             const late = s.lateFacts.filter(f => f.runId === runId && f.stepId === step.id && f.key === attempt.key && f.attemptNumber === attempt.number && f.outcome.kind === "applied");
-            if (pending && new Set(late.map(f => f.outcome.kind === "applied" ? f.outcome.remoteRef : "")).size > 1)
+            if (pending && new Set(late.flatMap(f => f.outcome.kind === "applied" && f.outcome.confirmed ? [definitionDigest(f.outcome.confirmed as unknown as Json)] : [])).size > 1)
+                observed = { kind: "unknown", reason: "Conflicting normalized receipts require investigation" };
+            else if (pending && new Set(late.map(f => f.outcome.kind === "applied" ? f.outcome.remoteRef : "")).size > 1)
                 observed = { kind: "unknown", reason: "Conflicting remote receipts require investigation" };
             else if (pending && late.length && new Set(late.map(f => f.outcome.kind === "applied" ? f.outcome.remoteRef : "")).size === 1)
-                observed = late[0]!.outcome;
+                observed = (late.find(f => f.outcome.kind === "applied" && f.outcome.confirmed) ?? late[0]!).outcome;
             else {
                 try {
                     if (signal.aborted)
                         throw new Error("LEASE_LOST");
-                    const input = { ...declaration(step), payload: copy(attempt.input) };
+                    if (!attempt.request || attempt.request.target !== e.target || attempt.request.executorId !== e.id || attempt.request.executorVersion !== e.version)
+                        throw new Error("REQUEST_BINDING_MISMATCH");
+                    const input = copy(attempt.request.step);
                     const raw = pending ? typeof e.reconcile === "function" ? await e.reconcile(input, attempt.key, { signal }) : { kind: "unknown", reason: e.reconcile.unsupported } : await e.apply(input, attempt.key, { signal });
                     observed = outcome(raw, pending ? "reconcile" : "apply");
                 }
@@ -359,6 +410,13 @@ export function createStagedWrite(options: ManagedOptions) {
                         a.status = "applied";
                         run.state = "running";
                         event(run, st.id, "applied");
+                        if (observed.confirmed) {
+                            const factId = JSON.stringify([runId, st.id, a.number]);
+                            current.remoteFacts[factId] = { id: factId, nodeId: node, targetId: e.target, remoteId: observed.remoteRef,
+                                projectionDigest: observed.confirmed.projectionDigest, values: copy(observed.confirmed.values),
+                                source: { kind: "attempt", runId, stepId: st.id, attemptNumber: a.number }, confirmedAt: new Date().toISOString() };
+                            current.latestFactByNode[node] = factId;
+                        }
                         current.resourceRevision++;
                     }
                     else if (observed.kind === "unknown") {

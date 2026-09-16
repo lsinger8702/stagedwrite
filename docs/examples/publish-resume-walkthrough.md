@@ -1,6 +1,6 @@
 # 当前协议的真实输入输出
 
-实际执行库、SQLite 与断言；远端是 Mock，无 HTTP/LLM 调用。运行时间 2026-09-15T07:40:05.483Z。
+实际执行库、SQLite 与断言；远端是 Mock，无 HTTP/LLM 调用。运行时间 2026-09-16T07:00:33.383Z。
 
 [交互 HTML](publish-resume.html) · [完整 JSON](publish-resume-trace.json) · [源码](../../examples/publish-resume.ts)
 
@@ -184,7 +184,7 @@
     }
   },
   "formatVersion": 3,
-  "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+  "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
   "version": 0,
   "type": "example.project-tasks",
   "typeVersion": "2",
@@ -309,8 +309,8 @@
     "nodes": [],
     "edges": []
   },
-  "createdAt": "2026-09-15T07:40:05.460Z",
-  "updatedAt": "2026-09-15T07:40:05.460Z"
+  "createdAt": "2026-09-16T07:00:33.359Z",
+  "updatedAt": "2026-09-16T07:00:33.359Z"
 }
 ```
 
@@ -328,7 +328,7 @@
 
 ```json
 [
-  "b28e089d-b66e-4c66-b580-306f99afa659",
+  "70a102a9-1007-4159-8aeb-80d03f797a69",
   0,
   [
     {
@@ -345,7 +345,7 @@
 
 ```json
 {
-  "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+  "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
   "version": 1,
   "preflightRequired": true,
   "changes": [
@@ -381,7 +381,7 @@
 
 ```json
 [
-  "b28e089d-b66e-4c66-b580-306f99afa659",
+  "70a102a9-1007-4159-8aeb-80d03f797a69",
   1,
   [
     {
@@ -398,7 +398,7 @@
 
 ```json
 {
-  "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+  "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
   "version": 2,
   "preflightRequired": true,
   "changes": [
@@ -434,7 +434,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "b28e089d-b66e-4c66-b580-306f99afa659",
+  "70a102a9-1007-4159-8aeb-80d03f797a69",
   2,
   [
     {
@@ -450,7 +450,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 {
-  "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+  "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
   "version": 3,
   "preflightRequired": true,
   "changes": [
@@ -486,7 +486,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "b28e089d-b66e-4c66-b580-306f99afa659"
+  "70a102a9-1007-4159-8aeb-80d03f797a69"
 ]
 ```
 
@@ -496,13 +496,13 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 {
   "formatVersion": 2,
   "scope": "execution",
-  "checkId": "d27772e3-86bd-4dc3-a565-46b607222fbb",
-  "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+  "checkId": "b49077a6-d0bf-43d0-82e5-f4674180a516",
+  "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
   "version": 3,
   "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
   "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
   "preview": {
-    "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+    "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
     "version": 3,
     "type": "example.project-tasks",
     "typeVersion": "2",
@@ -786,7 +786,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "b28e089d-b66e-4c66-b580-306f99afa659"
+  "70a102a9-1007-4159-8aeb-80d03f797a69"
 ]
 ```
 
@@ -796,13 +796,13 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 {
   "formatVersion": 2,
   "scope": "execution",
-  "checkId": "8ecbe06b-59cd-400a-ba3d-f811a0b8330b",
-  "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+  "checkId": "202963c5-046c-42a1-89a8-e1fc84198522",
+  "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
   "version": 3,
   "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
   "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
   "preview": {
-    "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+    "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
     "version": 3,
     "type": "example.project-tasks",
     "typeVersion": "2",
@@ -1079,7 +1079,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "b28e089d-b66e-4c66-b580-306f99afa659",
+  "70a102a9-1007-4159-8aeb-80d03f797a69",
   3,
   [
     {
@@ -1114,7 +1114,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 {
-  "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+  "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
   "version": 4,
   "preflightRequired": true,
   "changes": [
@@ -1192,7 +1192,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "b28e089d-b66e-4c66-b580-306f99afa659"
+  "70a102a9-1007-4159-8aeb-80d03f797a69"
 ]
 ```
 
@@ -1202,13 +1202,13 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 {
   "formatVersion": 2,
   "scope": "execution",
-  "checkId": "12affdc0-6d7f-4f2d-a2c4-da3743cbb796",
-  "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+  "checkId": "963d8d91-2b0b-47b9-b878-0fa8c5c7cf64",
+  "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
   "version": 4,
   "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
   "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
   "preview": {
-    "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+    "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
     "version": 4,
     "type": "example.project-tasks",
     "typeVersion": "2",
@@ -1307,10 +1307,10 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
   "status": "passed",
   "diagnostics": [],
   "pendingRules": [],
-  "certificate": "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
-  "artifactId": "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
+  "certificate": "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
+  "artifactId": "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
   "execution": {
-    "checkId": "12affdc0-6d7f-4f2d-a2c4-da3743cbb796",
+    "checkId": "963d8d91-2b0b-47b9-b878-0fa8c5c7cf64",
     "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
     "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
     "executorId": "example.project-service",
@@ -1335,8 +1335,8 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "b28e089d-b66e-4c66-b580-306f99afa659",
-  "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
+  "70a102a9-1007-4159-8aeb-80d03f797a69",
+  "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
   {
     "runId": "demo-run-1"
   }
@@ -1348,13 +1348,13 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 ```json
 {
   "id": "demo-run-1",
-  "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+  "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
   "kind": "initial_create",
   "version": 4,
   "state": "blocked",
-  "artifactId": "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
-  "initialArtifactId": "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
-  "certificate": "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
+  "artifactId": "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
+  "initialArtifactId": "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
+  "certificate": "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
   "revision": 0,
   "revisions": [],
   "attempts": [
@@ -1366,6 +1366,23 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
         "title": "文档发布",
         "capacity_hours": 16,
         "deadline_day": 20
+      },
+      "request": {
+        "step": {
+          "id": "project-1",
+          "payload": {
+            "title": "文档发布",
+            "capacity_hours": 16,
+            "deadline_day": 20
+          },
+          "effect": {
+            "kind": "create",
+            "nodeId": "project-1"
+          }
+        },
+        "target": "mock:local",
+        "executorId": "example.project-service",
+        "executorVersion": "5"
       },
       "status": "applied",
       "outcome": {
@@ -1384,6 +1401,32 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
         "priority": "urgent",
         "assignee": "lin",
         "projectId": "resource-1"
+      },
+      "request": {
+        "step": {
+          "id": "task-1",
+          "payload": {
+            "title": "编写快速入门",
+            "estimate_hours": 8,
+            "due_day": 20,
+            "priority": "urgent",
+            "assignee": "lin",
+            "projectId": "resource-1"
+          },
+          "dependsOn": [
+            "project-1"
+          ],
+          "inputRefs": {
+            "projectId": "project-1"
+          },
+          "effect": {
+            "kind": "create",
+            "nodeId": "task-1"
+          }
+        },
+        "target": "mock:local",
+        "executorId": "example.project-service",
+        "executorVersion": "5"
       },
       "status": "no_effect",
       "outcome": {
@@ -1422,25 +1465,25 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
       "sequence": 1,
       "stepId": "project-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T07:40:05.472Z"
+      "recordedAt": "2026-09-16T07:00:33.370Z"
     },
     {
       "sequence": 2,
       "stepId": "project-1",
       "kind": "applied",
-      "recordedAt": "2026-09-15T07:40:05.472Z"
+      "recordedAt": "2026-09-16T07:00:33.371Z"
     },
     {
       "sequence": 3,
       "stepId": "task-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T07:40:05.473Z"
+      "recordedAt": "2026-09-16T07:00:33.372Z"
     },
     {
       "sequence": 4,
       "stepId": "task-1",
       "kind": "not_applied",
-      "recordedAt": "2026-09-15T07:40:05.473Z",
+      "recordedAt": "2026-09-16T07:00:33.372Z",
       "reason": "Owner unavailable; request rejected before creation"
     }
   ],
@@ -1548,7 +1591,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
   ],
   "previewVersion": 4,
   "preview": {
-    "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+    "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
     "version": 4,
     "type": "example.project-tasks",
     "typeVersion": "2",
@@ -1761,7 +1804,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "b28e089d-b66e-4c66-b580-306f99afa659"
+  "70a102a9-1007-4159-8aeb-80d03f797a69"
 ]
 ```
 
@@ -1879,7 +1922,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
     }
   },
   "formatVersion": 3,
-  "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+  "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
   "version": 4,
   "type": "example.project-tasks",
   "typeVersion": "2",
@@ -2004,8 +2047,8 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
     "nodes": [],
     "edges": []
   },
-  "createdAt": "2026-09-15T07:40:05.460Z",
-  "updatedAt": "2026-09-15T07:40:05.468Z"
+  "createdAt": "2026-09-16T07:00:33.359Z",
+  "updatedAt": "2026-09-16T07:00:33.367Z"
 }
 ```
 
@@ -2023,7 +2066,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "b28e089d-b66e-4c66-b580-306f99afa659",
+  "70a102a9-1007-4159-8aeb-80d03f797a69",
   4,
   [
     {
@@ -2040,7 +2083,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 {
-  "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+  "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
   "version": 5,
   "preflightRequired": true,
   "changes": [
@@ -2085,17 +2128,17 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 ```json
 {
   "id": "demo-run-1",
-  "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+  "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
   "kind": "initial_create",
   "version": 5,
   "state": "unknown",
-  "artifactId": "36a7276f-855f-4682-b834-c0a7ca051c15",
-  "initialArtifactId": "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
-  "certificate": "36a7276f-855f-4682-b834-c0a7ca051c15",
+  "artifactId": "62fcb5f5-f4a6-48c1-8b4d-1ccfd475dabb",
+  "initialArtifactId": "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
+  "certificate": "62fcb5f5-f4a6-48c1-8b4d-1ccfd475dabb",
   "revision": 1,
   "revisions": [
     {
-      "artifactId": "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
+      "artifactId": "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
       "version": 4,
       "steps": [
         {
@@ -2211,6 +2254,23 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
         "capacity_hours": 16,
         "deadline_day": 20
       },
+      "request": {
+        "step": {
+          "id": "project-1",
+          "payload": {
+            "title": "文档发布",
+            "capacity_hours": 16,
+            "deadline_day": 20
+          },
+          "effect": {
+            "kind": "create",
+            "nodeId": "project-1"
+          }
+        },
+        "target": "mock:local",
+        "executorId": "example.project-service",
+        "executorVersion": "5"
+      },
       "status": "applied",
       "outcome": {
         "kind": "applied",
@@ -2228,6 +2288,32 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
         "priority": "urgent",
         "assignee": "lin",
         "projectId": "resource-1"
+      },
+      "request": {
+        "step": {
+          "id": "task-1",
+          "payload": {
+            "title": "编写快速入门",
+            "estimate_hours": 8,
+            "due_day": 20,
+            "priority": "urgent",
+            "assignee": "lin",
+            "projectId": "resource-1"
+          },
+          "dependsOn": [
+            "project-1"
+          ],
+          "inputRefs": {
+            "projectId": "project-1"
+          },
+          "effect": {
+            "kind": "create",
+            "nodeId": "task-1"
+          }
+        },
+        "target": "mock:local",
+        "executorId": "example.project-service",
+        "executorVersion": "5"
       },
       "status": "no_effect",
       "outcome": {
@@ -2272,6 +2358,32 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
         "assignee": "chen",
         "projectId": "resource-1"
       },
+      "request": {
+        "step": {
+          "id": "task-1",
+          "payload": {
+            "title": "编写快速入门",
+            "estimate_hours": 8,
+            "due_day": 20,
+            "priority": "urgent",
+            "assignee": "chen",
+            "projectId": "resource-1"
+          },
+          "dependsOn": [
+            "project-1"
+          ],
+          "inputRefs": {
+            "projectId": "project-1"
+          },
+          "effect": {
+            "kind": "create",
+            "nodeId": "task-1"
+          }
+        },
+        "target": "mock:local",
+        "executorId": "example.project-service",
+        "executorVersion": "5"
+      },
       "status": "applied",
       "outcome": {
         "kind": "applied",
@@ -2290,6 +2402,32 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
         "assignee": "chen",
         "projectId": "resource-1"
       },
+      "request": {
+        "step": {
+          "id": "task-2",
+          "payload": {
+            "title": "评审使用示例",
+            "estimate_hours": 8,
+            "due_day": 18,
+            "priority": "normal",
+            "assignee": "chen",
+            "projectId": "resource-1"
+          },
+          "dependsOn": [
+            "project-1"
+          ],
+          "inputRefs": {
+            "projectId": "project-1"
+          },
+          "effect": {
+            "kind": "create",
+            "nodeId": "task-2"
+          }
+        },
+        "target": "mock:local",
+        "executorId": "example.project-service",
+        "executorVersion": "5"
+      },
       "status": "unknown",
       "outcome": {
         "kind": "unknown",
@@ -2304,56 +2442,56 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
       "sequence": 1,
       "stepId": "project-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T07:40:05.472Z"
+      "recordedAt": "2026-09-16T07:00:33.370Z"
     },
     {
       "sequence": 2,
       "stepId": "project-1",
       "kind": "applied",
-      "recordedAt": "2026-09-15T07:40:05.472Z"
+      "recordedAt": "2026-09-16T07:00:33.371Z"
     },
     {
       "sequence": 3,
       "stepId": "task-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T07:40:05.473Z"
+      "recordedAt": "2026-09-16T07:00:33.372Z"
     },
     {
       "sequence": 4,
       "stepId": "task-1",
       "kind": "not_applied",
-      "recordedAt": "2026-09-15T07:40:05.473Z",
+      "recordedAt": "2026-09-16T07:00:33.372Z",
       "reason": "Owner unavailable; request rejected before creation"
     },
     {
       "sequence": 5,
       "stepId": "",
       "kind": "plan_repaired",
-      "recordedAt": "2026-09-15T07:40:05.477Z"
+      "recordedAt": "2026-09-16T07:00:33.376Z"
     },
     {
       "sequence": 6,
       "stepId": "task-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T07:40:05.477Z"
+      "recordedAt": "2026-09-16T07:00:33.377Z"
     },
     {
       "sequence": 7,
       "stepId": "task-1",
       "kind": "applied",
-      "recordedAt": "2026-09-15T07:40:05.478Z"
+      "recordedAt": "2026-09-16T07:00:33.377Z"
     },
     {
       "sequence": 8,
       "stepId": "task-2",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T07:40:05.479Z"
+      "recordedAt": "2026-09-16T07:00:33.378Z"
     },
     {
       "sequence": 9,
       "stepId": "task-2",
       "kind": "unknown",
-      "recordedAt": "2026-09-15T07:40:05.479Z",
+      "recordedAt": "2026-09-16T07:00:33.378Z",
       "reason": "Response timed out; creation outcome requires lookup"
     }
   ],
@@ -2450,7 +2588,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
   ],
   "previewVersion": 5,
   "preview": {
-    "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+    "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
     "version": 5,
     "type": "example.project-tasks",
     "typeVersion": "2",
@@ -2644,17 +2782,17 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 ```json
 {
   "id": "demo-run-1",
-  "draftId": "b28e089d-b66e-4c66-b580-306f99afa659",
+  "draftId": "70a102a9-1007-4159-8aeb-80d03f797a69",
   "kind": "initial_create",
   "version": 5,
   "state": "published",
-  "artifactId": "36a7276f-855f-4682-b834-c0a7ca051c15",
-  "initialArtifactId": "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
-  "certificate": "36a7276f-855f-4682-b834-c0a7ca051c15",
+  "artifactId": "62fcb5f5-f4a6-48c1-8b4d-1ccfd475dabb",
+  "initialArtifactId": "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
+  "certificate": "62fcb5f5-f4a6-48c1-8b4d-1ccfd475dabb",
   "revision": 1,
   "revisions": [
     {
-      "artifactId": "c7890ed5-8514-4fd8-be6f-aeda4d6502d3",
+      "artifactId": "0ea1e10a-01fa-4f5a-acd3-245dd4022f4b",
       "version": 4,
       "steps": [
         {
@@ -2770,6 +2908,23 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
         "capacity_hours": 16,
         "deadline_day": 20
       },
+      "request": {
+        "step": {
+          "id": "project-1",
+          "payload": {
+            "title": "文档发布",
+            "capacity_hours": 16,
+            "deadline_day": 20
+          },
+          "effect": {
+            "kind": "create",
+            "nodeId": "project-1"
+          }
+        },
+        "target": "mock:local",
+        "executorId": "example.project-service",
+        "executorVersion": "5"
+      },
       "status": "applied",
       "outcome": {
         "kind": "applied",
@@ -2787,6 +2942,32 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
         "priority": "urgent",
         "assignee": "lin",
         "projectId": "resource-1"
+      },
+      "request": {
+        "step": {
+          "id": "task-1",
+          "payload": {
+            "title": "编写快速入门",
+            "estimate_hours": 8,
+            "due_day": 20,
+            "priority": "urgent",
+            "assignee": "lin",
+            "projectId": "resource-1"
+          },
+          "dependsOn": [
+            "project-1"
+          ],
+          "inputRefs": {
+            "projectId": "project-1"
+          },
+          "effect": {
+            "kind": "create",
+            "nodeId": "task-1"
+          }
+        },
+        "target": "mock:local",
+        "executorId": "example.project-service",
+        "executorVersion": "5"
       },
       "status": "no_effect",
       "outcome": {
@@ -2831,6 +3012,32 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
         "assignee": "chen",
         "projectId": "resource-1"
       },
+      "request": {
+        "step": {
+          "id": "task-1",
+          "payload": {
+            "title": "编写快速入门",
+            "estimate_hours": 8,
+            "due_day": 20,
+            "priority": "urgent",
+            "assignee": "chen",
+            "projectId": "resource-1"
+          },
+          "dependsOn": [
+            "project-1"
+          ],
+          "inputRefs": {
+            "projectId": "project-1"
+          },
+          "effect": {
+            "kind": "create",
+            "nodeId": "task-1"
+          }
+        },
+        "target": "mock:local",
+        "executorId": "example.project-service",
+        "executorVersion": "5"
+      },
       "status": "applied",
       "outcome": {
         "kind": "applied",
@@ -2849,6 +3056,32 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
         "assignee": "chen",
         "projectId": "resource-1"
       },
+      "request": {
+        "step": {
+          "id": "task-2",
+          "payload": {
+            "title": "评审使用示例",
+            "estimate_hours": 8,
+            "due_day": 18,
+            "priority": "normal",
+            "assignee": "chen",
+            "projectId": "resource-1"
+          },
+          "dependsOn": [
+            "project-1"
+          ],
+          "inputRefs": {
+            "projectId": "project-1"
+          },
+          "effect": {
+            "kind": "create",
+            "nodeId": "task-2"
+          }
+        },
+        "target": "mock:local",
+        "executorId": "example.project-service",
+        "executorVersion": "5"
+      },
       "status": "applied",
       "outcome": {
         "kind": "applied",
@@ -2861,69 +3094,69 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
       "sequence": 1,
       "stepId": "project-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T07:40:05.472Z"
+      "recordedAt": "2026-09-16T07:00:33.370Z"
     },
     {
       "sequence": 2,
       "stepId": "project-1",
       "kind": "applied",
-      "recordedAt": "2026-09-15T07:40:05.472Z"
+      "recordedAt": "2026-09-16T07:00:33.371Z"
     },
     {
       "sequence": 3,
       "stepId": "task-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T07:40:05.473Z"
+      "recordedAt": "2026-09-16T07:00:33.372Z"
     },
     {
       "sequence": 4,
       "stepId": "task-1",
       "kind": "not_applied",
-      "recordedAt": "2026-09-15T07:40:05.473Z",
+      "recordedAt": "2026-09-16T07:00:33.372Z",
       "reason": "Owner unavailable; request rejected before creation"
     },
     {
       "sequence": 5,
       "stepId": "",
       "kind": "plan_repaired",
-      "recordedAt": "2026-09-15T07:40:05.477Z"
+      "recordedAt": "2026-09-16T07:00:33.376Z"
     },
     {
       "sequence": 6,
       "stepId": "task-1",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T07:40:05.477Z"
+      "recordedAt": "2026-09-16T07:00:33.377Z"
     },
     {
       "sequence": 7,
       "stepId": "task-1",
       "kind": "applied",
-      "recordedAt": "2026-09-15T07:40:05.478Z"
+      "recordedAt": "2026-09-16T07:00:33.377Z"
     },
     {
       "sequence": 8,
       "stepId": "task-2",
       "kind": "dispatching",
-      "recordedAt": "2026-09-15T07:40:05.479Z"
+      "recordedAt": "2026-09-16T07:00:33.378Z"
     },
     {
       "sequence": 9,
       "stepId": "task-2",
       "kind": "unknown",
-      "recordedAt": "2026-09-15T07:40:05.479Z",
+      "recordedAt": "2026-09-16T07:00:33.378Z",
       "reason": "Response timed out; creation outcome requires lookup"
     },
     {
       "sequence": 10,
       "stepId": "task-2",
       "kind": "reconciling",
-      "recordedAt": "2026-09-15T07:40:05.480Z"
+      "recordedAt": "2026-09-16T07:00:33.380Z"
     },
     {
       "sequence": 11,
       "stepId": "task-2",
       "kind": "applied",
-      "recordedAt": "2026-09-15T07:40:05.481Z"
+      "recordedAt": "2026-09-16T07:00:33.381Z"
     }
   ],
   "steps": [
@@ -3016,7 +3249,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
   ],
   "previewVersion": 5,
   "preview": {
-    "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+    "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
     "version": 5,
     "type": "example.project-tasks",
     "typeVersion": "2",
@@ -3162,7 +3395,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "b28e089d-b66e-4c66-b580-306f99afa659"
+  "70a102a9-1007-4159-8aeb-80d03f797a69"
 ]
 ```
 
@@ -3280,7 +3513,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
     }
   },
   "formatVersion": 3,
-  "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+  "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
   "version": 5,
   "type": "example.project-tasks",
   "typeVersion": "2",
@@ -3399,14 +3632,14 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
       }
     }
   },
-  "publishedArtifactId": "36a7276f-855f-4682-b834-c0a7ca051c15",
-  "lastPublishedAt": "2026-09-15T07:40:05.482Z",
+  "publishedArtifactId": "62fcb5f5-f4a6-48c1-8b4d-1ccfd475dabb",
+  "lastPublishedAt": "2026-09-16T07:00:33.382Z",
   "tombstones": {
     "nodes": [],
     "edges": []
   },
-  "createdAt": "2026-09-15T07:40:05.460Z",
-  "updatedAt": "2026-09-15T07:40:05.482Z"
+  "createdAt": "2026-09-16T07:00:33.359Z",
+  "updatedAt": "2026-09-16T07:00:33.382Z"
 }
 ```
 
@@ -3424,7 +3657,7 @@ reset 回到 create 时的“文档发布”，不会回到上一版的“临时
 
 ```json
 [
-  "b28e089d-b66e-4c66-b580-306f99afa659"
+  "70a102a9-1007-4159-8aeb-80d03f797a69"
 ]
 ```
 
@@ -3505,7 +3738,7 @@ Run 当前采用的意图与计划；旧产物仍可用 revisions 中的 artifac
 
 ```json
 {
-  "id": "36a7276f-855f-4682-b834-c0a7ca051c15",
+  "id": "62fcb5f5-f4a6-48c1-8b4d-1ccfd475dabb",
   "intentDigest": "sha256:stagedwrite-json-v1:733962fd9cbccc460c1183cc4a07667ccdcb077d314378610d91408a5756706f",
   "draft": {
     "graph": {
@@ -3618,7 +3851,7 @@ Run 当前采用的意图与计划；旧产物仍可用 revisions 中的 artifac
       }
     },
     "formatVersion": 3,
-    "id": "b28e089d-b66e-4c66-b580-306f99afa659",
+    "id": "70a102a9-1007-4159-8aeb-80d03f797a69",
     "version": 5,
     "type": "example.project-tasks",
     "typeVersion": "2",
@@ -3743,8 +3976,8 @@ Run 当前采用的意图与计划；旧产物仍可用 revisions 中的 artifac
       "nodes": [],
       "edges": []
     },
-    "createdAt": "2026-09-15T07:40:05.460Z",
-    "updatedAt": "2026-09-15T07:40:05.474Z"
+    "createdAt": "2026-09-16T07:00:33.359Z",
+    "updatedAt": "2026-09-16T07:00:33.373Z"
   },
   "plan": [
     {
@@ -3801,7 +4034,7 @@ Run 当前采用的意图与计划；旧产物仍可用 revisions 中的 artifac
     }
   ],
   "binding": {
-    "checkId": "87d1280e-e718-415c-ab2b-8fc2791195d3",
+    "checkId": "356757b3-5e72-4ff2-8cc8-e6b2f1634e20",
     "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
     "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
     "executorId": "example.project-service",

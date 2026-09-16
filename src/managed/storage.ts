@@ -87,7 +87,7 @@ export function createSqliteBackend(path: string): {
         try {
             const tables = probe.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
             if (tables.length && (!tables.some(t => t.name === "sw_managed_meta") ||
-                probe.prepare("SELECT value FROM sw_managed_meta WHERE key='schema'").get()?.value !== "2"))
+                probe.prepare("SELECT value FROM sw_managed_meta WHERE key='schema'").get()?.value !== "3"))
                 throw new Error("STORAGE_VERSION_UNSUPPORTED");
         } finally { probe.close(); }
     }
@@ -100,8 +100,8 @@ export function createSqliteBackend(path: string): {
     CREATE TABLE IF NOT EXISTS sw_managed_artifacts(id TEXT PRIMARY KEY,draft_id TEXT NOT NULL,body TEXT NOT NULL) STRICT;
     CREATE TABLE IF NOT EXISTS sw_managed_bindings(draft_id TEXT NOT NULL,node_id TEXT NOT NULL,body TEXT NOT NULL,PRIMARY KEY(draft_id,node_id)) STRICT;
     CREATE TABLE IF NOT EXISTS sw_managed_leases(resource TEXT PRIMARY KEY,token TEXT,fence INTEGER NOT NULL,expires_at REAL NOT NULL) STRICT;`);
-    db.prepare("INSERT OR IGNORE INTO sw_managed_meta VALUES ('schema','2')").run();
-    if (db.prepare("SELECT value FROM sw_managed_meta WHERE key='schema'").get()?.value !== "2") {
+    db.prepare("INSERT OR IGNORE INTO sw_managed_meta VALUES ('schema','3')").run();
+    if (db.prepare("SELECT value FROM sw_managed_meta WHERE key='schema'").get()?.value !== "3") {
         db.close();
         throw new Error("STORAGE_VERSION_UNSUPPORTED");
     }

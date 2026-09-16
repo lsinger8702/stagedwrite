@@ -14,6 +14,7 @@ export function validateState(id: string, s: ManagedState) {
     for (const [rid, r] of Object.entries(s.runs)) {
         requireState(r.id === rid && r.draftId === id && ["initial_create", "update"].includes(r.kind), "RUN_IDENTITY_MISMATCH");
         requireState(s.artifacts[r.artifactId] && s.artifacts[r.initialArtifactId], "RUN_INPUT_MISSING");
+        for (const a of r.attempts) requireState(a.request && a.request.step.id === a.stepId && same(a.request.step.payload, a.input) && a.request.target === s.artifacts[r.initialArtifactId]!.binding.target, "ATTEMPT_REQUEST_MISMATCH");
         requireState(r.revisions.every(v => s.artifacts[v.artifactId]), "RUN_INPUT_MISSING");
         requireState(r.state !== "published" || !r.attempts.some(a => a.status === "pending" || a.status === "unknown"), "UNRESOLVED_PUBLICATION");
     }
@@ -32,7 +33,9 @@ export function validateState(id: string, s: ManagedState) {
         if (f.source.kind === "attempt") {
             const source = f.source, r = s.runs[source.runId];
             const a = r?.attempts.find(x => x.stepId === source.stepId && x.number === source.attemptNumber);
-            requireState(a?.status === "applied" && r?.steps.find(x => x.id === source.stepId)?.effect.nodeId === f.nodeId, "FACT_EVIDENCE_MISSING");
+            requireState(a?.status === "applied" && a.outcome?.kind === "applied" && a.outcome.remoteRef === f.remoteId &&
+                a.outcome.confirmed?.projectionDigest === f.projectionDigest && same(a.outcome.confirmed.values, f.values) &&
+                a.request.step.effect.nodeId === f.nodeId, "FACT_EVIDENCE_MISSING");
         } else {
             const source = f.source;
             const o = s.artifacts[source.artifactId]?.observations?.find(o => o.id === source.observationId);
@@ -67,7 +70,7 @@ export function validateTransition(previous: ManagedState | undefined, next: Man
         requireState(r.attempts.length >= old.attempts.length, "ATTEMPT_IMMUTABLE");
         old.attempts.forEach((a, i) => {
             const b = r.attempts[i]!;
-            requireState(same({ stepId: a.stepId, key: a.key, number: a.number, input: a.input }, { stepId: b.stepId, key: b.key, number: b.number, input: b.input }), "ATTEMPT_IMMUTABLE");
+            requireState(same({ stepId: a.stepId, key: a.key, number: a.number, input: a.input, request: a.request }, { stepId: b.stepId, key: b.key, number: b.number, input: b.input, request: b.request }), "ATTEMPT_IMMUTABLE");
             if (a.status === "applied" || a.status === "no_effect") requireState(same(a, b), "ATTEMPT_IMMUTABLE");
         });
     }

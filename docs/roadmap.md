@@ -42,3 +42,7 @@ edit 只修改 Draft 意图；preflight 读取/归一化所需远端事实、诊
 2026-09-16：U0 已获批准；[U1 数据模型设计](design/021-update-data-model.md)第一批模型/存储基础已实现；完整执行模型和 update 链路尚未接通。
 
 2026-09-16：U2 纯编译基础已实现，含三方 diff、具体 drift 诊断及 unknown 阻断；尚未接入公开 preflight/远端执行。
+
+2026-09-16：可选 update.inspect 已接公开 preflight，支持预算、pending 和只读 updatePreview；不授予更新执行资格，自动 RemoteFact 提取仍待完成。
+
+2026-09-16：创建/查证成功回执的 confirmed 值已自动保存为 RemoteFact，Attempt 持久原请求信封（schema 3）；剩余 update/noop 槽位执行与发布分派。
