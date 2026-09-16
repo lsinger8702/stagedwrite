@@ -1,8 +1,96 @@
 # StagedWrite
 
-**A graph intent library for agent tools: create meaningful work, diagnose it, repair it with explicit OPs, and resume unfinished publication without recreating successful resources.**
+[English](README.md) · [简体中文](README.zh-CN.md)
 
-Early prototype, v0.0.1; no published npm package. `createStagedWrite` is the only engine entry point, using the managed Draft lifecycle. [Project principles](docs/design/000-project-principles.md) govern development; conflicting changes require the project owner's explicit agreement.
+**Help an LLM get complex writes right, repair precisely, and resume safely.**
+
+Your agent sends a large JSON body to a billing API. The request times out.
+Did the resource get created? Is it safe to retry? Regenerating and resending
+may create it twice. And if the API rejects one field, should the model
+have to generate the whole body again?
+
+Tool calling connects an agent to an API. Complex writes also need a way
+to check interdependent fields, interpret remote failures, repair specific
+mistakes, and track partial effects. StagedWrite provides that lifecycle
+beneath your tools, including tools exposed through MCP.
+
+## Check the intent. Track the effects.
+
+**Find problems before dispatch.** `preflight` checks the current Draft
+against registered structure and business rules. Local checks and async
+remote checks produce concrete diagnostics; unfinished checks return
+`pending`. A version-bound certificate gates publication. What can be
+verified depends on the rules and remote evidence supplied by the integration.
+
+**Continue from recorded outcomes.** An adapter reports `applied`,
+`not_applied`, or `unknown`. Confirmed successful steps are preserved.
+An unknown request must be reconciled before it can be resent or replaced
+with changed input. Safe retries of the same request reuse its key;
+changed requests receive a new identity only after the previous outcome
+is resolved. Remote idempotency and conclusive reconciliation remain
+adapter responsibilities.
+
+## Targeted diagnostics. Surgical repairs.
+
+When preflight finds a problem, or an adapter maps a real API rejection,
+the model receives the current Draft preview and a **targeted diagnostic**:
+a location, a code, and a message explaining what went wrong. Hints,
+candidate values, and candidate `repairOps` are optional. The model uses
+the diagnosis and the user's intent to choose a repair; a fixed solution
+is not required for a rule to be useful.
+
+**The rules run against the current work; the model receives the problems
+that actually apply.** It does not have to rediscover every violation by
+searching a large rulebook in prompts or memory.
+
+The model emits a short list of operations at explicit coordinates:
+`set` declares a value, `remove` explicitly clears it, and `reset` restores
+the fixed baseline declaration. The backend validates and applies the
+edits atomically. The integration maps the graph intent into the real
+request body.
+
+**Repair the affected fields without regenerating the whole graph.**
+The model can still inspect the full preview, but it need not reproduce
+all the fields that were already correct. Smaller repair outputs reduce
+token overhead and avoid unrelated changes caused by full regeneration;
+we do not claim a measured cost reduction here.
+
+After repair, `resume` continues the same unfinished Run: successes are
+preserved, unknowns are checked using their original request identities,
+and the repaired version must pass preflight before new work is dispatched.
+
+## A Draft outlives its first request
+
+A Draft starts with meaningful work intent and retains its identity after
+publication. As graph nodes succeed, they acquire bindings to the remote
+resources they created. One Draft can manage several resource bindings.
+
+The next step is to update those resources by editing the same Draft,
+with diff and drift checks against published intent and remote facts.
+**Remote update after publication is still in development, not available
+through the current public engine.**
+
+## A real integration and an executable walkthrough
+
+The **Stripe sandbox example** (Product → two Prices) exercises a remote
+validation refusal, explicit repair, and same-Run resume. Receipt loss is
+injected after a real creation. [Integration guide](examples/stripe/README.md)
+· [Recorded evidence and limits](docs/testing/stripe-sandbox.md).
+
+The offline walkthrough executes the library against a simulated remote.
+CI checks its recorded semantics and generated HTML/ZIP against the
+example and rendering sources. It is a reproducible scenario, not proof
+of correctness for every integration.
+
+---
+
+Early prototype, v0.0.1 · Node.js 22.13+ (`node:sqlite`) · no npm package yet.
+The three-state, dual-channel editing migration is in progress; its new
+nested-field components are not yet wired into the public engine.
+[Migration ledger](docs/tasks/three-state-op-migration.md) ·
+[Project principles](docs/design/000-project-principles.md).
+
+## Quickstart
 
 ```sh
 npm ci
@@ -19,6 +107,8 @@ A real Product → two Prices integration demonstrates a remote validation refus
 `npm run test:stripe` runs offline regression tests with no credentials. Live requests require an explicit flag and a test key; state and raw traces stay local. [Contributing](CONTRIBUTING.md).
 
 ## Current API
+
+StagedWrite is a graph intent library for agent tools. `createStagedWrite` is its only engine entry point.
 
 ```ts
 import { createStagedWrite, createSqliteBackend } from "stagedwrite";
@@ -40,7 +130,7 @@ if (check.status === "passed" && check.certificate) {
 await engine.close();
 ```
 
-See the [complete registered schema and rules](examples/fixtures/project-tasks-managed.ts), [executor and calls](examples/publish-resume.ts), and [contract](docs/design/018-draft-lifecycle-proposal.md).
+See the [complete registered schema and rules](examples/fixtures/project-tasks-managed.ts), [executor and calls](examples/publish-and-resume.ts), and [contract](docs/design/018-draft-lifecycle-proposal.md).
 
 - Draft persists ordinary `graph` values, separate `fieldIntents`, immutable `initialSnapshot`, `currentRunId`, and a successful artifact reference. It retains its identity after publication.
 - `set` declares a value, `remove` explicitly clears it. `reset` restores the fixed initial intent in this version, including undeclared fields; it does not undo the last edit.
@@ -81,7 +171,7 @@ Remote idempotency and conclusive reconciliation are adapter responsibilities. L
 
 There is one engine factory: `createStagedWrite`. The unused scalar and graph prototypes, their adapters, storage, migrations and compatibility exports have been removed before publication. We do not maintain a deprecated entry point or an old-data migration path. This does not delete any existing database file; use a fresh database for this experimental release.
 
-Not implemented: remote update after full success, diff/drift, rollback, autofill, scheduling, full edit history, manual adjudication/stop/import/retention APIs, or generic nested request-body generation. [Roadmap](docs/roadmap.md).
+Not available through the public engine: remote update after full success, the complete diff/drift update lifecycle, rollback, autofill, scheduling, full edit history, manual adjudication/stop/import/retention APIs, or generic nested request-body generation. [Roadmap](docs/roadmap.md).
 
 `npm run build` cleans `dist` first, so removed implementations cannot survive in a tarball. CI runs the current regression suite, the actual walkthrough and an isolated package-consumer check.
 

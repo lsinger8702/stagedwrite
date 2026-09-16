@@ -150,7 +150,7 @@ ManagedStore 注册 read/findRun/transact/appendLateFact/close。`transact` 必�
 
 当前新协议测试在 `tests/managed.test.ts`：固定 reset、三态、原子编辑、详细诊断、异步 pending/过期检查、单 Run 防重、修复保护、unknown 原请求查证、SQLite 重开、结果提交失败、跨实例互斥、跨进程租约争用、进程在远端生效后退出、失锁迟到回执与旧解锁隔离。注册、图 OP、预检的有效回归已移到当前入口或仍在使用的纯校验模块；旧执行/迁移/派生专属测试已删除。公共导出与 tarball 检查确保只存在一套引擎。
 
-真实 walkthrough 来自 `examples/publish-resume.ts` 的执行与断言；包含 3 个节点、3 条静态规则、异步 pending、两次改名后 reset、一次 publish、修复后 resume、超时后再次 resume，以及最终 Draft/Binding/Artifact。见 [HTML](../examples/publish-resume.html) 和 [完整 JSON](../examples/publish-resume-trace.json)。
+真实 walkthrough 来自 `examples/publish-and-resume.ts` 的执行与断言；包含 3 个节点、3 条静态规则、异步 pending、两次改名后 reset、一次 publish、修复后 resume、超时后再次 resume，以及最终 Draft/Binding/Artifact。见 [HTML](../examples/publish-resume.html) 和 [完整 JSON](../examples/publish-resume-trace.json)。
 
 仍未完成：真实跨主机后端故障验证、长期网络分区/压力验证、业务远端真实账号联调、人工处置等后续能力。测试通过不是任意远端 exactly-once 的承诺。
 
