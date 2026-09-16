@@ -18,8 +18,13 @@ try {
   writeFileSync(join(dir, 'managed.mjs'), `
 import assert from 'node:assert/strict';
 import * as api from 'stagedwrite';
-const {createStagedWrite,createSqliteBackend}=api;
-assert.deepEqual(Object.keys(api).sort(),['DefinitionAssemblyError','EditInputError','createMemoryBackend','createSqliteBackend','createStagedWrite','defineDraftType'].sort());
+import {Ajv2020} from 'ajv/dist/2020.js';
+const {createStagedWrite,createSqliteBackend,editBatchSchema,initialIntentSchema}=api;
+assert.ok(Object.isFrozen(editBatchSchema.$defs.field));assert.equal(initialIntentSchema.properties.roots.minItems,1);
+assert.deepEqual(Object.keys(api).sort(),['DefinitionAssemblyError','EditInputError','createMemoryBackend','createSqliteBackend','createStagedWrite','defineDraftType','editBatchSchema','initialIntentSchema'].sort());
+const ajv=new Ajv2020({strict:false});const checkInitial=ajv.compile(initialIntentSchema),checkBatch=ajv.compile(editBatchSchema);
+assert.ok(checkInitial({roots:[{nodeType:"task",fields:{name:"initial"}}]}));assert.equal(checkInitial({roots:[{ref:"one"}]}),false);
+assert.ok(checkBatch({patches:[{op:"reset",ref:"one",scope:"canonical",path:"/name"}]}));assert.equal(checkBatch({patches:[{op:"reset",ref:"one",path:"/name"}]}),false);
 const definition={id:'managed',version:'1',nodeTypes:{task:{valueSchema:{type:'object',properties:{name:{type:'string'}},additionalProperties:false},requiredAtPublish:['name']}},relationTypes:{}};
 const selector={type:'managed',typeVersion:'1'};let sends=0;
 const executor={...selector,id:'mock',version:'1',target:'managed:test',plan:d=>Object.values(d.graph.nodes).map(n=>({id:n.id,payload:n.fields,effect:{kind:'create',nodeId:n.id}})),apply:async()=>{sends++;return{kind:'applied',remoteRef:'managed-one'}},reconcile:async()=>({kind:'unknown',reason:'fixture'})};
@@ -29,7 +34,7 @@ const edit=await e.edit(d.id,0,{patches:[{op:'set',ref,scope:'canonical',path:'/
 const c=await e.preflight(d.id);const r=await e.publish(d.id,c.certificate);await e.close();e=open();assert.equal((await e.getDraft(d.id)).currentRunId,r.id);assert.equal((await e.resume(r.id)).state,'published');assert.equal((await e.publish(d.id,c.certificate)).id,r.id);assert.equal(sends,1);await e.close();
 `);
   execFileSync(process.execPath, ['managed.mjs'], { cwd: dir, stdio: 'pipe' });
-  writeFileSync(join(dir, 'managed.mts'), `import {createStagedWrite,createMemoryBackend,type ManagedEditResult,type ManagedDraft,type ManagedExecutor,type DraftLease,type ManagedStore} from 'stagedwrite';\nconst e=createStagedWrite({definitions:[],...createMemoryBackend()});\nfunction check(d:ManagedDraft,x:ManagedExecutor,l:DraftLease,s:ManagedStore){const name=d.graph.nodes.one?.fields.name;return [name,x.plan(d),l.fence,s.namespace];}\nconst edit: Promise<ManagedEditResult> = e.edit("draft", 0, {patches:[]});\nvoid edit;void e;void check;\n`);
+  writeFileSync(join(dir, 'managed.mts'), `import {createStagedWrite,createMemoryBackend,type ManagedEditResult,type ManagedDraft,type ManagedExecutor,type DraftLease,type ManagedStore,editBatchSchema,initialIntentSchema} from 'stagedwrite';\nconst e=createStagedWrite({definitions:[],...createMemoryBackend()});\nfunction check(d:ManagedDraft,x:ManagedExecutor,l:DraftLease,s:ManagedStore){const name=d.graph.nodes.one?.fields.name;return [name,x.plan(d),l.fence,s.namespace];}\nconst edit: Promise<ManagedEditResult> = e.edit("draft", 0, {patches:[]});\nvoid edit;void e;void check;void editBatchSchema;void initialIntentSchema;\n`);
   // The compiler comes from the checkout; module/type resolution occurs in the consumer directory.
   execFileSync(process.execPath, [join(root, 'node_modules/typescript/bin/tsc'), '--noEmit', '--strict', '--module', 'NodeNext', '--target', 'ES2022', 'managed.mts'], { cwd: dir, stdio: 'pipe' });
   const installed = JSON.parse(readFileSync(join(dir, 'node_modules/stagedwrite/package.json'), 'utf8'));

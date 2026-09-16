@@ -1,6 +1,6 @@
 # 024：三态编辑契约与实施边界
 
-**M01 契约定稿，尚未代表运行时已迁移。所有公开编辑动作只有 set/remove/reset。实现进度见 [账本](../tasks/three-state-op-migration.md)。000 的执行保护优先于这里的本地编辑能力。**
+**公开 create/edit/preview 已按本契约接线，最终迁移验收见账本。所有公开编辑动作只有 set/remove/reset。实现进度见 [账本](../tasks/three-state-op-migration.md)。000 的执行保护优先于这里的本地编辑能力。**
 
 ## 输入
 
@@ -57,7 +57,7 @@ Schema 扩展为闭合对象、标量、数组以及本地无环 $ref；对象�
 
 例：基线 `profile={name:"A", note:"B"}`；remove `/profile` 后 set `/profile/name="C"`，投影是 `{profile:{name:"C"}}`，声明保留 note 的 remove。此后 reset `/profile/name` 得到 name=A，note 仍 remove；reset `/profile` 才完整恢复 A/B。祖先 object 的 set{} 仅容器存在标识，不存第二份子值；预检 preview 必须展示子字段实际三态。适配器按有效子树声明读取，不能把内部容器标识直接作为请求体。
 
-这是实现约束，不是承诺现有 toInternal/compileUpdate 已支持嵌套；M04/M06 必须一同调整投影、预检与读取方。最终 Schema 校验前的普通标量约束允许被不同坐标后续父操作覆盖；路径结构错误立即拒绝。
+公开编辑与预检已支持上述嵌套语义；旧 toInternal 已删除。远端 update 的归一化与执行能力仍按其独立契约验收。最终 Schema 校验前的普通标量约束允许被不同坐标后续父操作覆盖；路径结构错误立即拒绝。
 
 ## 请求前身份、回执与安全
 

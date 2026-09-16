@@ -2,7 +2,7 @@
 
 **唯一进度账本。2026-09-16 用户要求：先方案、任务拆分，再逐项完成并及时更新。方案见 [022](../design/022-three-state-op-migration.md)。**
 
-**已确认：所有编辑 OP 只允许 set/remove/reset；移除 node/edge 专用动作；双通道；新建携带内容/复制来源；固定基线 reset 与执行保护保留。公开 create 已切换非空 roots/spec 与 createdRefs；edit/preview 与候选修复已切换双通道。M05 完成；M06–M09 仍按后续验收清单推进，不宣称全部结项。**
+**已确认：所有编辑 OP 只允许 set/remove/reset；移除 node/edge 专用动作；双通道；新建携带内容/复制来源；固定基线 reset 与执行保护保留。公开 create 已切换非空 roots/spec 与 createdRefs；edit/preview 与候选修复已切换双通道。2026-09-17 M00–M09 已按下方证据结项；远端 update 派发仍未实现，下一步恢复原 update 计划。**
 
 ## 记账规则
 
@@ -22,10 +22,10 @@
 | M03 | 完成 | M02 | 拓扑通道求值、初始内容展开、服务端身份及 createdRefs | 引用按请求前图；全批失败不写；无幽灵 refs；图的关系/共享引用正确 |
 | M04 | 完成 | M03 | 嵌套 Schema/三态字段求值/显式 scope | 父子路径优先级、null/remove/未声明、固定基线 reset、非法 scope 测试通过 |
 | M05 | 完成 | M04 | create 与 edit/preview 单入口接线、复制 spec | 非空初始意图；复制只带意图、不带 Binding/Run；输入位置映射；CAS/租约/成功保护保持 |
-| M06 | 进行中 | M05 | 诊断候选修复、preview、SDK/示例调用全部迁移 | message-only 仍可用；候选批次可预演；模型不需要 node.op 或真实远端 payload |
-| M07 | 待做 | M06 | 核心/存储/恢复回归、隔离包验证及文档清理 | 旧动作只出现在迁移说明与拒绝测试；合法批次/失败原子性/unknown/成功保护测试通过 |
-| M08 | 待做 | M07 | walkthrough HTML/ZIP、Stripe 样例与证据刷新 | walkthrough 闸门、Stripe 离线闸门通过；样例源码变化后需真实重录，不能仅改 digest。缺凭证标待外部条件 |
-| M09 | 待做 | M08 | 迁移总结、账本结项、恢复 update 派发 | 明确已实现/限制，检查无兼容残留；恢复 U3 前确认 OP 新入口稳定 |
+| M06 | 完成 | M05 | 诊断候选修复、preview、SDK/示例调用全部迁移 | message-only 仍可用；候选批次可预演；模型不需要 node.op 或真实远端 payload |
+| M07 | 完成 | M06 | 核心/存储/恢复回归、隔离包验证及文档清理 | 旧动作只出现在迁移说明与拒绝测试；合法批次/失败原子性/unknown/成功保护测试通过 |
+| M08 | 完成 | M07 | walkthrough HTML/ZIP、Stripe 样例与证据刷新 | walkthrough 闸门、Stripe 离线闸门通过；样例源码变化后需真实重录，不能仅改 digest。缺凭证标待外部条件 |
+| M09 | 完成 | M08 | 迁移总结、账本结项、恢复 update 派发 | 明确已实现/限制，检查无兼容残留；恢复 U3 前确认 OP 新入口稳定 |
 
 ## 本次记录
 
@@ -247,3 +247,29 @@
 
 - 诊断候选与实际示例调用方已经迁移；继续核对工具 schema 的包级接入、类型消费和所有面对 Agent 的说明，不能把内部 editBatchSchema 测试当作公开 SDK 已交付。
 - 随后 M07 做全仓旧协议残留和最终回归验收，M08 复核生成产物/真实证据，M09 结账后才恢复 update 派发。以上阶段尚未勾完成。
+
+
+### 2026-09-17 M06 — 包级输入 schema 与调用方接入完成
+
+- 从唯一包入口公开 editBatchSchema 和 initialIntentSchema，均为独立 JSON Schema 2020-12 文档且深度冻结。create 的递归 schema 不提供 ref/clone，edit 保留三态双通道；不新增引擎、自动执行或 provider 专属入口。
+- 新增 tests/public-tool-schema.test.ts：包级导入后编译 schema，JSON 初始内容进入真实 create；诊断候选批次经 preview/edit/preflight 修复；重复坐标和业务类型即使结构通过仍被引擎拒绝；错误 message/hint 保留，拒绝不破坏原检查。
+- 隔离 npm tarball 消费验证同时编译两份 schema，并检查类型导入、冻结导出和现有 SQLite 生命周期。新增 docs/guides/agent-inputs.md，中英 README 引用；明确 $defs 的文档根、宿主权限/版本、结构校验与执行资格的区别。
+- 本项交付的是现有公开协议和调用方/schema 迁移。Roadmap A1 的通用受控 dispatch、完整 Agent helpers 和模型 Harness 仍独立待做，不因本项完成而宣称已实现。
+
+### 2026-09-17 M07 — 回归及残留核对完成
+
+- 核心 139/139（含 TypeScript 编译），隔离包消费通过；src/scripts/examples 运行代码扫描无旧七动作名、GraphOp/GraphEditError、toInternal/fromInternal 或迁移桥。
+- 旧动作仅保留在设计迁移说明和拒绝测试。修正 018 中遗漏的七动作、顶层标量、旧 changes 和 preflight v2 描述；023 明示历史核对与 024 已收敛契约的关系。
+- 原子失败、三态/嵌套/固定基线、创建/克隆身份、preview 安全、单 Run、unknown 原请求、SQLite 重开和租约/中断等既有回归全部通过。git diff --check 通过。
+
+### 2026-09-17 M08 — 证据复验完成
+
+- walkthrough 重新执行并与已提交记录比较，HTML/JSON/Markdown/ZIP 字节及页面检查 6/6；生成产物没有漂移。
+- Stripe 离线 13/13：五个运行模块源码摘要、已审阅录制字节与场景闸门通过。本轮没有改 Stripe 运行模块或历史证据，没有调用远端；真实验证仍是 M05 记录的 2026-09-16 那次沙盒实验。
+
+### 2026-09-17 M09 — 迁移结项
+
+- 唯一 createStagedWrite 已完成 create roots/spec、edit/preview 双通道、诊断候选、包级工具 schema 与全部现有调用方迁移，无旧协议兼容入口。
+- 保留限制：数组整值、无跨 Draft 克隆、无新增无父根编辑；未完成 Run 的拓扑与成功节点受保护；unknown 先查证原请求。模型不直接提交真实请求体或执行 Step。
+- OP 迁移阻塞解除；下一阶段按 020/021 和原 update 任务计划继续，共用 Run/Attempt，不另造执行器。当前 UPDATE_NOT_SUPPORTED 未解除，不能对外宣称远端 update 已可用。
+- 本轮代码/文档尚未提交或推送，私有评审目录未纳入。

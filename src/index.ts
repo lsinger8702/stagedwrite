@@ -12,3 +12,4 @@ export type { PublishOptions } from "./execution/publication.js";
 export type { EditBatch, FieldPatch, TopologyPatch, NodeSpec, NodeInput, CreatedRef, InitialIntent } from "./edit/protocol.js";
 export { EditInputError } from "./edit/protocol.js";
 export type { EditReceipt, EditPreview, EditChange, CreateReceipt } from "./edit/results.js";
+export { editBatchSchema, initialIntentSchema } from "./edit/tool-schema.js";

@@ -85,7 +85,7 @@ void [missingScope, invalidRemove, bothTargets];
 
 test("edit tool schema: recursive creation and three-state forms validate without exposing old actions", async () => {
   const { Ajv2020 } = await import("ajv/dist/2020.js");
-  const { editBatchSchema } = await import("../src/edit/tool-schema.js");
+  const { editBatchSchema } = await import("../src/index.js");
   const validate = new Ajv2020({ strict: false }).compile(editBatchSchema);
   const examples = [
     { patches: [set()] },

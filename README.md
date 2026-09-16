@@ -145,6 +145,8 @@ const updated = await engine.edit(draft.id, draft.version, {
 
 Both `ownership` and `cardinality` are required on every registered relation. Repeated field coordinates in one batch are rejected atomically with `message` and `hint`. New nodes created by topology edits receive server IDs via `createdRefs`; preview IDs cannot be submitted to edit.
 
+The package exports `initialIntentSchema` and `editBatchSchema` for host-side structural validation. See [Agent input schemas](docs/guides/agent-inputs.md) for package imports, diagnostic repair handling and the boundary between tool shapes and engine validation.
+
 See the [complete registered schema and rules](examples/fixtures/project-tasks-managed.ts), [executor and calls](examples/publish-and-resume.ts), and [contract](docs/design/018-draft-lifecycle-proposal.md).
 
 - Draft persists ordinary `graph` values, separate `fieldIntents`, immutable `initialSnapshot`, `currentRunId`, and a successful artifact reference. It retains its identity after publication.

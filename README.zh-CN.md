@@ -103,6 +103,8 @@ const updated = await engine.edit(draft.id, draft.version, {
 
 拓扑放在 `graphPatches`，OP 同样只有 set/remove/reset。候选 `repairOps` 和 `repairs[].ops` 使用同一 EditBatch 结构。关系注册必填 ownership/cardinality；重复字段坐标整批拒绝并返回 message/hint。拓扑新增节点由服务端分配 ID，通过 createdRefs 返回；preview 的临时 ID 不能提交编辑。
 
+包内提供 `initialIntentSchema` 与 `editBatchSchema`，供宿主校验输入结构。参见 [Agent 输入接入指南](docs/guides/agent-inputs.md)：包级导入、诊断修复批次，以及工具 schema 与引擎校验的边界。这不代表通用 dispatch helper 或模型 Harness 已完成。
+
 ## 恢复边界
 
 **未完成工作调用 `resume(run.id)`；重复 publish 只观察已有 Run。** `getRun(run.id)` 可查看当前 preview、诊断和请求尝试记录。

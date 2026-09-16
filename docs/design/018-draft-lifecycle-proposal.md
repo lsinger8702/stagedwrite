@@ -56,16 +56,16 @@ set 更新声明和普通值；remove 保存 remove 并移除普通值。reset �
 
 例如 create title=A，edit title=B，再 edit title=C，reset 得到 A，不是 B。它不负责撤销最近操作。新节点不在基线中，其字段 reset 回未声明。
 
-OP 继续使用 node.add/node.remove/edge.add/edge.remove/set/remove/reset，字段限注册 schema 下的顶层标量。每批按序校验、全批提交或全批拒绝。preview 返回候选，不持久化，也不等同于执行资格；实际 edit 另校验锁和修复限制。
+OP 仅 set/remove/reset，以 graphPatches 与 patches 分通道；支持注册 Schema 下的嵌套对象与数组整值，完整范围见 024。拓扑先、字段后，同坐标重复整批拒绝并返回 message/hint。preview 返回临时候选，不持久化，也不等同执行资格；它与 edit 共用意图/Run 保护，实际 edit 另取租约并原子提交。
 
-`edit` 返回 `ManagedEditResult = {draftId, version, preflightRequired: true, changes}`。这是编辑回执，不是完整 Draft 或发布凭据；完整持久化快照用 getDraft 查询。已有 Run 时仍通过 resume 续作，resume 会对修复版本重新预检。
+`edit` 返回 `ManagedEditResult = {draftId, version, preflightRequired: true, changes, createdRefs}`。这是编辑回执，不是完整 Draft 或发布凭据；完整持久化快照用 getDraft 查询。已有 Run 时仍通过 resume 续作，resume 会对修复版本重新预检。
 
-`edit.changes` 是当批变化展示，继续沿用 GraphChange 的 before/after 三态展示格式（value/clear/null），不是持久化意图格式，也不是完整历史。修复安全不依赖它，而是比较 Run 的已采用快照。失败节点多次编辑后，净差异可能为零，version 仍推进并需重新检查。
+`edit.changes` 通过 inputPath 定位双通道中的输入，记录 op/target/ref 和 before/after。字段状态是 set（含重建值）、remove 或 undeclared；它不是完整历史。修复安全不依赖它，而是比较 Run 的已采用快照。失败节点多次编辑后，净差异可能为零，version 仍推进并需重新检查。
 
 ## 编译、规则和真实请求
 
 ```text
-create 的普通图 → 持久化 Graph + fieldIntents
+create 的 roots/spec 初始内容 → 持久化 Graph + fieldIntents
   → 同步规则 / 异步检查 → 当前三态 preview + 具体诊断
   → 注册 executor.plan(冻结的 ManagedDraft)
   → 不可变 Artifact（意图、plan、定义/规则/执行器/target 绑定）
@@ -73,7 +73,7 @@ create 的普通图 → 持久化 Graph + fieldIntents
   → executor.apply(step, key, {signal}) 构造并发送真实请求
 ```
 
-规则与 plan 都接收 ManagedDraft，能看普通 graph 和 fieldIntents；不把三态包装误作普通字段值。诊断路径仍相对于 preview 的 `/nodes/<id>/fields/<field>`，不是 `/graph/...`。preflight 响应沿用 formatVersion=2 的三态展示协议，包含未声明字段。
+规则与 plan 都接收 ManagedDraft，能看普通 graph 和 fieldIntents；不把三态包装误作普通字段值。诊断路径仍相对于 preview 的 `/nodes/<id>/fields/<field>`，不是 `/graph/...`。preflight 响应使用 formatVersion=3，preview 字段键是节点内 JSON Pointer，包含嵌套路径、重建的对象值与未声明字段。
 
 注册规则字段：id/version/type/typeVersion/check。同步 check 返回实际 GraphDiagnostic[]；异步 check 返回 complete+diagnostics 或 pending+message（可附 diagnostics/retryAfterSeconds）。具体诊断的 code/path/message 必填，候选与修复建议全部可选，完整协议见 [004](004-graph-preflight.md)。纯静态同步回调不能被 JS 超时机制抢占；I/O 应放到异步规则中，预算耗尽时尚未启动的规则返回 pending；已启动的检查超时返回 incomplete，不能视为通过。
 
@@ -100,7 +100,7 @@ Artifact 保存 id、intentDigest、完整 Draft 快照、plan、binding 和 res
 1. `create(selector, {roots: [...]})`：展开初始 spec、分配节点身份，原子保存非空初始意图与固定基线，返回 `{draft, createdRefs}`；结构合法即可，不要求业务规则全通过。
 2. `preflight(draftId)`：短锁开始检查轮次，锁外运行检查，短锁以 version/checkEpoch/resourceRevision 校验提交；过期结果 STALE_CHECK。没有执行器时 scope=draft，无发布凭据。
 3. `publish(draftId, certificate, {runId}?)`：获取 Draft 锁。已有 currentRunId 则只观察；明确不同 ID 返回 RUN_ID_CONFLICT。否则验证凭据和注册身份，同事务建立 Run+归属+目标，再发送。
-4. `edit(draftId, expectedVersion, ops)`：短锁与版本 CAS。认领前可改结构；认领后只允许未成功节点字段。成功节点包括 planner 未使用的字段都受保护。成功后 UPDATE_NOT_SUPPORTED。
+4. `edit(draftId, expectedVersion, batch)`：短锁与版本 CAS。认领前可改结构；认领后只允许未成功节点字段。成功节点包括 planner 未使用的字段都受保护。成功后 UPDATE_NOT_SUPPORTED。
 5. `resume(runId)`：同一 Draft 锁下取原 Run。先查证未决原请求，再对新版本预检、保护成功部分、采用新产物、继续未完成步骤。版本未变则直接按已保存事实续作。成功 Run 只观察。
 6. `getDraft/getCheck/getRun/getRunInput/getArtifact/getBindings`：查询。getRunInput 是当前已采用 Artifact；旧输入按 revisions 的 artifactId 读取。Run.version 与 previewVersion 明确分开。
 7. `close()`：存在进行中的操作时拒绝，否则关闭该实例后端。不要在实例之间共用会被某实例关闭的 SQLite 连接；每实例独立打开相同文件即可共享协议。

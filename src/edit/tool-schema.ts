@@ -1,13 +1,15 @@
+import { deepFreeze } from "../registry/json.js";
+
 /** Structural schema for the edit batch payload. The evaluator additionally checks
  * coordinate uniqueness, registered schema, graph identities, version and Run guards.
- * Kept internal until the managed public API accepts this protocol. */
+ * This is a standalone JSON Schema document, not a provider-specific tool definition. */
 const string = { type: "string", minLength: 1 };
 const fieldPath = { type: "string", pattern: "^/([^~/]|~[01])+(\/([^~/]|~[01])+)*$" };
 const relationPath = { type: "string", pattern: "^/([^~/]|~[01])+$" };
-const object = (properties: Record<string, unknown>, required = Object.keys(properties)) =>
+const object = <T extends Record<string, unknown>>(properties: T, required = Object.keys(properties)) =>
   ({ type: "object", properties, required, additionalProperties: false });
 const ref = (name: string) => ({ $ref: `#/$defs/${name}` });
-export const editBatchSchema = {
+export const editBatchSchema = deepFreeze({
   $schema: "https://json-schema.org/draft/2020-12/schema",
   ...object({
     graphPatches: { type: "array", items: ref("topology") },
@@ -40,4 +42,18 @@ export const editBatchSchema = {
       object({ op: { enum: ["remove", "reset"] }, ref: string })
     ] }
   }
-};
+});
+
+/** Creation has no existing identity to reference or clone, even in descendants. */
+export const initialIntentSchema = deepFreeze({
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  ...object({ roots: { type: "array", minItems: 1, items: ref("initialNode") } }),
+  $defs: {
+    json: editBatchSchema.$defs.json,
+    initialNode: object({
+      nodeType: string,
+      fields: { type: "object", additionalProperties: ref("json") },
+      relations: { type: "object", additionalProperties: { type: "array", items: ref("initialNode") } }
+    }, ["nodeType", "fields"])
+  }
+});
