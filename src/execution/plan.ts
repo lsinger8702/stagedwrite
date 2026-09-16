@@ -1,7 +1,7 @@
 import type { Step } from "../types.js";
 import { isObject, jsonSnapshot } from "../registry/json.js";
 /** Validate the executor plan before persisting an artifact. */
-export function validatePlan(output: unknown): Step[] {
+export function validatePlan(output: unknown, mode: "initial_create" | "update" = "initial_create"): Step[] {
     if (output instanceof Promise) {
         void output.catch(() => undefined);
         throw new Error("INVALID_PLAN");
@@ -25,9 +25,15 @@ export function validatePlan(output: unknown): Step[] {
             if (!isObject(step.inputRefs) || Object.entries(step.inputRefs).some(([field, dep]) => !field.trim() || Object.hasOwn(step.payload as object, field) || typeof dep !== "string" || !deps.includes(dep)))
                 throw new Error("INVALID_PLAN");
         }
-        if ((!isObject(step.effect) || Object.keys(step.effect).length !== 2 ||
-            step.effect.kind !== "create" || typeof step.effect.nodeId !== "string" || !step.effect.nodeId.trim()))
+        if (!isObject(step.effect) || typeof step.effect.nodeId !== "string" || !step.effect.nodeId.trim())
             throw new Error("INVALID_PLAN");
+        if (mode === "initial_create") {
+            if (Object.keys(step.effect).length !== 2 || step.effect.kind !== "create") throw new Error("INVALID_PLAN");
+        } else {
+            if (Object.keys(step.effect).length !== 3 || !["update", "noop"].includes(String(step.effect.kind)) ||
+                typeof step.effect.remoteId !== "string" || !step.effect.remoteId.trim()) throw new Error("INVALID_PLAN");
+            if (step.effect.kind === "noop" && (Object.keys(step.payload).length || step.inputRefs !== undefined)) throw new Error("INVALID_NOOP_PLAN");
+        }
         ids.add(step.id);
     }
     return plan as unknown as Step[];

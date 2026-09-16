@@ -1,5 +1,7 @@
 # Roadmap
 
+**当前最高优先级：按所有者新决定完成 [三态 OP 迁移](design/022-three-state-op-migration.md)。执行进度只维护在 [任务账本](tasks/three-state-op-migration.md)。下方 update/Agent 路线保留，update 派发待迁移后恢复。**
+
 **当前实现以 [000 原则](design/000-project-principles.md) 和 [018 契约](design/018-draft-lifecycle-proposal.md) 为准。2026-09-16：项目所有者要求将远端 update 与三种 Agent 接入方式纳入下一阶段。本页确定规划方向；具体接口、状态迁移和原则变更见 [019 提案](design/019-update-agent-roadmap.md)，U0 契约已获批准并同步原则，尚未据此开放运行时能力。**
 
 ## 已实现：首次创建与修复闭环
@@ -46,3 +48,5 @@ edit 只修改 Draft 意图；preflight 读取/归一化所需远端事实、诊
 2026-09-16：可选 update.inspect 已接公开 preflight，支持预算、pending 和只读 updatePreview；不授予更新执行资格，自动 RemoteFact 提取仍待完成。
 
 2026-09-16：创建/查证成功回执的 confirmed 值已自动保存为 RemoteFact，Attempt 持久原请求信封（schema 3）；剩余 update/noop 槽位执行与发布分派。
+
+2026-09-16：共用 Step 已支持 update/noop 的结构校验与预检映射；首次/修复发布采用记录已接入。update/noop 实际执行和无写入提交仍未开放。

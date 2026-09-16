@@ -9,3 +9,5 @@
 - Read `docs/design/004-graph-preflight.md` before changing rules or preflight. Preserve the checked Draft preview and concrete messages; the caller/LLM chooses OPs.
 - On an agreed principle change, record the decision and update the affected design, examples and tests. Routine implementation choices within the agreed boundaries do not require additional approval.
 - This is an independent public library. Do not add employer-specific implementation, business terminology, source paths or private review material to the repository. Reading external references does not authorize copying them into this project.
+
+- The owner requires a closed editing OP set: set/remove/reset only. Read `docs/design/022-three-state-op-migration.md` and use `docs/tasks/three-state-op-migration.md` as the single task ledger. Implement in dependency order, update status and test evidence as each item is completed, and do not mark planned or disconnected work complete. Pause remote update dispatch development until the OP migration is complete; preserve prior work. Do not reintroduce node/edge-specific public OP names or compatibility aliases.

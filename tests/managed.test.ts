@@ -462,3 +462,32 @@ test("managed: failed fact commit recovers a durable receipt without another app
         assert.equal(Object.keys((await backend.storage.read(d.id))!.remoteFacts).length, 2);
     } finally { await e.close(); }
 });
+
+test("managed: initial and repair certificates durably adopt the same run", async () => {
+    const backend = createMemoryBackend(); let calls = 0;
+    const e = engine(executor({ apply: async s => { calls++; return s.payload.name === "Second" ? { kind: "not_applied", reason: "repair" } : { kind: "applied", remoteRef: s.id }; } }), backend);
+    try {
+        const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!);
+        await e.edit(d.id, 0, [{ op: "set", nodeId: "b", path: "/name", value: "Fixed" }]);
+        const done = await e.resume(r.id); assert.equal(done.state, "published");
+        const s = (await backend.storage.read(d.id))!;
+        assert.equal(Object.keys(s.publications).length, 2);
+        for (const cert of [c.certificate!, done.certificate]) {
+            assert.equal(s.publications[cert]!.kind, "run");
+            assert.equal((await e.publish(d.id, cert)).id, r.id);
+        }
+        assert.equal(calls, 3);
+    } finally { await e.close(); }
+});
+test("managed: failed adoption commit cannot leave a run or dispatch an effect", async () => {
+    const backend = createMemoryBackend(); let calls = 0;
+    const storage = { ...backend.storage, transact: async (...args: Parameters<typeof backend.storage.transact>) => {
+        const [id, lease, fn] = args; return backend.storage.transact(id, lease, s => { const next = fn(s); if (Object.keys(next.publications).length) throw new Error("ADOPTION_COMMIT_FAILED"); return next; });
+    } };
+    const e = engine(executor({ apply: async s => { calls++; return { kind: "applied", remoteRef: s.id }; } }), { storage, locks: backend.locks });
+    try {
+        const { d, c } = await ready(e); await assert.rejects(e.publish(d.id, c.certificate!), /ADOPTION_COMMIT_FAILED/);
+        const s = (await backend.storage.read(d.id))!;
+        assert.equal(s.draft.currentRunId, null); assert.deepEqual(s.publications, {}); assert.deepEqual(s.runs, {}); assert.equal(calls, 0);
+    } finally { await e.close(); }
+});

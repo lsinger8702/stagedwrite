@@ -66,7 +66,7 @@ for (const sqlite of [false, true]) {
     test(`${label}: adoption records survive reopen and cannot be reassigned`, async () => {
         const f = await fixture(sqlite);
         try {
-            await f.edit(s => { s.publications[f.run.certificate] = { kind: "run", certificate: f.run.certificate, draftId: f.draft.id, version: 0, runId: f.run.id, adoptedAt: "2026-09-16T00:00:00Z" }; });
+            assert.equal((await f.backend.storage.read(f.draft.id))!.publications[f.run.certificate]!.kind, "run");
             const before = await f.backend.storage.read(f.draft.id);
             await assert.rejects(f.edit(s => { delete s.publications[f.run.certificate]; }), /PUBLICATION_IMMUTABLE/);
             await assert.rejects(f.edit(s => { s.publications[f.run.certificate]!.version = 100; }), /PUBLICATION_IMMUTABLE|PUBLICATION_IDENTITY/);

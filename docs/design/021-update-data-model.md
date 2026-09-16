@@ -170,3 +170,13 @@ SQLite：去掉 runs.draft_id 的 UNIQUE，增加 kind/state 索引字段；可�
 存储 schema 升至 3，schema 1/2 文件只读检测后拒绝，不做静默迁移。原因是旧 Attempt 缺少完整请求信封，不能靠当前计划猜测补齐。旧实验库应配合匹配的旧代码观察/恢复，不为重试另建资源。
 
 预检测试已经使用真实 apply 返回 confirmed 自动生成事实，删除原手工注入。新增事实提交失败→采用迟到回执的测试，以及 unknown 查证后保存事实、非法确认值不抹掉效果的测试。walkthrough 已按新增的真实 Attempt 输出重新生成；仍未开放成功后 edit/update/noop 执行。
+
+## 13. 共用 Step 与采用记录
+
+Step.effect 已扩为 create/update/noop；update/noop 必须带原 remoteId。共用 validatePlan 按 initial_create/update 模式检查，初始计划仍只接受 create；noop 的 payload 必须为空且不得含 inputRefs。
+
+可选 `update.plan(draft, compilation)` 将已检查 diff 映射为同一 Step 协议。预检检查节点全覆盖、动作与 diff 一致、远端 ID 不变、原步骤 ID/顺序/依赖不变；不能把有差异节点标成 noop。返回 `updatePreview.plan` 供检查，不签发 certificate，不派发请求。plan/apply 的真实业务字段映射仍由 adapter 测试负责，结构校验不能证明任意发送函数语义正确。
+
+首次 create 认领事务现在原子保存 PublicationAdoption；resume 采用修复 Artifact 时将新 certificate 归属原 Run，旧记录保留。重放已采用 certificate 观察原 Run，不能另建资源；采用事务失败不留下 Run/currentRunId 或远端效果。无写入发布的正式提交以及 update/noop 派发仍待接入，当前不声称已完成。
+
+核心累计 85/85，包括 noop 禁止隐式写入、动作/绑定/步骤身份拒绝、实际预检计划输出、修复凭据归属与采用提交失败回滚。没有新增独立 update 执行器。

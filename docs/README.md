@@ -17,3 +17,5 @@
 旧原型的源码与设计可从 Git 历史查阅；当前目录只保留当前实现相关文档。跨主机生产后端、update/diff/drift、rollback 尚未交付。
 
 9. [update 数据模型与原子提交](design/021-update-data-model.md)：U1 设计及实现拆分。
+
+10. [三态 OP 迁移方案](design/022-three-state-op-migration.md) · [准确契约](design/024-three-state-op-contract.md) · [逐项任务账本](tasks/three-state-op-migration.md)：当前首要任务。

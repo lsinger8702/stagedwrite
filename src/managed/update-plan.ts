@@ -1,3 +1,4 @@
+import { validatePlan } from "../execution/plan.js";
 import { canonicalJson, jsonSnapshot, pointer, type Json } from "../registry/json.js";
 import type { GraphDiagnostic } from "../preflight/types.js";
 import type { ManagedState, NormalizedValue, RemoteObservation } from "./types.js";
@@ -143,4 +144,22 @@ export function compileUpdate(state: ManagedState, projections: readonly UpdateP
         draftId: d.id, version: d.version, resourceRevision: state.resourceRevision, basePublishedArtifactId: d.publishedArtifactId!,
         baseRunId: d.currentRunId, targetId: d.targetId, observations, projections,
     }, slots });
+}
+
+/** Validate adapter request mapping without constructing or executing remote requests. */
+export function validateUpdatePlan(output: unknown, compilation: Extract<UpdateCompilation, { status: "passed" }>, state: ManagedState): import("../types.js").Step[] {
+    const steps = validatePlan(output, "update");
+    const baseline = state.artifacts[compilation.context.basePublishedArtifactId];
+    if (!baseline || steps.length !== compilation.slots.length || baseline.plan.length !== steps.length) throw new Error("UPDATE_PLAN_TOPOLOGY");
+    const slots = new Map(compilation.slots.map(slot => [slot.nodeId, slot]));
+    const seen = new Set<string>();
+    for (const [index, step] of steps.entries()) {
+        const slot = slots.get(step.effect.nodeId), prior = baseline.plan[index]!;
+        if (!slot || seen.has(slot.nodeId) || step.effect.kind !== slot.kind || step.effect.remoteId !== slot.remoteId)
+            throw new Error("UPDATE_EFFECT_MISMATCH");
+        if (step.id !== prior.id || step.effect.nodeId !== prior.effect.nodeId || !same(step.dependsOn ?? [], prior.dependsOn ?? []))
+            throw new Error("UPDATE_PLAN_TOPOLOGY");
+        seen.add(slot.nodeId);
+    }
+    return steps;
 }

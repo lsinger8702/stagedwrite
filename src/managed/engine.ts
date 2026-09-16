@@ -1,4 +1,4 @@
-import { compileUpdate, type UpdateProjection } from "./update-plan.js";
+import { compileUpdate, validateUpdatePlan, type UpdateProjection } from "./update-plan.js";
 import type { RemoteObservation } from "./types.js";
 import { randomUUID } from "node:crypto";
 import { DefinitionRegistry } from "../registry/registry.js";
@@ -43,9 +43,9 @@ export function createStagedWrite(options: ManagedOptions) {
         registry.getDefinition(e);
         if (executors.has(key(e)) || ![e.id, e.version, e.target].every(v => typeof v === "string" && v.trim()) || typeof e.plan !== "function" || typeof e.apply !== "function" || !(typeof e.reconcile === "function" || typeof e.reconcile?.unsupported === "string" && e.reconcile.unsupported.trim()))
             throw new Error("INVALID_EXECUTOR");
-        if (e.update !== undefined && (!e.update || typeof e.update.inspect !== "function"))
+        if (e.update !== undefined && (!e.update || typeof e.update.inspect !== "function" || e.update.plan !== undefined && typeof e.update.plan !== "function"))
             throw new Error("INVALID_UPDATE_INSPECTOR");
-        executors.set(key(e), { ...e, ...(e.update ? { update: { inspect: e.update.inspect.bind(e.update) } } : {}), plan: e.plan.bind(e), apply: e.apply.bind(e), reconcile: typeof e.reconcile === "function" ? e.reconcile.bind(e) : { ...e.reconcile } });
+        executors.set(key(e), { ...e, ...(e.update ? { update: { inspect: e.update.inspect.bind(e.update), ...(e.update.plan ? { plan: e.update.plan.bind(e.update) } : {}) } } : {}), plan: e.plan.bind(e), apply: e.apply.bind(e), reconcile: typeof e.reconcile === "function" ? e.reconcile.bind(e) : { ...e.reconcile } });
     }
     if (executors.size)
         for (const s of registry.selectors())
@@ -204,7 +204,10 @@ export function createStagedWrite(options: ManagedOptions) {
                         Object.keys(data).some(k => !["status", "projections", "observations", "diagnostics"].includes(k)) ||
                         data.diagnostics !== undefined && !Array.isArray(data.diagnostics)) throw new Error("INVALID_UPDATE_OBSERVATION");
                     const compiled = compileUpdate(s, data.projections as unknown as UpdateProjection[], data.observations as unknown as RemoteObservation[]);
-                    if (compiled.status === "passed") slots = { slots: compiled.slots };
+                    if (compiled.status === "passed") {
+                        slots = { slots: compiled.slots };
+                        if (inspector.plan) slots.plan = validateUpdatePlan(inspector.plan(frozen, deepFreeze(copy(compiled))), compiled, s);
+                    }
                     return { status: "complete" as const, diagnostics: [...(data.diagnostics ?? []) as unknown as GraphDiagnostic[], ...compiled.diagnostics] };
                 },
             }], timeout);
@@ -494,6 +497,11 @@ export function createStagedWrite(options: ManagedOptions) {
                 if (publishOptions !== undefined)
                     publicationId(publishOptions);
                 let s = await need(id);
+                const adopted = s.publications[certificate];
+                if (adopted?.kind === "run") {
+                    if (publishOptions?.runId && publishOptions.runId !== adopted.runId) throw new Error(`RUN_ID_CONFLICT: ${adopted.runId}`);
+                    return response(s, s.runs[adopted.runId]!);
+                }
                 if (s.draft.currentRunId) {
                     if (publishOptions?.runId && publishOptions.runId !== s.draft.currentRunId)
                         throw new Error(`RUN_ID_CONFLICT: ${s.draft.currentRunId}`);
@@ -513,6 +521,7 @@ export function createStagedWrite(options: ManagedOptions) {
                     if (a.binding.executorId !== e.id || a.binding.executorVersion !== e.version || a.binding.target !== e.target)
                         throw new Error("EXECUTOR_BINDING_MISMATCH");
                     current.runs[runId] = { id: runId, draftId: id, kind: "initial_create", version: current.draft.version, state: "running", artifactId: a.id, initialArtifactId: a.id, certificate, revision: 0, revisions: [], attempts: [], events: [], steps: a.plan.map(st => ({ ...copy(st), key: JSON.stringify([runId, st.id, 0]), status: "ready" })) };
+                    current.publications[certificate] = { kind: "run", certificate, draftId: id, version: a.draft.version, runId, adoptedAt: new Date().toISOString() };
                     current.draft.currentRunId = runId;
                     current.draft.targetId = e.target;
                 });
@@ -560,6 +569,7 @@ export function createStagedWrite(options: ManagedOptions) {
                             const attempted = run.attempts.some(a => a.stepId === st.id);
                             return { ...copy(st), key: changed && attempted ? JSON.stringify([runId, st.id, run.revision]) : old.key, status: "ready", ...(changed && attempted ? { requestRevision: run.revision } : {}) };
                         });
+                        current.publications[a.id] = { kind: "run", certificate: a.id, draftId: id, version: a.draft.version, runId, adoptedAt: new Date().toISOString() };
                         run.artifactId = a.id;
                         run.certificate = a.id;
                         run.version = a.draft.version;

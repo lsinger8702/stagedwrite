@@ -7,10 +7,10 @@ const complete = (title = "A") => ({ status: "complete" as const,
     projections: [{ nodeId: "a", projectionDigest: "v1", fields: { title: { path: "/title", writable: true, desired: { kind: "value" as const, value: "A" } } } }],
     observations: [{ id: "read", nodeId: "a", targetId: "test", remoteId: "remote-a", projectionDigest: "v1", values: { title: { kind: "value" as const, value: title } }, observedAt: "2026-09-16T00:00:00.000Z" }],
 });
-async function setup(inspect: ManagedUpdateInspector["inspect"], overrides: Partial<ManagedOptions> = {}) {
+async function setup(inspect: ManagedUpdateInspector["inspect"], overrides: Partial<ManagedOptions> = {}, plan?: ManagedUpdateInspector["plan"]) {
     const backend = createMemoryBackend();
     const e = createStagedWrite({ definitions: [definition], ...backend, ...overrides, executors: [{ ...selector, id: "task.executor", version: "1", target: "test",
-        update: { inspect }, plan: () => [{ id: "a", payload: { title: "A" }, effect: { kind: "create", nodeId: "a" } }],
+        update: { inspect, ...(plan ? { plan } : {}) }, plan: () => [{ id: "a", payload: { title: "A" }, effect: { kind: "create", nodeId: "a" } }],
         apply: async () => ({ kind: "applied", remoteRef: "remote-a", confirmed: { projectionDigest: "v1", values: { title: { kind: "value", value: "A" } } } }), reconcile: { unsupported: "not implemented" },
     }] });
     const draft = await e.create(selector, { nodes: { a: { id: "a", nodeType: "task", fields: { title: "A" } } }, edges: {} });
@@ -70,4 +70,13 @@ test("update inspection: concurrent check supersedes old remote result", async (
         const fresh = await e.preflight(draft.id); release(complete("late")); await rejected;
         assert.equal((await e.getCheck(draft.id)).checkId, fresh.checkId);
     } finally { await e.close(); }
+});
+
+test("update inspection: optional mapper previews the shared plan but grants no publication certificate", async () => {
+    const { e, draft } = await setup(async () => complete(), {}, (draft, compiled) => {
+        assert.ok(Object.isFrozen(draft)); assert.ok(Object.isFrozen(compiled));
+        return [{ id: "a", payload: {}, effect: { kind: "noop", nodeId: "a", remoteId: compiled.slots[0]!.remoteId } }];
+    });
+    try { const c = await e.preflight(draft.id); assert.equal(c.status, "passed"); assert.equal(c.updatePreview!.plan![0]!.effect.kind, "noop"); assert.equal(c.certificate, undefined); }
+    finally { await e.close(); }
 });

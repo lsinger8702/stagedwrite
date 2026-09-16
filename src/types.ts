@@ -26,11 +26,9 @@ export interface Step {
     dependsOn?: readonly string[];
     /** Payload field -> dependency step whose remoteRef supplies that field. */
     inputRefs?: Record<string, string>;
-    /** Exactly one create step per managed node in this release. */
-    effect: {
-        kind: "create";
-        nodeId: string;
-    };
+    /** Fixed-node effects share the same plan/request protocol. */
+    effect: { kind: "create"; nodeId: string }
+        | { kind: "update" | "noop"; nodeId: string; remoteId: string };
 }
 type Applied = {
     kind: "applied";

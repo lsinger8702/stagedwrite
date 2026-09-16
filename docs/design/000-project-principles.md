@@ -8,6 +8,14 @@
 
 **2026-09-16：项目所有者明确同意 [020 update 契约](020-update-contract-proposal.md)：固定图/固定远端 ID 字段更新、未决 Run 必须 resume、无写入发布持久确认、drift 冲突阻断、无远端 CAS 的首个接入限定单写方、本 Run 成功节点仍受保护。以下为批准的目标原则；运行时目前仍是首次创建阶段，update 尚未实现。**
 
+## P0：编辑 OP 封闭三态（2026-09-16 新决定）
+
+**项目所有者明确要求：所有对外编辑 OP 只能是 set/remove/reset，反对 node.add/node.remove/edge.add/edge.remove。拓扑与字段分通道；新节点内容/复制来源放入 set 的 value spec，不新增 clone 等动作。此原则替代七动作混合数组，迁移方案见 [022](022-three-state-op-migration.md)。**
+
+**按 [任务账本](../tasks/three-state-op-migration.md) 逐项实施，完成一项即记录代码与验证证据；未实现不能勾完成。当前运行时尚未迁移；update 实际派发开发暂缓，保留已有成果。**
+
+字段 reset 的固定基线与原有执行安全原则不变。计划 Step.effect 的 create/update/noop 不是编辑 OP，不混淆两者。
+
 ## P1：图式工作意图
 
 **Draft 是长期的图式工作意图容器，create 必须携带非空初始工作内容。节点和关系显式描述，单节点也是图。schema 不负责猜测本次意图。**
@@ -20,7 +28,9 @@
 
 **reset 恢复固定基线中的字段声明，不是撤销上一个 edit。首次成功前基线是 create 的 initialSnapshot；未来 update 阶段基线是最近全量成功发布的意图。基线未声明该字段，reset 才恢复未声明。必须保留基线，不能仅删除声明或从当前值猜上版。**
 
-本版 create 的普通字段归一为 set，包括 null；初始字段缺席表示未声明。没有 autofill 或默认值写回作者意图。多次 OP 按顺序原子应用，版本用于 CAS，不是完整编辑历史。
+本版 create 的普通字段归一为 set，包括 null；初始字段缺席表示未声明。没有 autofill 或默认值写回作者意图。不同字段坐标的 OP 按顺序原子应用，版本用于 CAS，不是完整编辑历史。
+
+**2026-09-16 所有者确认：同批规范化后的 `(ref, scope, path)` 重复，一律整批拒绝，即使 value 相同或 op 不同。拒绝信息必须包含非空 `message` 和 `hint`：说明哪些输入冲突，并指导合并为一条或拆成多批；不得静默覆盖、自动选最后一条或自动修复。preview 与 edit 使用相同校验。**
 
 ## P3：面向 LLM 的具体诊断
 

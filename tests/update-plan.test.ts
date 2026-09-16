@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createStagedWrite, createMemoryBackend, defineDraftType } from "../src/index.js";
-import { compileUpdate, type UpdateProjection } from "../src/managed/update-plan.js";
+import { compileUpdate, validateUpdatePlan, type UpdateProjection } from "../src/managed/update-plan.js";
 import type { NormalizedValue, RemoteObservation } from "../src/managed/types.js";
 const value = (v: string | number | boolean | null): NormalizedValue => ({ kind: "value", value: v });
 async function setup(B = value("A"), D = value("B"), O = value("A")) {
@@ -83,4 +83,23 @@ test("update diff: output is detached and recompiles against each fresh observat
     assert.deepEqual(o[0]!.values.title, value("A"));
     o[0]!.values.title = value("external");
     assert.equal(compileUpdate(s,p,o).status, "blocked");
+});
+
+test("update plan: shared effects preserve identity and cannot hide changes as noop", async () => {
+    const { s, p, o } = await setup(); const compiled = compileUpdate(s,p,o); assert.equal(compiled.status, "passed");
+    if (compiled.status !== "passed") return;
+    const plan = [{ id: "a/b", payload: { title: "B" }, effect: { kind: "update" as const, nodeId: "a/b", remoteId: "remote-a" } }];
+    assert.deepEqual(validateUpdatePlan(plan, compiled, s), plan);
+    assert.throws(() => validateUpdatePlan([{ ...plan[0], effect: { kind: "noop", nodeId: "a/b", remoteId: "remote-a" }, payload: {} }], compiled, s), /UPDATE_EFFECT_MISMATCH/);
+    assert.throws(() => validateUpdatePlan([{ ...plan[0], effect: { ...plan[0]!.effect, remoteId: "different" } }], compiled, s), /UPDATE_EFFECT_MISMATCH/);
+    assert.throws(() => validateUpdatePlan([{ ...plan[0], id: "renamed" }], compiled, s), /UPDATE_PLAN_TOPOLOGY/);
+    assert.throws(() => validateUpdatePlan([{ ...plan[0], effect: { kind: "create", nodeId: "a/b" } }], compiled, s), /INVALID_PLAN/);
+});
+test("update plan: noop cannot carry a payload or an input reference", async () => {
+    const { s, p, o } = await setup(value("A"), value("A"), value("A")); const compiled = compileUpdate(s,p,o);
+    assert.equal(compiled.status, "passed"); if (compiled.status !== "passed") return;
+    const step = { id: "a/b", payload: {}, effect: { kind: "noop" as const, nodeId: "a/b", remoteId: "remote-a" } };
+    assert.deepEqual(validateUpdatePlan([step], compiled, s), [step]);
+    assert.throws(() => validateUpdatePlan([{ ...step, payload: { title: "hidden write" } }], compiled, s), /INVALID_NOOP_PLAN/);
+    assert.throws(() => validateUpdatePlan([{ ...step, inputRefs: {} }], compiled, s), /INVALID_NOOP_PLAN/);
 });
