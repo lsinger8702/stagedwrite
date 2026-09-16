@@ -19,6 +19,7 @@ interface Entry {
   definition: DraftTypeDefinition;
   digest: string;
   validators: Map<string, ValidateFunction>;
+  schemas: Map<string, Record<string, Json>>;
 }
 
 /** Instance-owned, atomically assembled registry. No registration mutation API. */
@@ -78,7 +79,9 @@ export class DefinitionRegistry {
         const path = `/relationTypes/${pointer(name)}`;
         if (!name.trim()) invalid(path, "Relation type name must be nonempty");
         if (!isObject(relation)) { invalid(path, "Relation type must be an object"); continue; }
-        keys(relation, ["from", "to"], path);
+        keys(relation, ["from", "to", "ownership", "cardinality"], path);
+        if ("ownership" in relation && (typeof relation.ownership !== "string" || !["owned", "reference"].includes(relation.ownership))) invalid(`${path}/ownership`, "Expected owned or reference");
+        if ("cardinality" in relation && (typeof relation.cardinality !== "string" || !["one", "many"].includes(relation.cardinality))) invalid(`${path}/cardinality`, "Expected one or many");
         for (const end of ["from", "to"]) {
           const names = relation[end];
           if (!Array.isArray(names) || !names.length) { invalid(`${path}/${end}`, "Expected a nonempty node type array"); continue; }
@@ -100,7 +103,7 @@ export class DefinitionRegistry {
       const key = identity(definitionId, version);
       const existing = entries.get(key);
       if (existing && existing.digest !== digest) { report("DEFINITION_CONFLICT", "", "Same id/version has different definition content"); continue; }
-      if (!existing) entries.set(key, { definition: deepFreeze(snapshot) as unknown as DraftTypeDefinition, digest, validators });
+      if (!existing) entries.set(key, { definition: deepFreeze(snapshot) as unknown as DraftTypeDefinition, digest, validators, schemas });
     }
     if (issues.length) throw new DefinitionAssemblyError(issues);
     this.#entries = entries;
@@ -117,6 +120,12 @@ export class DefinitionRegistry {
   getDefinition(selector: DefinitionSelector): { definition: DraftTypeDefinition; digest: string } {
     const entry = this.#entry(selector);
     return { definition: structuredClone(entry.definition), digest: entry.digest };
+  }
+  /** Resolved local schema copy for canonical path interpretation; no remote loading. */
+  getValueSchema(selector: DefinitionSelector, nodeType: string): Record<string, Json> {
+    const schema = this.#entry(selector).schemas.get(nodeType);
+    if (!schema) throw new Error("NODE_TYPE_NOT_FOUND");
+    return structuredClone(schema);
   }
   /** Pure filled-value check, not intent interpretation or publish completeness. */
   validateValues(selector: DefinitionSelector, nodeType: string, values: unknown): { valid: boolean; issues: ValueIssue[] } {

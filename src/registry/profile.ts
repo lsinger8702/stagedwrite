@@ -46,6 +46,29 @@ export function checkValueSchema(input: Json | undefined, path: string, report: 
       if (chain.includes(name)) { report("SCHEMA_REF_CYCLE", `${at}/$ref`, "Reference cycle", { target: ref, chain: [...chain, name] }); return; }
       return resolveDef(name, chain);
     }
+    const declared = Array.isArray(schema.type) ? schema.type : [schema.type];
+    const container = declared.find(t => t === "object" || t === "array");
+    if (container) {
+      if (!(declared.length === 1 && !Array.isArray(schema.type) || declared.length === 2 && declared.includes("null") && new Set(declared).size === 2))
+        unsupported(`${at}/type`, "A container may only be unioned with null");
+      metadata(schema, at);
+      if (container === "object") {
+        keys(schema, ["type", "properties", "additionalProperties", "title", "description"], at);
+        if (schema.additionalProperties !== false) invalid(`${at}/additionalProperties`, "Nested objects must explicitly forbid additional properties");
+        if (!isObject(schema.properties)) { invalid(`${at}/properties`, "properties must be an object"); return; }
+        const properties: Record<string, Json> = {};
+        for (const [key, child] of Object.entries(schema.properties)) {
+          const resolved = resolve(child, `${at}/properties/${pointer(key)}`, chain);
+          if (resolved) properties[key] = resolved;
+        }
+        return { ...schema, properties };
+      }
+      keys(schema, ["type", "items", "minItems", "maxItems", "title", "description"], at);
+      const items = resolve(schema.items, `${at}/items`, chain);
+      for (const key of ["minItems", "maxItems"]) if (key in schema && (!Number.isSafeInteger(schema[key]) || (schema[key] as number) < 0)) invalid(`${at}/${key}`, "Expected a nonnegative safe integer");
+      if (typeof schema.minItems === "number" && typeof schema.maxItems === "number" && schema.minItems > schema.maxItems) invalid(at, "minItems exceeds maxItems");
+      return items ? { ...schema, items } : undefined;
+    }
     keys(schema, ["type", "title", "description", "enum", "minimum", "maximum", "minLength", "maxLength"], at);
     metadata(schema, at);
     const types = Array.isArray(schema.type) ? schema.type : [schema.type];

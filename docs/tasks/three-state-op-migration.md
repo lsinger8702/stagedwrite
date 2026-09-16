@@ -19,8 +19,8 @@
 | M00 | 完成 | 无 | 决策记录、022 迁移方案、影响范围、此账本 | 已读 GraphOp/evaluateGraphEdit/initialize/editIntent/Schema 与已有路线，确认旧协议七动作、顺序求值、顶层标量；文档链接与差异检查 |
 | M01 | 完成 | M00 | 完整请求/响应契约与状态用例表，关闭 022 §7 的细节 | 每种 set/remove/reset 在两通道均有定义/拒绝规则；根/边/复制/同批冲突/嵌套/预演无歧义；对照参考真实契约，不凭空推断 |
 | M02 | 完成 | M01 | 新 PatchOp、EditBatch、TopologySpec、回执和工具 schema | 静态/运行时只接受三种 op，互斥字段验证；不保留旧公开别名 |
-| M03 | 进行中 | M02 | 拓扑通道求值、初始内容展开、服务端身份及 createdRefs | 引用按请求前图；全批失败不写；无幽灵 refs；图的关系/共享引用正确 |
-| M04 | 待做 | M03 | 嵌套 Schema/三态字段求值/显式 scope | 父子路径优先级、null/remove/未声明、固定基线 reset、非法 scope 测试通过 |
+| M03 | 完成 | M02 | 拓扑通道求值、初始内容展开、服务端身份及 createdRefs | 引用按请求前图；全批失败不写；无幽灵 refs；图的关系/共享引用正确 |
+| M04 | 完成 | M03 | 嵌套 Schema/三态字段求值/显式 scope | 父子路径优先级、null/remove/未声明、固定基线 reset、非法 scope 测试通过 |
 | M05 | 待做 | M04 | create 与 edit/preview 单入口接线、复制 spec | 非空初始意图；复制只带意图、不带 Binding/Run；输入位置映射；CAS/租约/成功保护保持 |
 | M06 | 待做 | M05 | 诊断候选修复、preview、SDK/示例调用全部迁移 | message-only 仍可用；候选批次可预演；模型不需要 node.op 或真实远端 payload |
 | M07 | 待做 | M06 | 核心/存储/恢复回归、隔离包验证及文档清理 | 旧动作只出现在迁移说明与拒绝测试；合法批次/失败原子性/unknown/成功保护测试通过 |
@@ -39,6 +39,8 @@
 - 本任务未提交/推送；提交号在实际提交后补记。
 
 ## 延后且不遗忘
+
+- R1：存储式 preflight 规则与规则 Schema——所有者要求先记 TODO；见 [Roadmap](../roadmap.md#todo存储式预检规则与规则-schema)。不属于本次 OP 迁移，也不是检查结果缓存。
 
 - U3：update/noop 实际派发与正式无写入提交——等待本迁移完成；已做代码保留。
 - override 实际覆盖空间、自动推导/抑制——不在本阶段偷偷开放；若实现推导，既定五条边界必须一起验收。
@@ -114,3 +116,30 @@
 - 新增 8 项求值测试；`npm test` 105/105，通过 TypeScript 编译；`git diff --check` 通过。
 - M03 仍进行中：注册端口接线/定义校验尚待完成；普通字段 schema 校验、字段编辑属于 M04，统一生命周期接线属于 M05。本次纯求值通过不代表公开引擎已迁移，也没有远端 I/O。
 - 上一批已推送提交：9bd3820。本段后续代码仍在本地，未提交或推送。
+
+### M03 — 注册与拓扑组件完成
+
+- 上一批纯拓扑求值已按用户请求推送：`b468f08`。
+- 复用现有 DefinitionRegistry：登记 ownership/cardinality，枚举值必须是真正字符串，数组/null/未知值拒绝；内容参与原定义 digest，无独立可变策略表。
+- 新增 `src/edit/registered-topology.ts`，将同一注册定义、初始展开、候选拓扑与字段 schema 校验串联。三态入口缺少关系元数据直接拒绝，不推断默认值；evaluate 验证原 definitionDigest。
+- `tests/edit-registration.test.ts` 验证元数据、冻结注册/摘要变动、缺失声明、非法字段失败原子性与实际子树展开。
+- 验证：核心 `npm test` 108/108；Stripe 离线 13/13（包含原证据闸门，未修改样例或历史摘要）；`npm run verify:package` 通过；`git diff --check` 通过。
+- M03 完成指内部拓扑/注册组件交付。当前公开 managed 仍未切换；M04 完成嵌套字段后，由 M05 一次接线。新结果不是发布凭据。
+- **M05 必须移除过渡宽度**：共享 DraftTypeDefinition 的关系属性暂为可选，仅为当前旧公开入口仍在使用；新 registeredTopology 始终强制两项必填。公开切换时改为必填，并更新所有定义/样例，不能留下默认或兼容模式。Stripe 样例源码变化仍按 M08 真实重录闸门执行。
+- 下一项 M04：递归 Schema 与字段三态正规化/路径求值，含父子覆盖和固定基线 reset。
+- 本段注册代码仍在本地，未再次提交/推送；私有评审目录未纳入。
+
+### M04 — 进行中
+
+- 开始递归闭合对象/数组/本地 ref Schema 与字段三态路径求值；先内部接线，公开 managed 仍等待 M05。
+
+### M04 — 递归 Schema 与字段求值组件完成
+
+- `registry/types.ts` / `profile.ts` 支持闭合对象、数组、nullable 容器与递归本地 $ref；保留缺失引用/循环拒绝，数组 items 强制 schema 校验。`getValueSchema` 返回独立的解析后 schema 副本供路径解释。
+- 新增 `src/edit/fields.ts`：按序应用嵌套 set/remove/reset，对象存在标识与子声明分离；父 remove 后改子字段保留兄弟 clear；显式 null 父不被静默覆盖；数组只能整值编辑。
+- reset 从固定基线读取，支持祖先 remove 的有效清空语义；不将本批拓扑 reset 或前一次 edit 当新基线。图/声明不一致拒绝。
+- `registered-topology.ts` 已串联拓扑段 → 字段段 → 最终 schema 校验，失败不写原输入；字段变更使用各通道输入 pointer。
+- 内部 `previewFields` 展示注册路径的实际三态和重建后的对象值，不把 set {} 容器标识当作真实对象内容；公开 preflight 响应迁移仍归 M06。
+- 新增 7 项字段/Schema/混合批次测试；核心 `npm test` 115/115，Stripe 离线 13/13，`git diff --check` 通过。
+- M04 完成指内部组件。当前公开 managed 仍使用旧编辑路径；M05 必须一次切换 create/edit/preview、持久化投影及成功保护，不可把内部测试当成已迁移公开 API。
+- 本轮未提交/推送；下一项 M05。此前本地注册改动仍一起保留。
