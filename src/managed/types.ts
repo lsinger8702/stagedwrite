@@ -57,13 +57,15 @@ export interface Artifact {
     binding: NonNullable<GraphCheck["execution"]>;
     resourceRevision: number;
     observations?: readonly RemoteObservation[];
+    /** Immutable checked update inputs; observations live in this context. */
+    update?: Extract<import("./update-plan.js").UpdateCompilation, { status: "passed" }>;
 }
 export interface Attempt {
     stepId: string;
     key: string;
     number: number;
     input: Step["payload"];
-    request: { step: Step; target: string; executorId: string; executorVersion: string };
+    request: { step: Step; target: string; executorId: string; executorVersion: string; update?: { artifactId: string; observationId: string } };
     status: "pending" | "applied" | "no_effect" | "unknown";
     outcome?: ApplyOutcome | ReconcileOutcome;
 }

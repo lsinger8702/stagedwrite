@@ -1,3 +1,4 @@
+import { validateUpdateArtifact, validateUpdateAttempt } from "./update-evidence.js";
 import { validateStoredSnapshot } from "./snapshot.js";
 import type { ManagedState, Artifact } from "./types.js";
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -28,7 +29,9 @@ function validateStateContent(id: string, s: ManagedState, artifactsToValidate: 
     for (const [rid, r] of Object.entries(s.runs)) {
         requireState(r.id === rid && r.draftId === id && ["initial_create", "update"].includes(r.kind), "RUN_IDENTITY_MISMATCH");
         requireState(s.artifacts[r.artifactId] && s.artifacts[r.initialArtifactId], "RUN_INPUT_MISSING");
+        requireState([r.initialArtifactId, r.artifactId, ...r.revisions.map(v => v.artifactId)].every(aid => !!s.artifacts[aid]?.update === (r.kind === "update")), "RUN_ARTIFACT_KIND_MISMATCH");
         for (const a of r.attempts) requireState(a.request && a.request.step.id === a.stepId && same(a.request.step.payload, a.input) && a.request.target === s.artifacts[r.initialArtifactId]!.binding.target, "ATTEMPT_REQUEST_MISMATCH");
+        for (const a of r.attempts) validateUpdateAttempt(s, r, a);
         requireState(r.revisions.every(v => s.artifacts[v.artifactId]), "RUN_INPUT_MISSING");
         requireState(r.state !== "published" || !r.attempts.some(a => a.status === "pending" || a.status === "unknown"), "UNRESOLVED_PUBLICATION");
     }
@@ -52,7 +55,7 @@ function validateStateContent(id: string, s: ManagedState, artifactsToValidate: 
                 a.request.step.effect.nodeId === f.nodeId, "FACT_EVIDENCE_MISSING");
         } else {
             const source = f.source;
-            const o = s.artifacts[source.artifactId]?.observations?.find(o => o.id === source.observationId);
+            const o = (s.artifacts[source.artifactId]?.update?.context.observations ?? s.artifacts[source.artifactId]?.observations)?.find(o => o.id === source.observationId);
             requireState(o && o.nodeId === f.nodeId && o.remoteId === f.remoteId && o.targetId === f.targetId && o.projectionDigest === f.projectionDigest && same(o.values, f.values), "FACT_EVIDENCE_MISSING");
         }
     }
@@ -71,6 +74,7 @@ function validateStateContent(id: string, s: ManagedState, artifactsToValidate: 
     for (const artifact of artifactsToValidate) {
         validateStoredSnapshot({ graph: artifact.draft.graph, fieldIntents: artifact.draft.fieldIntents });
         validateStoredSnapshot(artifact.draft.initialSnapshot);
+        validateUpdateArtifact(s, artifact);
     }
 }
 

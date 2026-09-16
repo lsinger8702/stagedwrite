@@ -1,3 +1,6 @@
+import { compileUpdate } from "../src/managed/update-plan.js";
+import { updateRequest } from "../src/managed/update-evidence.js";
+import { definitionDigest, type Json } from "../src/registry/json.js";
 import { rememberRefs, nodeRef } from "./fixtures/refs.js";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -27,7 +30,18 @@ async function fixture(sqlite: boolean) {
 }
 function addUpdate(s: ManagedState, id: string) {
     const original = s.runs[s.draft.currentRunId!]!;
-    s.runs[id] = { ...structuredClone(original), id, kind: "update", state: "blocked", attempts: [], events: [], revisions: [], steps: original.steps.map(step => ({ ...step, status: "ready" })) };
+    const nodes = Object.values(s.draft.graph.nodes);
+    const compilation = compileUpdate(s, nodes.map(n => ({ nodeId: n.id, projectionDigest: "title-v1", fields: { title: { path: "/title", writable: true, desired: { kind: "value", value: n.fields.title as string } } } })),
+        nodes.map(n => ({ id: `read:${id}:${n.id}`, nodeId: n.id, targetId: "test", remoteId: s.bindings[n.id]!.remoteId, projectionDigest: "title-v1", values: structuredClone(s.remoteFacts[s.latestFactByNode[n.id]!]!.values), observedAt: "2026-09-17T00:00:00Z", remoteVersion: "v1" })));
+    assert.equal(compilation.status, "passed"); if (compilation.status !== "passed") throw Error("fixture compilation failed");
+    const plan = original.steps.map((step): import("../src/types.js").Step => { const slot = compilation.slots.find(slot => slot.nodeId === step.effect.nodeId)!;
+        return { id: step.id, payload: slot.kind === "update" ? { title: s.draft.graph.nodes[slot.nodeId]!.fields.title as string } : {}, effect: { kind: slot.kind, nodeId: slot.nodeId, remoteId: slot.remoteId } }; });
+    const artifactId = `${id}:artifact`, source = s.artifacts[original.artifactId]!;
+    s.artifacts[artifactId] = { ...structuredClone(source), id: artifactId, draft: structuredClone(s.draft), plan, update: compilation,
+        intentDigest: definitionDigest({ graph: s.draft.graph, fieldIntents: s.draft.fieldIntents } as unknown as Json), resourceRevision: s.resourceRevision,
+        binding: { ...source.binding, planDigest: definitionDigest(plan as unknown as Json) } };
+    s.runs[id] = { ...structuredClone(original), id, kind: "update", state: "blocked", artifactId, initialArtifactId: artifactId, certificate: artifactId,
+        version: s.draft.version, attempts: [], events: [], revisions: [], steps: plan.map(step => ({ ...step, key: `${id}:${step.id}`, status: "ready" })) };
     s.draft.currentRunId = id;
     s.draft.status = "pending";
 }
@@ -160,5 +174,89 @@ test("sqlite: historical artifact corruption is still checked on read and transa
             assert.equal(db.prepare("SELECT body FROM sw_managed_artifacts WHERE id=?").get(f.run.artifactId)!.body, damaged);
         }
         db.prepare("UPDATE sw_managed_artifacts SET body=? WHERE id=?").run(row.body as string, f.run.artifactId);
+    } finally { db.close(); await f.cleanup(); }
+});
+
+
+for (const sqlite of [false, true]) test(`${sqlite ? "sqlite" : "memory"}: update evidence pins historical facts and the original request`, async () => {
+    const f = await fixture(sqlite), ref = nodeRef(f.draft, "a");
+    try {
+        await f.edit(s => {
+            s.draft.graph.nodes[ref]!.fields.title = "B"; s.draft.fieldIntents[ref]!["/title"] = { kind: "set", value: "B" }; s.draft.version++;
+            s.draft.status = "pending"; addUpdate(s, "update-1");
+        });
+        const before = (await f.backend.storage.read(f.draft.id))!;
+        const artifact = before.artifacts[before.runs["update-1"]!.artifactId]!;
+        const request = updateRequest(artifact, "a", before.bindings);
+        assert.equal(request.step.effect.kind, "update"); assert.equal(request.step.payload.title, "B");
+        assert.equal(request.update!.observationId, artifact.update!.context.observations[0]!.id);
+        const addAttempt = (s: ManagedState) => {
+            const run = s.runs["update-1"]!;
+            run.attempts.push({ stepId: "a", key: run.steps[0]!.key, number: 1, input: structuredClone(request.step.payload), request: structuredClone(request), status: "unknown" });
+            run.state = "unknown"; run.steps[0]!.status = "unknown";
+        };
+        for (const mutate of [
+            (s: ManagedState) => { delete s.runs["update-1"]!.attempts[0]!.request.update; },
+            (s: ManagedState) => { s.runs["update-1"]!.attempts[0]!.request.update!.observationId = "unrelated"; },
+            (s: ManagedState) => { s.runs["update-1"]!.attempts[0]!.request.step.payload.title = "C"; s.runs["update-1"]!.attempts[0]!.input.title = "C"; },
+        ]) {
+            await assert.rejects(f.edit(s => { addAttempt(s); mutate(s); }), /UPDATE_REQUEST_/);
+            assert.deepEqual(await f.backend.storage.read(f.draft.id), before);
+        }
+        await f.edit(addAttempt);
+        const saved = (await f.backend.storage.read(f.draft.id))!;
+        await assert.rejects(f.edit(s => { s.artifacts[artifact.id]!.update!.context.observations[0]!.remoteVersion = "v2"; }), /ARTIFACT_IMMUTABLE/);
+        await assert.rejects(f.edit(s => { s.runs["update-1"]!.attempts[0]!.request.update!.observationId = "new"; }), /ATTEMPT_IMMUTABLE/);
+        assert.deepEqual(await f.backend.storage.read(f.draft.id), saved);
+        await f.edit(s => { s.draft.version++; s.draft.graph.nodes[ref]!.fields.title = "C"; s.draft.fieldIntents[ref]!["/title"] = { kind: "set", value: "C" }; });
+        if (sqlite) {
+            const reopened = createSqliteBackend(f.path);
+            try {
+                const stored = (await reopened.storage.read(f.draft.id))!;
+                assert.equal(stored.draft.graph.nodes[ref]!.fields.title, "C");
+                assert.deepEqual(stored.runs["update-1"]!.attempts[0]!.request, request);
+                assert.equal(stored.artifacts[artifact.id]!.update!.context.observations[0]!.remoteVersion, "v1");
+            } finally { await reopened.storage.close(); }
+        }
+    } finally { await f.cleanup(); }
+});
+
+
+for (const sqlite of [false, true]) test(`${sqlite ? "sqlite" : "memory"}: new update artifacts cannot omit or contradict their pinned evidence`, async () => {
+    const f = await fixture(sqlite);
+    try {
+        const before = await f.backend.storage.read(f.draft.id);
+        for (const damage of [
+            (a: import("../src/managed/types.js").Artifact) => { delete a.update; },
+            (a: import("../src/managed/types.js").Artifact) => { a.update!.context.version++; },
+            (a: import("../src/managed/types.js").Artifact) => { a.update!.slots[0]!.factId = "missing"; },
+            (a: import("../src/managed/types.js").Artifact) => { a.update!.context.observations[0]!.remoteId = "another-resource"; },
+            (a: import("../src/managed/types.js").Artifact) => { a.observations = []; },
+            (a: import("../src/managed/types.js").Artifact) => { a.binding.planDigest = "tampered"; },
+        ]) {
+            await assert.rejects(f.edit(s => { addUpdate(s, "bad"); damage(s.artifacts["bad:artifact"]!); }), /UPDATE_|RUN_ARTIFACT_KIND_MISMATCH/);
+            assert.deepEqual(await f.backend.storage.read(f.draft.id), before);
+        }
+    } finally { await f.cleanup(); }
+});
+
+test("sqlite: corrupted historical update conditions reject reads without rewriting the evidence", async () => {
+    const f = await fixture(true), db = new DatabaseSync(f.path);
+    try {
+        await f.edit(s => addUpdate(s, "update-1"));
+        const row = db.prepare("SELECT body FROM sw_managed_artifacts WHERE id=?").get("update-1:artifact")!;
+        const artifact = JSON.parse(row.body as string);
+        artifact.update.context.observations[0].values.title = { kind: "value", value: "corrupt" };
+        const damaged = JSON.stringify(artifact);
+        db.prepare("UPDATE sw_managed_artifacts SET body=? WHERE id=?").run(damaged, "update-1:artifact");
+        const reopened = createSqliteBackend(f.path);
+        try {
+            await assert.rejects(reopened.storage.read(f.draft.id), /UPDATE_ARTIFACT_COMPILATION_MISMATCH/);
+            let called = false;
+            await assert.rejects(f.edit(() => { called = true; }), /UPDATE_ARTIFACT_COMPILATION_MISMATCH/);
+            assert.equal(called, false);
+            assert.equal(db.prepare("SELECT body FROM sw_managed_artifacts WHERE id=?").get("update-1:artifact")!.body, damaged);
+        } finally { await reopened.storage.close(); }
+        db.prepare("UPDATE sw_managed_artifacts SET body=? WHERE id=?").run(row.body as string, "update-1:artifact");
     } finally { db.close(); await f.cleanup(); }
 });

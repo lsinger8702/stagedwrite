@@ -105,3 +105,83 @@ test("update plan: noop cannot carry a payload or an input reference", async () 
     assert.throws(() => validateUpdatePlan([{ ...step, payload: { title: "hidden write" } }], compiled, s), /INVALID_NOOP_PLAN/);
     assert.throws(() => validateUpdatePlan([{ ...step, inputRefs: {} }], compiled, s), /INVALID_NOOP_PLAN/);
 });
+
+test("update readback: fresh provenance preserves conditions and returns detached execution inputs", async () => {
+    const { verifyUpdateReadback } = await import("../src/managed/update-readback.js");
+    const { s, p, o } = await setup();
+    o[0]!.remoteVersion = "revision-1";
+    const checked = compileUpdate(s, p, o); assert.equal(checked.status, "passed"); if (checked.status !== "passed") return;
+    const plan = [{ id: "a/b", payload: { title: "B" }, effect: { kind: "update" as const, nodeId: "a/b", remoteId: "remote-a" } }];
+    const fresh = structuredClone(o); fresh[0]!.id = "fresh-read"; fresh[0]!.observedAt = "2026-09-17T00:00:00Z";
+    const before = structuredClone({ s, checked, plan, p, fresh });
+    const result = verifyUpdateReadback(s, checked, plan, p, fresh, plan);
+    assert.equal(result.status, "passed"); if (result.status !== "passed") return;
+    assert.equal(result.compilation.context.observations[0]!.id, "fresh-read");
+    result.plan[0]!.payload.title = "mutated";
+    result.compilation.context.observations[0]!.values.title = value("mutated");
+    assert.deepEqual({ s, checked, plan, p, fresh }, before);
+});
+
+test("update readback: changed local ownership or facts require a new check even with identical remote values", async () => {
+    const { verifyUpdateReadback } = await import("../src/managed/update-readback.js");
+    for (const change of [
+        (s: Awaited<ReturnType<typeof setup>>["s"]) => { s.draft.version++; },
+        (s: Awaited<ReturnType<typeof setup>>["s"]) => { s.resourceRevision++; },
+        (s: Awaited<ReturnType<typeof setup>>["s"]) => { s.draft.currentRunId = "other-owner"; },
+        (s: Awaited<ReturnType<typeof setup>>["s"]) => { const old = s.artifacts[s.draft.publishedArtifactId!]!; s.artifacts.other = { ...structuredClone(old), id: "other" }; s.draft.publishedArtifactId = "other"; },
+    ]) {
+        const { s, p, o } = await setup(), checked = compileUpdate(s, p, o);
+        assert.equal(checked.status, "passed"); if (checked.status !== "passed") return;
+        const plan = [{ id: "a/b", payload: { title: "B" }, effect: { kind: "update" as const, nodeId: "a/b", remoteId: "remote-a" } }];
+        change(s);
+        const result = verifyUpdateReadback(s, checked, plan, p, o, plan);
+        assert.equal(result.status, "blocked"); if (result.status !== "blocked") return;
+        assert.equal(result.diagnostics[0]!.code, "update.check_stale");
+        assert.ok(result.diagnostics[0]!.message && result.diagnostics[0]!.hint);
+    }
+});
+
+test("update readback: changed remote conditions or payload never silently replace the checked plan", async () => {
+    const { verifyUpdateReadback } = await import("../src/managed/update-readback.js");
+    const { s, p, o } = await setup(); o[0]!.remoteVersion = "revision-1";
+    const checked = compileUpdate(s, p, o); assert.equal(checked.status, "passed"); if (checked.status !== "passed") return;
+    const plan = [{ id: "a/b", payload: { title: "B" }, effect: { kind: "update" as const, nodeId: "a/b", remoteId: "remote-a" } }];
+    for (const change of [
+        (next: typeof o) => { next[0]!.remoteVersion = "revision-2"; },
+        (next: typeof o) => { delete next[0]!.remoteVersion; },
+        (next: typeof o) => { next[0]!.values.title = value("B"); }, // Now noop is not permission to replace the original write.
+        (next: typeof o) => { next[0]!.values.title = value("external"); },
+    ]) {
+        const fresh = structuredClone(o); change(fresh);
+        const result = verifyUpdateReadback(s, checked, plan, p, fresh, plan);
+        assert.equal(result.status, "blocked");
+    }
+    const changed = structuredClone(plan); changed[0]!.payload.title = "different-request";
+    const result = verifyUpdateReadback(s, checked, plan, p, o, changed);
+    assert.equal(result.status, "blocked"); if (result.status === "blocked") assert.equal(result.diagnostics[0]!.code, "update.plan_changed");
+    const mapped = structuredClone(p); mapped[0]!.fields.title!.clearValue = { kind: "absent" };
+    assert.equal(verifyUpdateReadback(s, checked, plan, mapped, o, plan).status, "blocked");
+});
+
+test("update readback: noop still checks conditions; matching values cannot resolve an unknown request", async () => {
+    const { verifyUpdateReadback } = await import("../src/managed/update-readback.js");
+    const { s, p, o, run } = await setup(value("A"), value("A"), value("A")); o[0]!.remoteVersion = "v1";
+    const checked = compileUpdate(s, p, o); assert.equal(checked.status, "passed"); if (checked.status !== "passed") return;
+    const plan = [{ id: "a/b", payload: {}, effect: { kind: "noop" as const, nodeId: "a/b", remoteId: "remote-a" } }];
+    assert.equal(verifyUpdateReadback(s, checked, plan, p, o, plan).status, "passed");
+    const fresh = structuredClone(o); fresh[0]!.remoteVersion = "v2";
+    assert.equal(verifyUpdateReadback(s, checked, plan, p, fresh, plan).status, "blocked");
+    s.runs[run.id]!.attempts[0]!.status = "unknown";
+    const unresolved = verifyUpdateReadback(s, checked, plan, p, o, plan);
+    assert.equal(unresolved.status, "blocked"); if (unresolved.status === "blocked") assert.equal(unresolved.diagnostics[0]!.code, "update.unresolved_request");
+});
+
+test("update readback: malformed evidence and accessors fail without side effects", async () => {
+    const { verifyUpdateReadback } = await import("../src/managed/update-readback.js");
+    const { s, p, o } = await setup(), checked = compileUpdate(s, p, o);
+    assert.equal(checked.status, "passed"); if (checked.status !== "passed") return;
+    let reads = 0;
+    const invalid = { get context() { reads++; return checked.context; } } as typeof checked;
+    assert.equal(verifyUpdateReadback(s, invalid, [], p, o, []).status, "blocked"); assert.equal(reads, 0);
+    assert.equal(verifyUpdateReadback(s, {} as typeof checked, [], p, o, []).status, "blocked");
+});

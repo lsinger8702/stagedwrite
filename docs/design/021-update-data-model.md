@@ -180,3 +180,17 @@ Step.effect 已扩为 create/update/noop；update/noop 必须带原 remoteId。�
 首次 create 认领事务现在原子保存 PublicationAdoption；resume 采用修复 Artifact 时将新 certificate 归属原 Run，旧记录保留。重放已采用 certificate 观察原 Run，不能另建资源；采用事务失败不留下 Run/currentRunId 或远端效果。无写入发布的正式提交以及 update/noop 派发仍待接入，当前不声称已完成。
 
 核心累计 85/85，包括 noop 禁止隐式写入、动作/绑定/步骤身份拒绝、实际预检计划输出、修复凭据归属与采用提交失败回滚。没有新增独立 update 执行器。
+
+## 14. U3 恢复：写前复核组件
+
+2026-09-17 三态 OP 迁移结束，执行进度见 [U3 账本](../tasks/update-execution.md)。新增内部 verifyUpdateReadback：当前本地编译条件、新鲜观察/条件令牌及 adapter 请求计划必须与原检查一致。读取 ID/时间可更新，不允许暗中将原计划换成另一份写入或 noop。结果未知优先阻断；失败诊断有 message/hint。
+
+该纯函数尚未接入 publish，没有检查凭据、租约、认领或派发权限。下一步补齐 Artifact/Attempt 执行证据、共用 update/noop 槽位及原子认领，然后按状态矩阵接线。当前远端 update 入口继续关闭。
+
+## 15. U3.2 固定产物与原请求证据
+
+Artifact.update 保存通过检查的 UpdateCompilation，包含基线、槽位引用的确认事实、投影、观察及远端条件令牌。update 不再另存 Artifact.observations，避免两个观察来源。Attempt.request.update 保存 artifactId/observationId，和原请求 Step、解析后 payload、执行器身份一起受历史不可变约束；原条件从引用的不可变产物读取。
+
+存储边界检查编译上下文、注册身份、摘要、计划及请求映射的一致性。历史重编译使用该产物固定的事实视图，允许当前 Draft/最新事实已变化；它只验证历史自洽，不能替代 U3.1 的当前状态与新鲜读取复核。读路径全量校验，写路径只对新增 Artifact 重编译，旧产物由不可变约束保护。
+
+内部 updateRequest 构建原请求信封，不执行 I/O、不保存 Attempt。五项新增测试覆盖 Memory/SQLite 的证据拒绝与固定请求，以及 SQLite 外部损坏后拒绝读取且保留原始 body。核心 149/149；公开 update 仍未开放，实际产物生成与派发属于 U3.3–U3.5。
