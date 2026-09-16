@@ -1,7 +1,6 @@
 import { isObject, type Json } from "../registry/json.js";
-import { editIntent } from "../managed/intent.js";
+import { registeredTopology } from "../edit/registered-topology.js";
 import type { ManagedDraft, IntentSnapshot } from "../managed/types.js";
-import type { GraphOp } from "../graph/types.js";
 import type { DefinitionRegistry } from "../registry/registry.js";
 
 const text = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
@@ -12,8 +11,7 @@ const optionalText = (v: Record<string, Json>, name: string) => !(name in v) || 
 /** Input has already passed the JSON snapshot boundary. Suggestions never mutate the draft. */
 export function validDiagnostic(entry: Json, registry: DefinitionRegistry, draft: ManagedDraft, baseline: IntentSnapshot): boolean {
   const batch = (ops: unknown): boolean => {
-    if (!Array.isArray(ops) || !ops.length) return false;
-    try { editIntent(registry, draft, baseline, draft.version, ops as GraphOp[]); return true; }
+    try { registeredTopology(registry, draft).evaluate(draft, baseline, draft.definitionDigest, ops, { preview: true }); return true; }
     catch { return false; }
   };
   const candidate = (v: Json, excluded = false): boolean => isObject(v) &&

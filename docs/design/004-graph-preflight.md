@@ -23,20 +23,20 @@ Preflight 检查当前图，向调用方返回具体问题和足够的当前状�
 | message | 必填，说明当前哪里不符合什么条件；尽量写清当前值和相关事实 |
 | severity | 可选 error 或 warning，缺省 error；响应中始终补齐 |
 | hint | 可选提示，可解释方向、约束和选择条件，不代替用户作决定 |
-| candidates | 可选 `{value,label?,message?,metadata?,repairOps?}[]`；value 为标量（含 null），metadata 为 JSON 对象，repairOps 为选择该候选时可考虑的一整批 GraphOp |
+| candidates | 可选 `{value,label?,message?,metadata?,repairOps?}[]`；value 为标量（含 null），metadata 为 JSON 对象，repairOps 为选择该候选时可考虑的一个 EditBatch |
 | excludedCandidates | 可选 `{value,label?,message?,metadata?}[]`，仅解释被排除的值，不包含 repairOps，不作为可选项 |
-| repairs | 可选 `{id?,message,ops:GraphOp[]}[]`，每项为独立候选修复方案；数组不是必须全部执行的步骤列表 |
+| repairs | 可选 `{id?,message,ops:EditBatch}[]`，每项为独立候选修复方案；数组不是必须全部执行的步骤列表 |
 | constraintIds | 可选字符串数组，规则作者声明本次采用的约束身份；库不自动解析或执行这些约束 |
 | stage | 可选来源阶段标签，不是内建执行阶段枚举 |
 | retryable / retryAfterSeconds | 可选预检重试建议；间隔为非负安全整数秒且要求 retryable=true，不调度重试、不授权 publish/resume |
 | metadata | 可选 JSON 对象，携带当前问题的结构化事实、单位或其他补充上下文 |
 | related | 可选图根 JSON Pointer 数组，定位与问题有关的其他节点或字段 |
 
-引擎补充 source（builtin/rule/executor 身份与版本）。path 和 related 使用 JSON Pointer 转义，例如节点 a/b 的字段 name 对应 `/nodes/a~1b/fields/name`。编辑 OP 使用 `{nodeId:"a/b",path:"/name"}`，两者分别针对图根和节点字段。
+引擎补充 source（builtin/rule/executor 身份与版本）。path 和 related 使用 JSON Pointer 转义，例如节点 a/b 的字段 name 对应 `/nodes/a~1b/fields/name`。编辑 OP 使用 `{op:"set",ref:"a/b",scope:"canonical",path:"/name",value:"..."}`，两者分别针对图根和节点字段。
 
 **候选值和候选 OP 都是可选辅助信息。只返回 code/path/message 的规则仍然合法；不是每个问题都必须能给出修复方案。**
 
-候选项的 repairOps 与 repairs 中每组 ops 都是一批独立 GraphOp。库用现有纯 OP 预演验证其在被检查图上的结构合法性，不写草稿，不运行这些候选的业务预检，不保证能消除所有问题或符合用户意图。非法候选 OP 使该规则整批输出成为 rule.error/incomplete，不能悄悄丢弃错误提示。候选值不带 OP 时仍只是辅助数据，不保证 schema 或业务适用性。
+候选项的 repairOps 与 repairs 中每组 ops 都是一个独立 EditBatch。库用现有纯 OP 预演验证其在被检查图上的结构合法性，不写草稿，不运行这些候选的业务预检，不保证能消除所有问题或符合用户意图。非法候选 OP 使该规则整批输出成为 rule.error/incomplete，不能悄悄丢弃错误提示。候选值不带 OP 时仍只是辅助数据，不保证 schema 或业务适用性。
 
 调用方/LLM 可以选择一组、组合其中部分、修改或另写方案；最终批次必须走普通 edit 的版本、schema、图完整性检查，然后重新 preflight。不能把互斥方案全部连接执行。预检不自动应用 OP，也不把候选当授权。
 
@@ -60,7 +60,7 @@ GraphCheck 始终包含 preview: GraphDraftPreview，包括 passed、blocked、p
 
 ```ts
 const check = await engine.preflight(draftId);
-// Application supplies check + user intent to its LLM and receives chosen GraphOp[].
+// Application supplies check + user intent to its LLM and receives chosen EditBatch.
 // Use the version from that response, never silently replace it with a later version.
 const updated = await engine.edit(check.draftId, check.version, chosenOps);
 const next = await engine.preflight(updated.draftId);
@@ -143,6 +143,6 @@ resume 接受修复后的 Draft 时会重新执行本节预检；未通过则响
 
 预检内部直接读取 ManagedDraft，与规则公开输入保持一致，不再先转成标量包装图再用回调闭包转换回来。候选修复校验使用当前 Draft 的固定基线，与真实 edit 的 reset 一致；基线由引擎从 initialSnapshot 或 publishedArtifactId 对应 Artifact 选取，规则不能另行指定。
 
-本项不改变公开编辑输入：双通道 EditBatch 尚待迁移；嵌套 preview 已在后续 JSON 读链路中接通，准确状态见 [任务账本](../tasks/three-state-op-migration.md)。规则注册复用不代表检查结果缓存；每次 preflight 仍执行适用规则。
+公开 edit/preview 与候选修复已切换双通道 EditBatch；嵌套 preview 已接通，准确状态见 [任务账本](../tasks/three-state-op-migration.md)。规则注册复用不代表检查结果缓存；每次 preflight 仍执行适用规则。
 
-当前 ManagedDraft 的 graph.fields 与 set 声明值使用 Json，Step.payload 与远端归一化事实仍保持独立类型。公开旧 create/edit 的输入尚待下一步迁移；JSON 存储/预检贯通不能当作新编辑入口已开放。
+当前 ManagedDraft 的 graph.fields 与 set 声明值使用 Json，Step.payload 与远端归一化事实仍保持独立类型。公开 create 的 roots/spec 输入尚待迁移；edit/preview 已接入三态批次与真实存储事务。

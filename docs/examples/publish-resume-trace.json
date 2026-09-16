@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-09-16T11:18:59.277Z",
+  "recordedAt": "2026-09-16T11:48:26.297Z",
   "runtime": "v24.19.0",
   "environment": "Real library + temporary SQLite; simulated remote; no HTTP or LLM calls.",
   "registration": {
@@ -85,7 +85,9 @@
           ],
           "to": [
             "task"
-          ]
+          ],
+          "ownership": "owned",
+          "cardinality": "many"
         }
       }
     },
@@ -95,21 +97,21 @@
         "typeVersion": "2",
         "id": "project.capacity",
         "version": "2",
-        "implementation": "draft => {\n            const issues = [];\n            for (const project of Object.values(draft.graph.nodes).filter(n => n.nodeType === \"project\")) {\n                const tasks = tasksFor(draft, project), capacity = value(project, \"capacityHours\");\n                const hours = tasks.map(task => value(task, \"estimateHours\"));\n                if (typeof capacity !== \"number\" || hours.some(h => typeof h !== \"number\"))\n                    continue;\n                const total = hours.reduce((a, b) => a + b, 0);\n                if (total > capacity)\n                    issues.push({ code: \"project.capacity_exceeded\", path: at(project.id, \"capacityHours\"),\n                        message: `项目“${value(project, \"name\")}”容量为 ${capacity} 小时，但 ${tasks.map(task => `“${value(task, \"name\")}”${value(task, \"estimateHours\")} 小时`).join(\"、\")}，合计 ${total} 小时，超出 ${total - capacity} 小时。`,\n                        hint: \"可以缩减任务范围、将部分工作移到下一期，或在用户允许时增加容量；请根据用户意图选择。\",\n                        related: tasks.map(task => at(task.id, \"estimateHours\")),\n                        stage: \"work-planning\", metadata: { capacityHours: capacity, totalHours: total, excessHours: total - capacity, unit: \"hours\" },\n                        repairs: [{ id: \"expand-capacity\", message: \"若用户允许追加容量，可提高到当前任务总工时；这不会解决日期或负责人问题。\",\n                                ops: [{ op: \"set\", nodeId: project.id, path: \"/capacityHours\", value: total }] }] });\n            }\n            return issues;\n        }"
+        "implementation": "draft => {\n            const issues = [];\n            for (const project of Object.values(draft.graph.nodes).filter(n => n.nodeType === \"project\")) {\n                const tasks = tasksFor(draft, project), capacity = value(project, \"capacityHours\");\n                const hours = tasks.map(task => value(task, \"estimateHours\"));\n                if (typeof capacity !== \"number\" || hours.some(h => typeof h !== \"number\"))\n                    continue;\n                const total = hours.reduce((a, b) => a + b, 0);\n                if (total > capacity)\n                    issues.push({ code: \"project.capacity_exceeded\", path: at(project.id, \"capacityHours\"),\n                        message: `项目“${value(project, \"name\")}”容量为 ${capacity} 小时，但 ${tasks.map(task => `“${value(task, \"name\")}”${value(task, \"estimateHours\")} 小时`).join(\"、\")}，合计 ${total} 小时，超出 ${total - capacity} 小时。`,\n                        hint: \"可以缩减任务范围、将部分工作移到下一期，或在用户允许时增加容量；请根据用户意图选择。\",\n                        related: tasks.map(task => at(task.id, \"estimateHours\")),\n                        stage: \"work-planning\", metadata: { capacityHours: capacity, totalHours: total, excessHours: total - capacity, unit: \"hours\" },\n                        repairs: [{ id: \"expand-capacity\", message: \"若用户允许追加容量，可提高到当前任务总工时；这不会解决日期或负责人问题。\",\n                                ops: { patches: [{ op: \"set\", ref: project.id, scope: \"canonical\", path: \"/capacityHours\", value: total }] } }] });\n            }\n            return issues;\n        }"
       },
       {
         "type": "example.project-tasks",
         "typeVersion": "2",
         "id": "task.deadline",
         "version": "2",
-        "implementation": "draft => {\n            const issues = [];\n            for (const project of Object.values(draft.graph.nodes).filter(n => n.nodeType === \"project\"))\n                for (const task of tasksFor(draft, project)) {\n                    const deadline = value(project, \"deadlineDay\"), due = value(task, \"dueDay\");\n                    if (typeof deadline === \"number\" && typeof due === \"number\" && due > deadline)\n                        issues.push({\n                            code: \"task.after_project_deadline\", path: at(task.id, \"dueDay\"),\n                            message: `任务“${value(task, \"name\")}”安排在第 ${due} 天完成，晚于所属项目的第 ${deadline} 天截止日。`,\n                            hint: \"可以提前该任务、调整项目截止日，或将任务移到下一期；不要自行假设用户同意延期。\",\n                            related: [at(project.id, \"deadlineDay\")],\n                            repairs: [\n                                { id: \"earlier-task\", message: \"若任务可以提前，将它安排到项目截止日。\", ops: [{ op: \"set\", nodeId: task.id, path: \"/dueDay\", value: deadline }] },\n                                { id: \"later-project\", message: \"若用户接受整个项目延期，将项目截止日延到该任务完成日。\", ops: [{ op: \"set\", nodeId: project.id, path: \"/deadlineDay\", value: due }] }\n                            ]\n                        });\n                }\n            return issues;\n        }"
+        "implementation": "draft => {\n            const issues = [];\n            for (const project of Object.values(draft.graph.nodes).filter(n => n.nodeType === \"project\"))\n                for (const task of tasksFor(draft, project)) {\n                    const deadline = value(project, \"deadlineDay\"), due = value(task, \"dueDay\");\n                    if (typeof deadline === \"number\" && typeof due === \"number\" && due > deadline)\n                        issues.push({\n                            code: \"task.after_project_deadline\", path: at(task.id, \"dueDay\"),\n                            message: `任务“${value(task, \"name\")}”安排在第 ${due} 天完成，晚于所属项目的第 ${deadline} 天截止日。`,\n                            hint: \"可以提前该任务、调整项目截止日，或将任务移到下一期；不要自行假设用户同意延期。\",\n                            related: [at(project.id, \"deadlineDay\")],\n                            repairs: [\n                                { id: \"earlier-task\", message: \"若任务可以提前，将它安排到项目截止日。\", ops: { patches: [{ op: \"set\", ref: task.id, scope: \"canonical\", path: \"/dueDay\", value: deadline }] } },\n                                { id: \"later-project\", message: \"若用户接受整个项目延期，将项目截止日延到该任务完成日。\", ops: { patches: [{ op: \"set\", ref: project.id, scope: \"canonical\", path: \"/deadlineDay\", value: due }] } }\n                            ]\n                        });\n                }\n            return issues;\n        }"
       },
       {
         "type": "example.project-tasks",
         "typeVersion": "2",
         "id": "task.urgent-owner",
         "version": "2",
-        "implementation": "draft => {\n            const issues = [];\n            for (const task of Object.values(draft.graph.nodes).filter(n => n.nodeType === \"task\")) {\n                const owner = value(task, \"owner\");\n                if (value(task, \"priority\") === \"urgent\" && (typeof owner !== \"string\" || !owner.trim()))\n                    issues.push({\n                        code: \"task.urgent_owner_required\", path: at(task.id, \"owner\"),\n                        message: `任务“${value(task, \"name\")}”优先级为 urgent，但负责人${draft.fieldIntents[task.id]?.[\"/owner\"]?.kind === \"remove\" ? \"被明确清空\" : \"没有有效值\"}；紧急任务必须有负责人。`,\n                        hint: \"指定能接手的负责人，或在用户允许时降低优先级；候选人仅供选择，不代表已获授权分配。\",\n                        candidates: [\n                            { value: \"lin\", label: \"林\", message: \"本期可以承接文档任务（虚构候选）\", metadata: { availableHours: 8, skills: [\"documentation\"] },\n                                repairOps: [{ op: \"set\", nodeId: task.id, path: \"/owner\", value: \"lin\" }] },\n                            { value: \"chen\", label: \"陈\", message: \"本期可以承接评审任务（虚构候选）\", metadata: { availableHours: 4, skills: [\"review\"] },\n                                repairOps: [{ op: \"set\", nodeId: task.id, path: \"/owner\", value: \"chen\" }] }\n                        ],\n                        excludedCandidates: [{ value: \"zhou\", label: \"周\", message: \"本期不可参与（虚构约束）\", metadata: { available: false } }],\n                        constraintIds: [\"demo-current-period-availability\"],\n                        repairs: [{ id: \"lower-priority\", message: \"只有用户同意降低优先级时，才考虑保留负责人清空状态并改为普通任务。\",\n                                ops: [{ op: \"set\", nodeId: task.id, path: \"/priority\", value: \"normal\" }] }],\n                        related: [at(task.id, \"priority\")]\n                    });\n            }\n            return issues;\n        }"
+        "implementation": "draft => {\n            const issues = [];\n            for (const task of Object.values(draft.graph.nodes).filter(n => n.nodeType === \"task\")) {\n                const owner = value(task, \"owner\");\n                if (value(task, \"priority\") === \"urgent\" && (typeof owner !== \"string\" || !owner.trim()))\n                    issues.push({\n                        code: \"task.urgent_owner_required\", path: at(task.id, \"owner\"),\n                        message: `任务“${value(task, \"name\")}”优先级为 urgent，但负责人${draft.fieldIntents[task.id]?.[\"/owner\"]?.kind === \"remove\" ? \"被明确清空\" : \"没有有效值\"}；紧急任务必须有负责人。`,\n                        hint: \"指定能接手的负责人，或在用户允许时降低优先级；候选人仅供选择，不代表已获授权分配。\",\n                        candidates: [\n                            { value: \"lin\", label: \"林\", message: \"本期可以承接文档任务（虚构候选）\", metadata: { availableHours: 8, skills: [\"documentation\"] },\n                                repairOps: { patches: [{ op: \"set\", ref: task.id, scope: \"canonical\", path: \"/owner\", value: \"lin\" }] } },\n                            { value: \"chen\", label: \"陈\", message: \"本期可以承接评审任务（虚构候选）\", metadata: { availableHours: 4, skills: [\"review\"] },\n                                repairOps: { patches: [{ op: \"set\", ref: task.id, scope: \"canonical\", path: \"/owner\", value: \"chen\" }] } }\n                        ],\n                        excludedCandidates: [{ value: \"zhou\", label: \"周\", message: \"本期不可参与（虚构约束）\", metadata: { available: false } }],\n                        constraintIds: [\"demo-current-period-availability\"],\n                        repairs: [{ id: \"lower-priority\", message: \"只有用户同意降低优先级时，才考虑保留负责人清空状态并改为普通任务。\",\n                                ops: { patches: [{ op: \"set\", ref: task.id, scope: \"canonical\", path: \"/priority\", value: \"normal\" }] } }],\n                        related: [at(task.id, \"priority\")]\n                    });\n            }\n            return issues;\n        }"
       }
     ],
     "asyncRules": [
@@ -125,32 +127,38 @@
   "asyncScenario": "异步规则返回 pending，上游重入预检。测试驱动模拟外部任务完成，没有实际等待或启动后台任务。",
   "executionRepairIntent": "首次 publish 返回负责人不可用诊断；调用方选择候选 OP 修复后 resume。同 Run 的后续超时再次 resume 查证，成功部分不重发。",
   "userIntent": "项目容量保持 16 小时，截止日保持第 20 天；两个任务本期各交付 8 小时范围的最小版本；快速入门仍为紧急任务，由林负责并在第 20 天完成。",
-  "chosenOps": [
-    {
-      "op": "set",
-      "nodeId": "task-1",
-      "path": "/estimateHours",
-      "value": 8
-    },
-    {
-      "op": "set",
-      "nodeId": "task-2",
-      "path": "/estimateHours",
-      "value": 8
-    },
-    {
-      "op": "set",
-      "nodeId": "task-1",
-      "path": "/dueDay",
-      "value": 20
-    },
-    {
-      "op": "set",
-      "nodeId": "task-1",
-      "path": "/owner",
-      "value": "lin"
-    }
-  ],
+  "chosenOps": {
+    "patches": [
+      {
+        "op": "set",
+        "ref": "task-1",
+        "scope": "canonical",
+        "path": "/estimateHours",
+        "value": 8
+      },
+      {
+        "op": "set",
+        "ref": "task-2",
+        "scope": "canonical",
+        "path": "/estimateHours",
+        "value": 8
+      },
+      {
+        "op": "set",
+        "ref": "task-1",
+        "scope": "canonical",
+        "path": "/dueDay",
+        "value": 20
+      },
+      {
+        "op": "set",
+        "ref": "task-1",
+        "scope": "canonical",
+        "path": "/owner",
+        "value": "lin"
+      }
+    ]
+  },
   "steps": [
     {
       "method": "create",
@@ -321,11 +329,11 @@
           }
         },
         "formatVersion": 3,
-        "id": "ace27800-08e5-493f-860c-727cbc07dc35",
+        "id": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
         "version": 0,
         "type": "example.project-tasks",
         "typeVersion": "2",
-        "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+        "definitionDigest": "sha256:stagedwrite-json-v1:d838c4c0fac1f3d696df44356a3bbc7b10f3f443f0c02cee349eeb4805d0d984",
         "status": "pending",
         "currentRunId": null,
         "targetId": null,
@@ -446,8 +454,8 @@
           "nodes": [],
           "edges": []
         },
-        "createdAt": "2026-09-16T11:18:59.242Z",
-        "updatedAt": "2026-09-16T11:18:59.242Z"
+        "createdAt": "2026-09-16T11:48:26.259Z",
+        "updatedAt": "2026-09-16T11:48:26.259Z"
       },
       "remoteCalls": [],
       "checkCalls": [],
@@ -457,37 +465,43 @@
       "method": "edit",
       "note": "先连续修改名称，供下一步验证 reset 的固定基线。",
       "input": [
-        "ace27800-08e5-493f-860c-727cbc07dc35",
+        "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
         0,
-        [
-          {
-            "op": "set",
-            "nodeId": "project-1",
-            "path": "/name",
-            "value": "临时名称 A"
-          }
-        ]
+        {
+          "patches": [
+            {
+              "op": "set",
+              "ref": "project-1",
+              "scope": "canonical",
+              "path": "/name",
+              "value": "临时名称 A"
+            }
+          ]
+        }
       ],
       "output": {
-        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
+        "draftId": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
         "version": 1,
         "preflightRequired": true,
         "changes": [
           {
-            "opIndex": 0,
+            "inputPath": "/patches/0",
+            "op": "set",
+            "ref": "project-1",
+            "scope": "canonical",
             "target": "field",
-            "id": "project-1",
             "path": "/name",
             "before": {
-              "kind": "value",
+              "kind": "set",
               "value": "文档发布"
             },
             "after": {
-              "kind": "value",
+              "kind": "set",
               "value": "临时名称 A"
             }
           }
-        ]
+        ],
+        "createdRefs": []
       },
       "remoteCalls": [],
       "checkCalls": [],
@@ -497,37 +511,43 @@
       "method": "edit",
       "note": "先连续修改名称，供下一步验证 reset 的固定基线。",
       "input": [
-        "ace27800-08e5-493f-860c-727cbc07dc35",
+        "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
         1,
-        [
-          {
-            "op": "set",
-            "nodeId": "project-1",
-            "path": "/name",
-            "value": "临时名称 B"
-          }
-        ]
+        {
+          "patches": [
+            {
+              "op": "set",
+              "ref": "project-1",
+              "scope": "canonical",
+              "path": "/name",
+              "value": "临时名称 B"
+            }
+          ]
+        }
       ],
       "output": {
-        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
+        "draftId": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
         "version": 2,
         "preflightRequired": true,
         "changes": [
           {
-            "opIndex": 0,
+            "inputPath": "/patches/0",
+            "op": "set",
+            "ref": "project-1",
+            "scope": "canonical",
             "target": "field",
-            "id": "project-1",
             "path": "/name",
             "before": {
-              "kind": "value",
+              "kind": "set",
               "value": "临时名称 A"
             },
             "after": {
-              "kind": "value",
+              "kind": "set",
               "value": "临时名称 B"
             }
           }
-        ]
+        ],
+        "createdRefs": []
       },
       "remoteCalls": [],
       "checkCalls": [],
@@ -537,36 +557,42 @@
       "method": "edit",
       "note": "reset 回到 create 时的“文档发布”，不会回到上一版的“临时名称 A”。",
       "input": [
-        "ace27800-08e5-493f-860c-727cbc07dc35",
+        "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
         2,
-        [
-          {
-            "op": "reset",
-            "nodeId": "project-1",
-            "path": "/name"
-          }
-        ]
+        {
+          "patches": [
+            {
+              "op": "reset",
+              "ref": "project-1",
+              "scope": "canonical",
+              "path": "/name"
+            }
+          ]
+        }
       ],
       "output": {
-        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
+        "draftId": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
         "version": 3,
         "preflightRequired": true,
         "changes": [
           {
-            "opIndex": 0,
+            "inputPath": "/patches/0",
+            "op": "reset",
+            "ref": "project-1",
+            "scope": "canonical",
             "target": "field",
-            "id": "project-1",
             "path": "/name",
             "before": {
-              "kind": "value",
+              "kind": "set",
               "value": "临时名称 B"
             },
             "after": {
-              "kind": "value",
+              "kind": "set",
               "value": "文档发布"
             }
           }
-        ]
+        ],
+        "createdRefs": []
       },
       "remoteCalls": [],
       "checkCalls": [],
@@ -576,22 +602,22 @@
       "method": "preflight",
       "note": "静态规则给出 3 条具体诊断；异步检查返回 pending，无发布凭据。",
       "input": [
-        "ace27800-08e5-493f-860c-727cbc07dc35"
+        "eeb139ef-2aa0-439d-b2d4-bbceba219ec1"
       ],
       "output": {
         "formatVersion": 3,
         "scope": "execution",
-        "checkId": "ad77bd52-52bd-45ab-b0e2-4d3ecffaac7b",
-        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
+        "checkId": "f980d61c-ee2d-45ec-a335-c0e2a30ac07e",
+        "draftId": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
         "version": 3,
-        "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+        "definitionDigest": "sha256:stagedwrite-json-v1:d838c4c0fac1f3d696df44356a3bbc7b10f3f443f0c02cee349eeb4805d0d984",
         "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
         "preview": {
-          "id": "ace27800-08e5-493f-860c-727cbc07dc35",
+          "id": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
           "version": 3,
           "type": "example.project-tasks",
           "typeVersion": "2",
-          "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+          "definitionDigest": "sha256:stagedwrite-json-v1:d838c4c0fac1f3d696df44356a3bbc7b10f3f443f0c02cee349eeb4805d0d984",
           "nodes": {
             "project-1": {
               "id": "project-1",
@@ -705,14 +731,17 @@
               {
                 "id": "expand-capacity",
                 "message": "若用户允许追加容量，可提高到当前任务总工时；这不会解决日期或负责人问题。",
-                "ops": [
-                  {
-                    "op": "set",
-                    "nodeId": "project-1",
-                    "path": "/capacityHours",
-                    "value": 22
-                  }
-                ]
+                "ops": {
+                  "patches": [
+                    {
+                      "op": "set",
+                      "ref": "project-1",
+                      "scope": "canonical",
+                      "path": "/capacityHours",
+                      "value": 22
+                    }
+                  ]
+                }
               }
             ],
             "severity": "error",
@@ -734,26 +763,32 @@
               {
                 "id": "earlier-task",
                 "message": "若任务可以提前，将它安排到项目截止日。",
-                "ops": [
-                  {
-                    "op": "set",
-                    "nodeId": "task-1",
-                    "path": "/dueDay",
-                    "value": 20
-                  }
-                ]
+                "ops": {
+                  "patches": [
+                    {
+                      "op": "set",
+                      "ref": "task-1",
+                      "scope": "canonical",
+                      "path": "/dueDay",
+                      "value": 20
+                    }
+                  ]
+                }
               },
               {
                 "id": "later-project",
                 "message": "若用户接受整个项目延期，将项目截止日延到该任务完成日。",
-                "ops": [
-                  {
-                    "op": "set",
-                    "nodeId": "project-1",
-                    "path": "/deadlineDay",
-                    "value": 22
-                  }
-                ]
+                "ops": {
+                  "patches": [
+                    {
+                      "op": "set",
+                      "ref": "project-1",
+                      "scope": "canonical",
+                      "path": "/deadlineDay",
+                      "value": 22
+                    }
+                  ]
+                }
               }
             ],
             "severity": "error",
@@ -779,14 +814,17 @@
                     "documentation"
                   ]
                 },
-                "repairOps": [
-                  {
-                    "op": "set",
-                    "nodeId": "task-1",
-                    "path": "/owner",
-                    "value": "lin"
-                  }
-                ]
+                "repairOps": {
+                  "patches": [
+                    {
+                      "op": "set",
+                      "ref": "task-1",
+                      "scope": "canonical",
+                      "path": "/owner",
+                      "value": "lin"
+                    }
+                  ]
+                }
               },
               {
                 "value": "chen",
@@ -798,14 +836,17 @@
                     "review"
                   ]
                 },
-                "repairOps": [
-                  {
-                    "op": "set",
-                    "nodeId": "task-1",
-                    "path": "/owner",
-                    "value": "chen"
-                  }
-                ]
+                "repairOps": {
+                  "patches": [
+                    {
+                      "op": "set",
+                      "ref": "task-1",
+                      "scope": "canonical",
+                      "path": "/owner",
+                      "value": "chen"
+                    }
+                  ]
+                }
               }
             ],
             "excludedCandidates": [
@@ -825,14 +866,17 @@
               {
                 "id": "lower-priority",
                 "message": "只有用户同意降低优先级时，才考虑保留负责人清空状态并改为普通任务。",
-                "ops": [
-                  {
-                    "op": "set",
-                    "nodeId": "task-1",
-                    "path": "/priority",
-                    "value": "normal"
-                  }
-                ]
+                "ops": {
+                  "patches": [
+                    {
+                      "op": "set",
+                      "ref": "task-1",
+                      "scope": "canonical",
+                      "path": "/priority",
+                      "value": "normal"
+                    }
+                  ]
+                }
               }
             ],
             "related": [
@@ -860,7 +904,7 @@
         {
           "method": "queryExport",
           "input": {
-            "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
+            "draftId": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
             "version": 3
           },
           "output": {
@@ -876,22 +920,22 @@
       "method": "preflight",
       "note": "外部检查完成，仍有 3 条业务问题。完整 preview、message、候选值和 repair OP 都来自实际检查。",
       "input": [
-        "ace27800-08e5-493f-860c-727cbc07dc35"
+        "eeb139ef-2aa0-439d-b2d4-bbceba219ec1"
       ],
       "output": {
         "formatVersion": 3,
         "scope": "execution",
-        "checkId": "4947b0d1-637c-4ee2-80ee-f9dffad43315",
-        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
+        "checkId": "1379c999-2dca-4ee8-93bb-51a5d34b7eb8",
+        "draftId": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
         "version": 3,
-        "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+        "definitionDigest": "sha256:stagedwrite-json-v1:d838c4c0fac1f3d696df44356a3bbc7b10f3f443f0c02cee349eeb4805d0d984",
         "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
         "preview": {
-          "id": "ace27800-08e5-493f-860c-727cbc07dc35",
+          "id": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
           "version": 3,
           "type": "example.project-tasks",
           "typeVersion": "2",
-          "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+          "definitionDigest": "sha256:stagedwrite-json-v1:d838c4c0fac1f3d696df44356a3bbc7b10f3f443f0c02cee349eeb4805d0d984",
           "nodes": {
             "project-1": {
               "id": "project-1",
@@ -1005,14 +1049,17 @@
               {
                 "id": "expand-capacity",
                 "message": "若用户允许追加容量，可提高到当前任务总工时；这不会解决日期或负责人问题。",
-                "ops": [
-                  {
-                    "op": "set",
-                    "nodeId": "project-1",
-                    "path": "/capacityHours",
-                    "value": 22
-                  }
-                ]
+                "ops": {
+                  "patches": [
+                    {
+                      "op": "set",
+                      "ref": "project-1",
+                      "scope": "canonical",
+                      "path": "/capacityHours",
+                      "value": 22
+                    }
+                  ]
+                }
               }
             ],
             "severity": "error",
@@ -1034,26 +1081,32 @@
               {
                 "id": "earlier-task",
                 "message": "若任务可以提前，将它安排到项目截止日。",
-                "ops": [
-                  {
-                    "op": "set",
-                    "nodeId": "task-1",
-                    "path": "/dueDay",
-                    "value": 20
-                  }
-                ]
+                "ops": {
+                  "patches": [
+                    {
+                      "op": "set",
+                      "ref": "task-1",
+                      "scope": "canonical",
+                      "path": "/dueDay",
+                      "value": 20
+                    }
+                  ]
+                }
               },
               {
                 "id": "later-project",
                 "message": "若用户接受整个项目延期，将项目截止日延到该任务完成日。",
-                "ops": [
-                  {
-                    "op": "set",
-                    "nodeId": "project-1",
-                    "path": "/deadlineDay",
-                    "value": 22
-                  }
-                ]
+                "ops": {
+                  "patches": [
+                    {
+                      "op": "set",
+                      "ref": "project-1",
+                      "scope": "canonical",
+                      "path": "/deadlineDay",
+                      "value": 22
+                    }
+                  ]
+                }
               }
             ],
             "severity": "error",
@@ -1079,14 +1132,17 @@
                     "documentation"
                   ]
                 },
-                "repairOps": [
-                  {
-                    "op": "set",
-                    "nodeId": "task-1",
-                    "path": "/owner",
-                    "value": "lin"
-                  }
-                ]
+                "repairOps": {
+                  "patches": [
+                    {
+                      "op": "set",
+                      "ref": "task-1",
+                      "scope": "canonical",
+                      "path": "/owner",
+                      "value": "lin"
+                    }
+                  ]
+                }
               },
               {
                 "value": "chen",
@@ -1098,14 +1154,17 @@
                     "review"
                   ]
                 },
-                "repairOps": [
-                  {
-                    "op": "set",
-                    "nodeId": "task-1",
-                    "path": "/owner",
-                    "value": "chen"
-                  }
-                ]
+                "repairOps": {
+                  "patches": [
+                    {
+                      "op": "set",
+                      "ref": "task-1",
+                      "scope": "canonical",
+                      "path": "/owner",
+                      "value": "chen"
+                    }
+                  ]
+                }
               }
             ],
             "excludedCandidates": [
@@ -1125,14 +1184,17 @@
               {
                 "id": "lower-priority",
                 "message": "只有用户同意降低优先级时，才考虑保留负责人清空状态并改为普通任务。",
-                "ops": [
-                  {
-                    "op": "set",
-                    "nodeId": "task-1",
-                    "path": "/priority",
-                    "value": "normal"
-                  }
-                ]
+                "ops": {
+                  "patches": [
+                    {
+                      "op": "set",
+                      "ref": "task-1",
+                      "scope": "canonical",
+                      "path": "/priority",
+                      "value": "normal"
+                    }
+                  ]
+                }
               }
             ],
             "related": [
@@ -1153,7 +1215,7 @@
         {
           "method": "queryExport",
           "input": {
-            "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
+            "draftId": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
             "version": 3
           },
           "output": {
@@ -1168,97 +1230,112 @@
       "method": "edit",
       "note": "调用方依据用户意图选定 4 个 OP。规则建议不自动执行。",
       "input": [
-        "ace27800-08e5-493f-860c-727cbc07dc35",
+        "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
         3,
-        [
-          {
-            "op": "set",
-            "nodeId": "task-1",
-            "path": "/estimateHours",
-            "value": 8
-          },
-          {
-            "op": "set",
-            "nodeId": "task-2",
-            "path": "/estimateHours",
-            "value": 8
-          },
-          {
-            "op": "set",
-            "nodeId": "task-1",
-            "path": "/dueDay",
-            "value": 20
-          },
-          {
-            "op": "set",
-            "nodeId": "task-1",
-            "path": "/owner",
-            "value": "lin"
-          }
-        ]
+        {
+          "patches": [
+            {
+              "op": "set",
+              "ref": "task-1",
+              "scope": "canonical",
+              "path": "/estimateHours",
+              "value": 8
+            },
+            {
+              "op": "set",
+              "ref": "task-2",
+              "scope": "canonical",
+              "path": "/estimateHours",
+              "value": 8
+            },
+            {
+              "op": "set",
+              "ref": "task-1",
+              "scope": "canonical",
+              "path": "/dueDay",
+              "value": 20
+            },
+            {
+              "op": "set",
+              "ref": "task-1",
+              "scope": "canonical",
+              "path": "/owner",
+              "value": "lin"
+            }
+          ]
+        }
       ],
       "output": {
-        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
+        "draftId": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
         "version": 4,
         "preflightRequired": true,
         "changes": [
           {
-            "opIndex": 0,
+            "inputPath": "/patches/0",
+            "op": "set",
+            "ref": "task-1",
+            "scope": "canonical",
             "target": "field",
-            "id": "task-1",
             "path": "/estimateHours",
             "before": {
-              "kind": "value",
+              "kind": "set",
               "value": 12
             },
             "after": {
-              "kind": "value",
+              "kind": "set",
               "value": 8
             }
           },
           {
-            "opIndex": 1,
+            "inputPath": "/patches/1",
+            "op": "set",
+            "ref": "task-2",
+            "scope": "canonical",
             "target": "field",
-            "id": "task-2",
             "path": "/estimateHours",
             "before": {
-              "kind": "value",
+              "kind": "set",
               "value": 10
             },
             "after": {
-              "kind": "value",
+              "kind": "set",
               "value": 8
             }
           },
           {
-            "opIndex": 2,
+            "inputPath": "/patches/2",
+            "op": "set",
+            "ref": "task-1",
+            "scope": "canonical",
             "target": "field",
-            "id": "task-1",
             "path": "/dueDay",
             "before": {
-              "kind": "value",
+              "kind": "set",
               "value": 22
             },
             "after": {
-              "kind": "value",
+              "kind": "set",
               "value": 20
             }
           },
           {
-            "opIndex": 3,
+            "inputPath": "/patches/3",
+            "op": "set",
+            "ref": "task-1",
+            "scope": "canonical",
             "target": "field",
-            "id": "task-1",
             "path": "/owner",
             "before": {
-              "kind": "value",
+              "kind": "set",
               "value": null
             },
             "after": {
-              "kind": "value",
+              "kind": "set",
               "value": "lin"
             }
           }
-        ]
+        ],
+        "createdRefs": []
       },
       "remoteCalls": [],
       "checkCalls": [],
@@ -1268,22 +1345,22 @@
       "method": "preflight",
       "note": "检查通过，保存不可变 Artifact。执行器的 plan 将图映射成请求参数。",
       "input": [
-        "ace27800-08e5-493f-860c-727cbc07dc35"
+        "eeb139ef-2aa0-439d-b2d4-bbceba219ec1"
       ],
       "output": {
         "formatVersion": 3,
         "scope": "execution",
-        "checkId": "c4989d2a-d470-432b-9640-f62f436abbbd",
-        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
+        "checkId": "77d38330-ff61-4b19-88b1-1ac4bb223927",
+        "draftId": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
         "version": 4,
-        "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+        "definitionDigest": "sha256:stagedwrite-json-v1:d838c4c0fac1f3d696df44356a3bbc7b10f3f443f0c02cee349eeb4805d0d984",
         "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
         "preview": {
-          "id": "ace27800-08e5-493f-860c-727cbc07dc35",
+          "id": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
           "version": 4,
           "type": "example.project-tasks",
           "typeVersion": "2",
-          "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+          "definitionDigest": "sha256:stagedwrite-json-v1:d838c4c0fac1f3d696df44356a3bbc7b10f3f443f0c02cee349eeb4805d0d984",
           "nodes": {
             "project-1": {
               "id": "project-1",
@@ -1378,11 +1455,11 @@
         "status": "passed",
         "diagnostics": [],
         "pendingRules": [],
-        "certificate": "eed08655-6bf2-4341-850f-8004140371d6",
-        "artifactId": "eed08655-6bf2-4341-850f-8004140371d6",
+        "certificate": "e37defbc-d704-40de-b0b8-0d0beda64e27",
+        "artifactId": "e37defbc-d704-40de-b0b8-0d0beda64e27",
         "execution": {
-          "checkId": "c4989d2a-d470-432b-9640-f62f436abbbd",
-          "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+          "checkId": "77d38330-ff61-4b19-88b1-1ac4bb223927",
+          "definitionDigest": "sha256:stagedwrite-json-v1:d838c4c0fac1f3d696df44356a3bbc7b10f3f443f0c02cee349eeb4805d0d984",
           "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
           "executorId": "example.project-service",
           "executorVersion": "5",
@@ -1395,7 +1472,7 @@
         {
           "method": "queryExport",
           "input": {
-            "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
+            "draftId": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
             "version": 4
           },
           "output": {
@@ -1410,21 +1487,21 @@
       "method": "publish",
       "note": "同事务建立 Run 和 currentRunId。项目创建成功，任务 1 明确拒绝，任务 2 尚未发送。Draft 仍 pending。",
       "input": [
-        "ace27800-08e5-493f-860c-727cbc07dc35",
-        "eed08655-6bf2-4341-850f-8004140371d6",
+        "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
+        "e37defbc-d704-40de-b0b8-0d0beda64e27",
         {
           "runId": "demo-run-1"
         }
       ],
       "output": {
         "id": "demo-run-1",
-        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
+        "draftId": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
         "kind": "initial_create",
         "version": 4,
         "state": "blocked",
-        "artifactId": "eed08655-6bf2-4341-850f-8004140371d6",
-        "initialArtifactId": "eed08655-6bf2-4341-850f-8004140371d6",
-        "certificate": "eed08655-6bf2-4341-850f-8004140371d6",
+        "artifactId": "e37defbc-d704-40de-b0b8-0d0beda64e27",
+        "initialArtifactId": "e37defbc-d704-40de-b0b8-0d0beda64e27",
+        "certificate": "e37defbc-d704-40de-b0b8-0d0beda64e27",
         "revision": 0,
         "revisions": [],
         "attempts": [
@@ -1515,14 +1592,17 @@
                       "value": "chen",
                       "label": "陈",
                       "message": "目前可接手（虚构候选）",
-                      "repairOps": [
-                        {
-                          "op": "set",
-                          "nodeId": "task-1",
-                          "path": "/owner",
-                          "value": "chen"
-                        }
-                      ]
+                      "repairOps": {
+                        "patches": [
+                          {
+                            "op": "set",
+                            "ref": "task-1",
+                            "scope": "canonical",
+                            "path": "/owner",
+                            "value": "chen"
+                          }
+                        ]
+                      }
                     }
                   ]
                 }
@@ -1535,25 +1615,25 @@
             "sequence": 1,
             "stepId": "project-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T11:18:59.257Z"
+            "recordedAt": "2026-09-16T11:48:26.277Z"
           },
           {
             "sequence": 2,
             "stepId": "project-1",
             "kind": "applied",
-            "recordedAt": "2026-09-16T11:18:59.258Z"
+            "recordedAt": "2026-09-16T11:48:26.278Z"
           },
           {
             "sequence": 3,
             "stepId": "task-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T11:18:59.259Z"
+            "recordedAt": "2026-09-16T11:48:26.279Z"
           },
           {
             "sequence": 4,
             "stepId": "task-1",
             "kind": "not_applied",
-            "recordedAt": "2026-09-16T11:18:59.260Z",
+            "recordedAt": "2026-09-16T11:48:26.279Z",
             "reason": "Owner unavailable; request rejected before creation"
           }
         ],
@@ -1621,14 +1701,17 @@
                       "value": "chen",
                       "label": "陈",
                       "message": "目前可接手（虚构候选）",
-                      "repairOps": [
-                        {
-                          "op": "set",
-                          "nodeId": "task-1",
-                          "path": "/owner",
-                          "value": "chen"
-                        }
-                      ]
+                      "repairOps": {
+                        "patches": [
+                          {
+                            "op": "set",
+                            "ref": "task-1",
+                            "scope": "canonical",
+                            "path": "/owner",
+                            "value": "chen"
+                          }
+                        ]
+                      }
                     }
                   ]
                 }
@@ -1661,11 +1744,11 @@
         ],
         "previewVersion": 4,
         "preview": {
-          "id": "ace27800-08e5-493f-860c-727cbc07dc35",
+          "id": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
           "version": 4,
           "type": "example.project-tasks",
           "typeVersion": "2",
-          "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+          "definitionDigest": "sha256:stagedwrite-json-v1:d838c4c0fac1f3d696df44356a3bbc7b10f3f443f0c02cee349eeb4805d0d984",
           "nodes": {
             "project-1": {
               "id": "project-1",
@@ -1767,14 +1850,17 @@
                 "value": "chen",
                 "label": "陈",
                 "message": "目前可接手（虚构候选）",
-                "repairOps": [
-                  {
-                    "op": "set",
-                    "nodeId": "task-1",
-                    "path": "/owner",
-                    "value": "chen"
-                  }
-                ]
+                "repairOps": {
+                  "patches": [
+                    {
+                      "op": "set",
+                      "ref": "task-1",
+                      "scope": "canonical",
+                      "path": "/owner",
+                      "value": "chen"
+                    }
+                  ]
+                }
               }
             ]
           }
@@ -1844,14 +1930,17 @@
                     "value": "chen",
                     "label": "陈",
                     "message": "目前可接手（虚构候选）",
-                    "repairOps": [
-                      {
-                        "op": "set",
-                        "nodeId": "task-1",
-                        "path": "/owner",
-                        "value": "chen"
-                      }
-                    ]
+                    "repairOps": {
+                      "patches": [
+                        {
+                          "op": "set",
+                          "ref": "task-1",
+                          "scope": "canonical",
+                          "path": "/owner",
+                          "value": "chen"
+                        }
+                      ]
+                    }
                   }
                 ]
               }
@@ -1866,7 +1955,7 @@
       "method": "getDraft",
       "note": "失败后 currentRunId 保留；pending 不意味着远端没有资源。",
       "input": [
-        "ace27800-08e5-493f-860c-727cbc07dc35"
+        "eeb139ef-2aa0-439d-b2d4-bbceba219ec1"
       ],
       "output": {
         "graph": {
@@ -1875,9 +1964,9 @@
               "id": "project-1",
               "nodeType": "project",
               "fields": {
-                "name": "文档发布",
                 "capacityHours": 16,
-                "deadlineDay": 20
+                "deadlineDay": 20,
+                "name": "文档发布"
               }
             },
             "task-1": {
@@ -1885,9 +1974,9 @@
               "nodeType": "task",
               "fields": {
                 "name": "编写快速入门",
+                "priority": "urgent",
                 "estimateHours": 8,
                 "dueDay": 20,
-                "priority": "urgent",
                 "owner": "lin"
               }
             },
@@ -1896,10 +1985,10 @@
               "nodeType": "task",
               "fields": {
                 "name": "评审使用示例",
-                "estimateHours": 8,
                 "dueDay": 18,
                 "priority": "normal",
-                "owner": "chen"
+                "owner": "chen",
+                "estimateHours": 8
               }
             }
           },
@@ -1920,10 +2009,6 @@
         },
         "fieldIntents": {
           "project-1": {
-            "/name": {
-              "kind": "set",
-              "value": "文档发布"
-            },
             "/capacityHours": {
               "kind": "set",
               "value": 16
@@ -1931,12 +2016,20 @@
             "/deadlineDay": {
               "kind": "set",
               "value": 20
+            },
+            "/name": {
+              "kind": "set",
+              "value": "文档发布"
             }
           },
           "task-1": {
             "/name": {
               "kind": "set",
               "value": "编写快速入门"
+            },
+            "/priority": {
+              "kind": "set",
+              "value": "urgent"
             },
             "/estimateHours": {
               "kind": "set",
@@ -1945,10 +2038,6 @@
             "/dueDay": {
               "kind": "set",
               "value": 20
-            },
-            "/priority": {
-              "kind": "set",
-              "value": "urgent"
             },
             "/owner": {
               "kind": "set",
@@ -1959,10 +2048,6 @@
             "/name": {
               "kind": "set",
               "value": "评审使用示例"
-            },
-            "/estimateHours": {
-              "kind": "set",
-              "value": 8
             },
             "/dueDay": {
               "kind": "set",
@@ -1975,15 +2060,19 @@
             "/owner": {
               "kind": "set",
               "value": "chen"
+            },
+            "/estimateHours": {
+              "kind": "set",
+              "value": 8
             }
           }
         },
         "formatVersion": 3,
-        "id": "ace27800-08e5-493f-860c-727cbc07dc35",
+        "id": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
         "version": 4,
         "type": "example.project-tasks",
         "typeVersion": "2",
-        "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+        "definitionDigest": "sha256:stagedwrite-json-v1:d838c4c0fac1f3d696df44356a3bbc7b10f3f443f0c02cee349eeb4805d0d984",
         "status": "pending",
         "currentRunId": "demo-run-1",
         "targetId": "mock:local",
@@ -2104,8 +2193,8 @@
           "nodes": [],
           "edges": []
         },
-        "createdAt": "2026-09-16T11:18:59.242Z",
-        "updatedAt": "2026-09-16T11:18:59.253Z"
+        "createdAt": "2026-09-16T11:48:26.259Z",
+        "updatedAt": "2026-09-16T11:48:26.272Z"
       },
       "remoteCalls": [],
       "checkCalls": [],
@@ -2115,37 +2204,43 @@
       "method": "edit",
       "note": "假设用户同意改由陈接手，只修复未完成任务。成功项目不允许修改。",
       "input": [
-        "ace27800-08e5-493f-860c-727cbc07dc35",
+        "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
         4,
-        [
-          {
-            "op": "set",
-            "nodeId": "task-1",
-            "path": "/owner",
-            "value": "chen"
-          }
-        ]
+        {
+          "patches": [
+            {
+              "op": "set",
+              "ref": "task-1",
+              "scope": "canonical",
+              "path": "/owner",
+              "value": "chen"
+            }
+          ]
+        }
       ],
       "output": {
-        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
+        "draftId": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
         "version": 5,
         "preflightRequired": true,
         "changes": [
           {
-            "opIndex": 0,
+            "inputPath": "/patches/0",
+            "op": "set",
+            "ref": "task-1",
+            "scope": "canonical",
             "target": "field",
-            "id": "task-1",
             "path": "/owner",
             "before": {
-              "kind": "value",
+              "kind": "set",
               "value": "lin"
             },
             "after": {
-              "kind": "value",
+              "kind": "set",
               "value": "chen"
             }
           }
-        ]
+        ],
+        "createdRefs": []
       },
       "remoteCalls": [],
       "checkCalls": [],
@@ -2159,17 +2254,17 @@
       ],
       "output": {
         "id": "demo-run-1",
-        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
+        "draftId": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
         "kind": "initial_create",
         "version": 5,
         "state": "unknown",
-        "artifactId": "194fa738-0d6a-486f-ac26-fe536a65a3f3",
-        "initialArtifactId": "eed08655-6bf2-4341-850f-8004140371d6",
-        "certificate": "194fa738-0d6a-486f-ac26-fe536a65a3f3",
+        "artifactId": "1860f289-a482-47bb-a278-8b6f6e7c47e8",
+        "initialArtifactId": "e37defbc-d704-40de-b0b8-0d0beda64e27",
+        "certificate": "1860f289-a482-47bb-a278-8b6f6e7c47e8",
         "revision": 1,
         "revisions": [
           {
-            "artifactId": "eed08655-6bf2-4341-850f-8004140371d6",
+            "artifactId": "e37defbc-d704-40de-b0b8-0d0beda64e27",
             "version": 4,
             "steps": [
               {
@@ -2235,14 +2330,17 @@
                           "value": "chen",
                           "label": "陈",
                           "message": "目前可接手（虚构候选）",
-                          "repairOps": [
-                            {
-                              "op": "set",
-                              "nodeId": "task-1",
-                              "path": "/owner",
-                              "value": "chen"
-                            }
-                          ]
+                          "repairOps": {
+                            "patches": [
+                              {
+                                "op": "set",
+                                "ref": "task-1",
+                                "scope": "canonical",
+                                "path": "/owner",
+                                "value": "chen"
+                              }
+                            ]
+                          }
                         }
                       ]
                     }
@@ -2363,14 +2461,17 @@
                       "value": "chen",
                       "label": "陈",
                       "message": "目前可接手（虚构候选）",
-                      "repairOps": [
-                        {
-                          "op": "set",
-                          "nodeId": "task-1",
-                          "path": "/owner",
-                          "value": "chen"
-                        }
-                      ]
+                      "repairOps": {
+                        "patches": [
+                          {
+                            "op": "set",
+                            "ref": "task-1",
+                            "scope": "canonical",
+                            "path": "/owner",
+                            "value": "chen"
+                          }
+                        ]
+                      }
                     }
                   ]
                 }
@@ -2473,56 +2574,56 @@
             "sequence": 1,
             "stepId": "project-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T11:18:59.257Z"
+            "recordedAt": "2026-09-16T11:48:26.277Z"
           },
           {
             "sequence": 2,
             "stepId": "project-1",
             "kind": "applied",
-            "recordedAt": "2026-09-16T11:18:59.258Z"
+            "recordedAt": "2026-09-16T11:48:26.278Z"
           },
           {
             "sequence": 3,
             "stepId": "task-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T11:18:59.259Z"
+            "recordedAt": "2026-09-16T11:48:26.279Z"
           },
           {
             "sequence": 4,
             "stepId": "task-1",
             "kind": "not_applied",
-            "recordedAt": "2026-09-16T11:18:59.260Z",
+            "recordedAt": "2026-09-16T11:48:26.279Z",
             "reason": "Owner unavailable; request rejected before creation"
           },
           {
             "sequence": 5,
             "stepId": "",
             "kind": "plan_repaired",
-            "recordedAt": "2026-09-16T11:18:59.264Z"
+            "recordedAt": "2026-09-16T11:48:26.285Z"
           },
           {
             "sequence": 6,
             "stepId": "task-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T11:18:59.266Z"
+            "recordedAt": "2026-09-16T11:48:26.286Z"
           },
           {
             "sequence": 7,
             "stepId": "task-1",
             "kind": "applied",
-            "recordedAt": "2026-09-16T11:18:59.267Z"
+            "recordedAt": "2026-09-16T11:48:26.287Z"
           },
           {
             "sequence": 8,
             "stepId": "task-2",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T11:18:59.268Z"
+            "recordedAt": "2026-09-16T11:48:26.289Z"
           },
           {
             "sequence": 9,
             "stepId": "task-2",
             "kind": "unknown",
-            "recordedAt": "2026-09-16T11:18:59.269Z",
+            "recordedAt": "2026-09-16T11:48:26.289Z",
             "reason": "Response timed out; creation outcome requires lookup"
           }
         ],
@@ -2619,11 +2720,11 @@
         ],
         "previewVersion": 5,
         "preview": {
-          "id": "ace27800-08e5-493f-860c-727cbc07dc35",
+          "id": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
           "version": 5,
           "type": "example.project-tasks",
           "typeVersion": "2",
-          "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+          "definitionDigest": "sha256:stagedwrite-json-v1:d838c4c0fac1f3d696df44356a3bbc7b10f3f443f0c02cee349eeb4805d0d984",
           "nodes": {
             "project-1": {
               "id": "project-1",
@@ -2793,7 +2894,7 @@
         {
           "method": "queryExport",
           "input": {
-            "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
+            "draftId": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
             "version": 5
           },
           "output": {
@@ -2812,17 +2913,17 @@
       ],
       "output": {
         "id": "demo-run-1",
-        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
+        "draftId": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
         "kind": "initial_create",
         "version": 5,
         "state": "published",
-        "artifactId": "194fa738-0d6a-486f-ac26-fe536a65a3f3",
-        "initialArtifactId": "eed08655-6bf2-4341-850f-8004140371d6",
-        "certificate": "194fa738-0d6a-486f-ac26-fe536a65a3f3",
+        "artifactId": "1860f289-a482-47bb-a278-8b6f6e7c47e8",
+        "initialArtifactId": "e37defbc-d704-40de-b0b8-0d0beda64e27",
+        "certificate": "1860f289-a482-47bb-a278-8b6f6e7c47e8",
         "revision": 1,
         "revisions": [
           {
-            "artifactId": "eed08655-6bf2-4341-850f-8004140371d6",
+            "artifactId": "e37defbc-d704-40de-b0b8-0d0beda64e27",
             "version": 4,
             "steps": [
               {
@@ -2888,14 +2989,17 @@
                           "value": "chen",
                           "label": "陈",
                           "message": "目前可接手（虚构候选）",
-                          "repairOps": [
-                            {
-                              "op": "set",
-                              "nodeId": "task-1",
-                              "path": "/owner",
-                              "value": "chen"
-                            }
-                          ]
+                          "repairOps": {
+                            "patches": [
+                              {
+                                "op": "set",
+                                "ref": "task-1",
+                                "scope": "canonical",
+                                "path": "/owner",
+                                "value": "chen"
+                              }
+                            ]
+                          }
                         }
                       ]
                     }
@@ -3016,14 +3120,17 @@
                       "value": "chen",
                       "label": "陈",
                       "message": "目前可接手（虚构候选）",
-                      "repairOps": [
-                        {
-                          "op": "set",
-                          "nodeId": "task-1",
-                          "path": "/owner",
-                          "value": "chen"
-                        }
-                      ]
+                      "repairOps": {
+                        "patches": [
+                          {
+                            "op": "set",
+                            "ref": "task-1",
+                            "scope": "canonical",
+                            "path": "/owner",
+                            "value": "chen"
+                          }
+                        ]
+                      }
                     }
                   ]
                 }
@@ -3124,69 +3231,69 @@
             "sequence": 1,
             "stepId": "project-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T11:18:59.257Z"
+            "recordedAt": "2026-09-16T11:48:26.277Z"
           },
           {
             "sequence": 2,
             "stepId": "project-1",
             "kind": "applied",
-            "recordedAt": "2026-09-16T11:18:59.258Z"
+            "recordedAt": "2026-09-16T11:48:26.278Z"
           },
           {
             "sequence": 3,
             "stepId": "task-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T11:18:59.259Z"
+            "recordedAt": "2026-09-16T11:48:26.279Z"
           },
           {
             "sequence": 4,
             "stepId": "task-1",
             "kind": "not_applied",
-            "recordedAt": "2026-09-16T11:18:59.260Z",
+            "recordedAt": "2026-09-16T11:48:26.279Z",
             "reason": "Owner unavailable; request rejected before creation"
           },
           {
             "sequence": 5,
             "stepId": "",
             "kind": "plan_repaired",
-            "recordedAt": "2026-09-16T11:18:59.264Z"
+            "recordedAt": "2026-09-16T11:48:26.285Z"
           },
           {
             "sequence": 6,
             "stepId": "task-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T11:18:59.266Z"
+            "recordedAt": "2026-09-16T11:48:26.286Z"
           },
           {
             "sequence": 7,
             "stepId": "task-1",
             "kind": "applied",
-            "recordedAt": "2026-09-16T11:18:59.267Z"
+            "recordedAt": "2026-09-16T11:48:26.287Z"
           },
           {
             "sequence": 8,
             "stepId": "task-2",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T11:18:59.268Z"
+            "recordedAt": "2026-09-16T11:48:26.289Z"
           },
           {
             "sequence": 9,
             "stepId": "task-2",
             "kind": "unknown",
-            "recordedAt": "2026-09-16T11:18:59.269Z",
+            "recordedAt": "2026-09-16T11:48:26.289Z",
             "reason": "Response timed out; creation outcome requires lookup"
           },
           {
             "sequence": 10,
             "stepId": "task-2",
             "kind": "reconciling",
-            "recordedAt": "2026-09-16T11:18:59.272Z"
+            "recordedAt": "2026-09-16T11:48:26.292Z"
           },
           {
             "sequence": 11,
             "stepId": "task-2",
             "kind": "applied",
-            "recordedAt": "2026-09-16T11:18:59.273Z"
+            "recordedAt": "2026-09-16T11:48:26.293Z"
           }
         ],
         "steps": [
@@ -3279,11 +3386,11 @@
         ],
         "previewVersion": 5,
         "preview": {
-          "id": "ace27800-08e5-493f-860c-727cbc07dc35",
+          "id": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
           "version": 5,
           "type": "example.project-tasks",
           "typeVersion": "2",
-          "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+          "definitionDigest": "sha256:stagedwrite-json-v1:d838c4c0fac1f3d696df44356a3bbc7b10f3f443f0c02cee349eeb4805d0d984",
           "nodes": {
             "project-1": {
               "id": "project-1",
@@ -3417,7 +3524,7 @@
       "method": "getDraft",
       "note": "全部成功才设置 published、publishedArtifactId 和 lastPublishedAt。currentRunId 仍保留。",
       "input": [
-        "ace27800-08e5-493f-860c-727cbc07dc35"
+        "eeb139ef-2aa0-439d-b2d4-bbceba219ec1"
       ],
       "output": {
         "graph": {
@@ -3426,9 +3533,9 @@
               "id": "project-1",
               "nodeType": "project",
               "fields": {
-                "name": "文档发布",
                 "capacityHours": 16,
-                "deadlineDay": 20
+                "deadlineDay": 20,
+                "name": "文档发布"
               }
             },
             "task-1": {
@@ -3436,9 +3543,9 @@
               "nodeType": "task",
               "fields": {
                 "name": "编写快速入门",
+                "priority": "urgent",
                 "estimateHours": 8,
                 "dueDay": 20,
-                "priority": "urgent",
                 "owner": "chen"
               }
             },
@@ -3447,10 +3554,10 @@
               "nodeType": "task",
               "fields": {
                 "name": "评审使用示例",
-                "estimateHours": 8,
                 "dueDay": 18,
                 "priority": "normal",
-                "owner": "chen"
+                "owner": "chen",
+                "estimateHours": 8
               }
             }
           },
@@ -3471,10 +3578,6 @@
         },
         "fieldIntents": {
           "project-1": {
-            "/name": {
-              "kind": "set",
-              "value": "文档发布"
-            },
             "/capacityHours": {
               "kind": "set",
               "value": 16
@@ -3482,12 +3585,20 @@
             "/deadlineDay": {
               "kind": "set",
               "value": 20
+            },
+            "/name": {
+              "kind": "set",
+              "value": "文档发布"
             }
           },
           "task-1": {
             "/name": {
               "kind": "set",
               "value": "编写快速入门"
+            },
+            "/priority": {
+              "kind": "set",
+              "value": "urgent"
             },
             "/estimateHours": {
               "kind": "set",
@@ -3496,10 +3607,6 @@
             "/dueDay": {
               "kind": "set",
               "value": 20
-            },
-            "/priority": {
-              "kind": "set",
-              "value": "urgent"
             },
             "/owner": {
               "kind": "set",
@@ -3510,10 +3617,6 @@
             "/name": {
               "kind": "set",
               "value": "评审使用示例"
-            },
-            "/estimateHours": {
-              "kind": "set",
-              "value": 8
             },
             "/dueDay": {
               "kind": "set",
@@ -3526,15 +3629,19 @@
             "/owner": {
               "kind": "set",
               "value": "chen"
+            },
+            "/estimateHours": {
+              "kind": "set",
+              "value": 8
             }
           }
         },
         "formatVersion": 3,
-        "id": "ace27800-08e5-493f-860c-727cbc07dc35",
+        "id": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
         "version": 5,
         "type": "example.project-tasks",
         "typeVersion": "2",
-        "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+        "definitionDigest": "sha256:stagedwrite-json-v1:d838c4c0fac1f3d696df44356a3bbc7b10f3f443f0c02cee349eeb4805d0d984",
         "status": "published",
         "currentRunId": "demo-run-1",
         "targetId": "mock:local",
@@ -3649,14 +3756,14 @@
             }
           }
         },
-        "publishedArtifactId": "194fa738-0d6a-486f-ac26-fe536a65a3f3",
-        "lastPublishedAt": "2026-09-16T11:18:59.275Z",
+        "publishedArtifactId": "1860f289-a482-47bb-a278-8b6f6e7c47e8",
+        "lastPublishedAt": "2026-09-16T11:48:26.295Z",
         "tombstones": {
           "nodes": [],
           "edges": []
         },
-        "createdAt": "2026-09-16T11:18:59.242Z",
-        "updatedAt": "2026-09-16T11:18:59.275Z"
+        "createdAt": "2026-09-16T11:48:26.259Z",
+        "updatedAt": "2026-09-16T11:48:26.295Z"
       },
       "remoteCalls": [],
       "checkCalls": [],
@@ -3666,7 +3773,7 @@
       "method": "getBindings",
       "note": "每个成功节点都已绑定远端资源；这些是确认事实，不是远端实时漂移检测。",
       "input": [
-        "ace27800-08e5-493f-860c-727cbc07dc35"
+        "eeb139ef-2aa0-439d-b2d4-bbceba219ec1"
       ],
       "output": {
         "project-1": {
@@ -3729,7 +3836,7 @@
         "demo-run-1"
       ],
       "output": {
-        "id": "194fa738-0d6a-486f-ac26-fe536a65a3f3",
+        "id": "1860f289-a482-47bb-a278-8b6f6e7c47e8",
         "intentDigest": "sha256:stagedwrite-json-v1:733962fd9cbccc460c1183cc4a07667ccdcb077d314378610d91408a5756706f",
         "draft": {
           "graph": {
@@ -3738,9 +3845,9 @@
                 "id": "project-1",
                 "nodeType": "project",
                 "fields": {
-                  "name": "文档发布",
                   "capacityHours": 16,
-                  "deadlineDay": 20
+                  "deadlineDay": 20,
+                  "name": "文档发布"
                 }
               },
               "task-1": {
@@ -3748,9 +3855,9 @@
                 "nodeType": "task",
                 "fields": {
                   "name": "编写快速入门",
+                  "priority": "urgent",
                   "estimateHours": 8,
                   "dueDay": 20,
-                  "priority": "urgent",
                   "owner": "chen"
                 }
               },
@@ -3759,10 +3866,10 @@
                 "nodeType": "task",
                 "fields": {
                   "name": "评审使用示例",
-                  "estimateHours": 8,
                   "dueDay": 18,
                   "priority": "normal",
-                  "owner": "chen"
+                  "owner": "chen",
+                  "estimateHours": 8
                 }
               }
             },
@@ -3783,10 +3890,6 @@
           },
           "fieldIntents": {
             "project-1": {
-              "/name": {
-                "kind": "set",
-                "value": "文档发布"
-              },
               "/capacityHours": {
                 "kind": "set",
                 "value": 16
@@ -3794,12 +3897,20 @@
               "/deadlineDay": {
                 "kind": "set",
                 "value": 20
+              },
+              "/name": {
+                "kind": "set",
+                "value": "文档发布"
               }
             },
             "task-1": {
               "/name": {
                 "kind": "set",
                 "value": "编写快速入门"
+              },
+              "/priority": {
+                "kind": "set",
+                "value": "urgent"
               },
               "/estimateHours": {
                 "kind": "set",
@@ -3808,10 +3919,6 @@
               "/dueDay": {
                 "kind": "set",
                 "value": 20
-              },
-              "/priority": {
-                "kind": "set",
-                "value": "urgent"
               },
               "/owner": {
                 "kind": "set",
@@ -3822,10 +3929,6 @@
               "/name": {
                 "kind": "set",
                 "value": "评审使用示例"
-              },
-              "/estimateHours": {
-                "kind": "set",
-                "value": 8
               },
               "/dueDay": {
                 "kind": "set",
@@ -3838,15 +3941,19 @@
               "/owner": {
                 "kind": "set",
                 "value": "chen"
+              },
+              "/estimateHours": {
+                "kind": "set",
+                "value": 8
               }
             }
           },
           "formatVersion": 3,
-          "id": "ace27800-08e5-493f-860c-727cbc07dc35",
+          "id": "eeb139ef-2aa0-439d-b2d4-bbceba219ec1",
           "version": 5,
           "type": "example.project-tasks",
           "typeVersion": "2",
-          "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+          "definitionDigest": "sha256:stagedwrite-json-v1:d838c4c0fac1f3d696df44356a3bbc7b10f3f443f0c02cee349eeb4805d0d984",
           "status": "pending",
           "currentRunId": "demo-run-1",
           "targetId": "mock:local",
@@ -3967,8 +4074,8 @@
             "nodes": [],
             "edges": []
           },
-          "createdAt": "2026-09-16T11:18:59.242Z",
-          "updatedAt": "2026-09-16T11:18:59.261Z"
+          "createdAt": "2026-09-16T11:48:26.259Z",
+          "updatedAt": "2026-09-16T11:48:26.281Z"
         },
         "plan": [
           {
@@ -4025,8 +4132,8 @@
           }
         ],
         "binding": {
-          "checkId": "6c33d73b-3510-42fe-abf1-e383258ade1a",
-          "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
+          "checkId": "ad328064-e606-4dc5-9c6e-be7c5359d06c",
+          "definitionDigest": "sha256:stagedwrite-json-v1:d838c4c0fac1f3d696df44356a3bbc7b10f3f443f0c02cee349eeb4805d0d984",
           "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
           "executorId": "example.project-service",
           "executorVersion": "5",

@@ -22,8 +22,7 @@ test("registered topology: source registry validates metadata and binds ownershi
 test("registered topology: incomplete metadata never receives defaults", () => {
   const d = definition(); const relation: Record<string, unknown> = d.relationTypes.children;
   delete relation.ownership;
-  const registry = new DefinitionRegistry([d]);
-  assert.throws(() => registeredTopology(registry, selector), e => e instanceof EditInputError && /explicit ownership/.test(e.message) && /does not infer/.test(e.hint));
+  assert.throws(() => new DefinitionRegistry([d]), DefinitionAssemblyError);
 });
 test("registered topology: schema failures remain atomic and valid specs use one immutable registration", () => {
   const bound = registeredTopology(new DefinitionRegistry([definition()]), selector);

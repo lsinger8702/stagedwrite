@@ -1,7 +1,7 @@
 import { PREVIEW_REF_PREFIX } from "./identity.js";
 import { isObject, jsonSnapshot, pointer, type Json } from "../registry/json.js";
 
-// Migration module: not exported from the package until the managed engine uses it.
+// Public editing contract: both topology and field channels use only these three OPs.
 export type PatchOp = "set" | "remove" | "reset";
 export type FieldPatch = { ref: string; scope: "canonical"; path: string } & (
   | { op: "set"; value: Json }

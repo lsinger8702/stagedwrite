@@ -6,7 +6,7 @@ import type { EditPreview, EditReceipt } from "../edit/results.js";
 import { registeredTopology } from "../edit/registered-topology.js";
 import { protectIntentRepair, requireEditVersion, type RepairProtection } from "./edit-guards.js";
 
-/** Required slice of the future managed snapshot; no alternate engine or storage API. */
+/** Required intent slice for managed candidate preparation; no alternate engine or storage API. */
 export interface EditableDraft extends TopologyState, DefinitionSelector {
   id: string;
   version: number;

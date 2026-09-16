@@ -38,7 +38,7 @@ test('quoted engine keys have stable distinct header-safe wire identities', () =
 test('currency refusal produces a graph-path message and optional repair OP', async () => {
   const result = await create(async () => ({ status: 400, data: { error: { type: 'invalid_request_error', param: 'currency', message: 'Invalid currency' } } })).apply(step, 'key', context);
   assert.equal(result.kind, 'not_applied'); assert.equal(result.diagnostics[0].path, '/nodes/annual/fields/currency');
-  assert.equal(result.diagnostics[0].candidates[0].repairOps[0].value, 'hkd');
+  assert.deepEqual(result.diagnostics[0].candidates[0].repairOps, { patches: [{ op: 'set', ref: 'annual', scope: 'canonical', path: '/currency', value: 'hkd' }] });
 });
 
 test('unclassified failures and inconsistent 200 receipts never prove no effect', async () => {

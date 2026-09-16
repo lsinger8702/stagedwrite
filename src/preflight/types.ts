@@ -1,5 +1,6 @@
+import type { EditBatch } from "../edit/protocol.js";
 import type { Json } from "../registry/json.js";
-import type { GraphDraft, GraphNode, GraphOp } from "../graph/types.js";
+import type { GraphDraft, GraphNode } from "../graph/types.js";
 import type { Diagnostic } from "../types.js";
 
 /** Paths are JSON Pointers from the graph root, including related locations. */
@@ -9,13 +10,13 @@ export interface GraphCandidate {
   message?: string;
   metadata?: Record<string, Json>;
   /** Optional, complete edit batch for selecting this candidate; never applied by preflight. */
-  repairOps?: readonly GraphOp[];
+  repairOps?: EditBatch;
 }
 export interface GraphRepair {
   id?: string;
   message: string;
   /** One alternative atomic batch, not instructions to concatenate all alternatives. */
-  ops: readonly GraphOp[];
+  ops: EditBatch;
 }
 export interface GraphDiagnostic extends Diagnostic {
   candidates?: readonly GraphCandidate[];

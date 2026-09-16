@@ -85,8 +85,8 @@ of correctness for every integration.
 ---
 
 Early prototype, v0.0.1 · Node.js 22.13+ (`node:sqlite`) · no npm package yet.
-The three-state, dual-channel editing migration is in progress; its new
-nested-field components are not yet wired into the public engine.
+Public edit/preview and suggested repairs use the three-state, dual-channel protocol.
+Create still accepts an initial graph; roots/spec initialization is the remaining migration.
 [Migration ledger](docs/tasks/three-state-op-migration.md) ·
 [Project principles](docs/design/000-project-principles.md).
 
@@ -130,17 +130,29 @@ if (check.status === "passed" && check.certificate) {
 await engine.close();
 ```
 
+Edit a current node using its ref from the Draft/preview:
+
+```ts
+const updated = await engine.edit(draft.id, draft.version, {
+  patches: [{ op: "set", ref: nodeRef, scope: "canonical", path: "/profile/name", value: "Chosen name" }],
+});
+// Topology edits use graphPatches with the same set/remove/reset OP set.
+// Candidate repairOps and repairs[].ops contain this same EditBatch shape.
+```
+
+Both `ownership` and `cardinality` are required on every registered relation. Repeated field coordinates in one batch are rejected atomically with `message` and `hint`. New nodes created by topology edits receive server IDs via `createdRefs`; preview IDs cannot be submitted to edit.
+
 See the [complete registered schema and rules](examples/fixtures/project-tasks-managed.ts), [executor and calls](examples/publish-and-resume.ts), and [contract](docs/design/018-draft-lifecycle-proposal.md).
 
 - Draft persists ordinary `graph` values, separate `fieldIntents`, immutable `initialSnapshot`, `currentRunId`, and a successful artifact reference. It retains its identity after publication.
 - `set` declares a value, `remove` explicitly clears it. `reset` restores the fixed initial intent in this version, including undeclared fields; it does not undo the last edit.
 - The first publish claims one Run atomically. Further publish calls only observe that Run; an explicitly different Run ID is rejected. Independent resource creation needs a new Draft.
 - `resume` continues the same unfinished Run, even without a process failure. Success is preserved; unknown requests use their original input/key for reconciliation. Repair edits are limited to unfinished nodes' fields.
-- `edit` returns only `{draftId, version, preflightRequired: true, changes}`. Use `getDraft` for the stored snapshot and `preflight` for the complete current preview and diagnostics. Editing an existing Run still requires `resume` to continue it.
+- `edit` returns only `{draftId, version, preflightRequired: true, changes, createdRefs}`. Use `getDraft` for the stored snapshot and `preflight` for the complete current preview and diagnostics. Editing an existing Run still requires `resume` to continue it.
 - Bindings are saved as individual nodes succeed. `pending` may already have remote resources; only full success marks the Draft `published`.
 - All managed APIs are asynchronous. Without executors, preflight is diagnostic-only. Without a registered backend, storage and locking are in-process memory only.
 
-Preflight responses use `formatVersion: 3`. Preview fields are keyed by node-relative JSON Pointers (`fields["/profile/name"]`), with reconstructed object values and explicit child states. Arrays remain whole values. Older saved checks require a fresh preflight. The public create/edit protocol migration is still in progress.
+Preflight responses use `formatVersion: 3`. Preview fields are keyed by node-relative JSON Pointers (`fields["/profile/name"]`), with reconstructed object values and explicit child states. Arrays remain whole values. Older saved checks require a fresh preflight. Public edit/preview and repair suggestions use `EditBatch`; create roots/spec migration is still in progress.
 
 ## Recovery boundary
 

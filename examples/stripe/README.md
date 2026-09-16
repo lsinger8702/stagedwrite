@@ -48,6 +48,16 @@ node --env-file=.env.stripe examples/stripe/run.mjs \
 
 两次 resume 前都会关闭并重新打开 SQLite 后端。**年度回执丢失是显式故障注入，不是本次真实遇到了网络超时。币种拒绝和所有资源创建、查证均为真实 Stripe 请求。** 没有调用大模型；`run.mjs` 作为调用方明确选择文档描述的 HKD 修复，规则不会自动替用户决定。
 
+修复输入使用同一双通道协议：
+
+```js
+await engine.edit(draft.id, draft.version, {
+  patches: [{ op: 'set', ref: 'monthly', scope: 'canonical', path: '/currency', value: 'hkd' }],
+});
+```
+
+这里的 monthly 是本例当前初始图中的节点 ref。关系注册显式声明 ownership/cardinality；create 的 roots/spec 与服务端初始 ID 迁移尚未完成。此次录制已用新 EditBatch 在真实 sandbox 重新运行，未沿用旧样例摘要。
+
 ## 中断后继续
 
 保留原目录、配置和样例版本：

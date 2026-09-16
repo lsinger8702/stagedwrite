@@ -1,5 +1,5 @@
 import { defineDraftType } from "../../src/index.js";
-import type { ManagedInitialIntent, ManagedDraft, GraphDiagnostic, GraphOp, ManagedRule, Value } from "../../src/index.js";
+import type { ManagedInitialIntent, ManagedDraft, GraphDiagnostic, EditBatch, ManagedRule, Value } from "../../src/index.js";
 /** Entirely fictional project/task schema and business policies for the walkthrough. */
 export const definition = defineDraftType({ id: "example.project-tasks", version: "2", nodeTypes: {
         project: { valueSchema: { type: "object", properties: {
@@ -14,7 +14,7 @@ export const definition = defineDraftType({ id: "example.project-tasks", version
                     priority: { type: "string", enum: ["normal", "urgent"] },
                     owner: { type: ["string", "null"], description: "负责人；紧急任务必须明确指定" }
                 }, additionalProperties: false }, requiredAtPublish: ["name", "estimateHours", "dueDay", "priority"] }
-    }, relationTypes: { contains: { from: ["project"], to: ["task"] } } });
+    }, relationTypes: { contains: { from: ["project"], to: ["task"], ownership: "owned", cardinality: "many" } } });
 export const selector = { type: definition.id, typeVersion: definition.version };
 export const value = (node: ManagedDraft["graph"]["nodes"][string], field: string): Value => {
   const v = node.fields[field] ?? null;
@@ -40,7 +40,7 @@ export const rules: ManagedRule[] = [
                         related: tasks.map(task => at(task.id, "estimateHours")),
                         stage: "work-planning", metadata: { capacityHours: capacity, totalHours: total, excessHours: total - capacity, unit: "hours" },
                         repairs: [{ id: "expand-capacity", message: "若用户允许追加容量，可提高到当前任务总工时；这不会解决日期或负责人问题。",
-                                ops: [{ op: "set", nodeId: project.id, path: "/capacityHours", value: total }] }] });
+                                ops: { patches: [{ op: "set", ref: project.id, scope: "canonical", path: "/capacityHours", value: total }] } }] });
             }
             return issues;
         } },
@@ -56,8 +56,8 @@ export const rules: ManagedRule[] = [
                             hint: "可以提前该任务、调整项目截止日，或将任务移到下一期；不要自行假设用户同意延期。",
                             related: [at(project.id, "deadlineDay")],
                             repairs: [
-                                { id: "earlier-task", message: "若任务可以提前，将它安排到项目截止日。", ops: [{ op: "set", nodeId: task.id, path: "/dueDay", value: deadline }] },
-                                { id: "later-project", message: "若用户接受整个项目延期，将项目截止日延到该任务完成日。", ops: [{ op: "set", nodeId: project.id, path: "/deadlineDay", value: due }] }
+                                { id: "earlier-task", message: "若任务可以提前，将它安排到项目截止日。", ops: { patches: [{ op: "set", ref: task.id, scope: "canonical", path: "/dueDay", value: deadline }] } },
+                                { id: "later-project", message: "若用户接受整个项目延期，将项目截止日延到该任务完成日。", ops: { patches: [{ op: "set", ref: project.id, scope: "canonical", path: "/deadlineDay", value: due }] } }
                             ]
                         });
                 }
@@ -74,14 +74,14 @@ export const rules: ManagedRule[] = [
                         hint: "指定能接手的负责人，或在用户允许时降低优先级；候选人仅供选择，不代表已获授权分配。",
                         candidates: [
                             { value: "lin", label: "林", message: "本期可以承接文档任务（虚构候选）", metadata: { availableHours: 8, skills: ["documentation"] },
-                                repairOps: [{ op: "set", nodeId: task.id, path: "/owner", value: "lin" }] },
+                                repairOps: { patches: [{ op: "set", ref: task.id, scope: "canonical", path: "/owner", value: "lin" }] } },
                             { value: "chen", label: "陈", message: "本期可以承接评审任务（虚构候选）", metadata: { availableHours: 4, skills: ["review"] },
-                                repairOps: [{ op: "set", nodeId: task.id, path: "/owner", value: "chen" }] }
+                                repairOps: { patches: [{ op: "set", ref: task.id, scope: "canonical", path: "/owner", value: "chen" }] } }
                         ],
                         excludedCandidates: [{ value: "zhou", label: "周", message: "本期不可参与（虚构约束）", metadata: { available: false } }],
                         constraintIds: ["demo-current-period-availability"],
                         repairs: [{ id: "lower-priority", message: "只有用户同意降低优先级时，才考虑保留负责人清空状态并改为普通任务。",
-                                ops: [{ op: "set", nodeId: task.id, path: "/priority", value: "normal" }] }],
+                                ops: { patches: [{ op: "set", ref: task.id, scope: "canonical", path: "/priority", value: "normal" }] } }],
                         related: [at(task.id, "priority")]
                     });
             }
@@ -109,9 +109,9 @@ export const initial: ManagedInitialIntent = {
 };
 // Fictional user context for choosing edits. This does not come from the registered rules.
 export const userIntent = "项目容量保持 16 小时，截止日保持第 20 天；两个任务本期各交付 8 小时范围的最小版本；快速入门仍为紧急任务，由林负责并在第 20 天完成。";
-export const chosen: GraphOp[] = [
-    { op: "set", nodeId: "task-1", path: "/estimateHours", value: 8 },
-    { op: "set", nodeId: "task-2", path: "/estimateHours", value: 8 },
-    { op: "set", nodeId: "task-1", path: "/dueDay", value: 20 },
-    { op: "set", nodeId: "task-1", path: "/owner", value: "lin" }
-];
+export const chosen: EditBatch = { patches: [
+    { op: "set", ref: "task-1", scope: "canonical", path: "/estimateHours", value: 8 },
+    { op: "set", ref: "task-2", scope: "canonical", path: "/estimateHours", value: 8 },
+    { op: "set", ref: "task-1", scope: "canonical", path: "/dueDay", value: 20 },
+    { op: "set", ref: "task-1", scope: "canonical", path: "/owner", value: "lin" }
+] };

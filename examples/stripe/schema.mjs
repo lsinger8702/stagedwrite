@@ -16,7 +16,7 @@ export const definition = defineDraftType({
       requiredAtPublish: ['currency', 'amount', 'interval'],
     },
   },
-  relationTypes: { pricedBy: { from: ['product'], to: ['price'] } },
+  relationTypes: { pricedBy: { from: ['product'], to: ['price'], ownership: 'owned', cardinality: 'many' } },
 });
 export const selector = { type: definition.id, typeVersion: definition.version };
 

@@ -12,7 +12,7 @@
 
 **项目所有者明确要求：所有对外编辑 OP 只能是 set/remove/reset，反对 node.add/node.remove/edge.add/edge.remove。拓扑与字段分通道；新节点内容/复制来源放入 set 的 value spec，不新增 clone 等动作。此原则替代七动作混合数组，迁移方案见 [022](022-three-state-op-migration.md)。**
 
-**按 [任务账本](../tasks/three-state-op-migration.md) 逐项实施，完成一项即记录代码与验证证据；未实现不能勾完成。当前运行时尚未迁移；update 实际派发开发暂缓，保留已有成果。**
+**按 [任务账本](../tasks/three-state-op-migration.md) 逐项实施，完成一项即记录代码与验证证据；未实现不能勾完成。公开 edit/preview 和候选修复已接入双通道；create roots/spec 与旧初始化器删除仍待完成。update 实际派发开发暂缓，保留已有成果。**
 
 字段 reset 的固定基线与原有执行安全原则不变。计划 Step.effect 的 create/update/noop 不是编辑 OP，不混淆两者。
 
@@ -44,7 +44,7 @@
 
 preview 显式显示三态，响应格式与普通持久化 Graph 可不同；不能把 preview 当真实请求体。注册方负责 plan、真实请求映射和远端错误到图路径的映射。
 
-**edit 返回轻量回执：draftId、version、preflightRequired 与本批 changes；不附完整 Graph、fieldIntents、初始基线或执行归属。完整存储快照用 getDraft 查询，诊断与完整当前 preview 由 preflight 返回。**
+**edit 返回轻量回执：draftId、version、preflightRequired、本批 changes 与 createdRefs；不附完整 Graph、fieldIntents、初始基线或执行归属。完整存储快照用 getDraft 查询，诊断与完整当前 preview 由 preflight 返回。**
 
 ## P4：意图与执行事实分工
 

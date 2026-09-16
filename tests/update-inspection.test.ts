@@ -32,7 +32,7 @@ test("update inspection: real preflight returns a full preview and noop diff wit
         const after = await backend.storage.read(draft.id);
         assert.deepEqual(after!.remoteFacts, before!.remoteFacts); assert.equal(after!.resourceRevision, before!.resourceRevision);
         assert.deepEqual(after!.artifacts, before!.artifacts);
-        await assert.rejects(e.edit(draft.id, 0, [{ op: "set", nodeId: "a", path: "/title", value: "B" }]), /UPDATE_NOT_SUPPORTED/);
+        await assert.rejects(e.edit(draft.id, 0, { patches: [{ op: "set", ref: "a", scope: "canonical", path: "/title", value: "B" }] }), /UPDATE_NOT_SUPPORTED/);
     } finally { await e.close(); }
 });
 test("update inspection: pending can be retried and drift carries concrete observed values", async () => {

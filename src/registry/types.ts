@@ -46,9 +46,9 @@ export interface DraftTypeDefinition {
   relationTypes: Readonly<Record<string, {
     from: readonly string[];
     to: readonly string[];
-    /** Required by the new topology evaluator; legacy entry removal is tracked in M05. */
-    ownership?: "owned" | "reference";
-    cardinality?: "one" | "many";
+    /** Explicit deletion/sharing semantics; the engine never infers these. */
+    ownership: "owned" | "reference";
+    cardinality: "one" | "many";
   }>>;
 }
 export interface DefinitionSelector { type: string; typeVersion: string }

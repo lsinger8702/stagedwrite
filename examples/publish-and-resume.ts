@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createStagedWrite, createSqliteBackend, type ManagedExecutor, type ManagedAsyncRule, type Step, type ApplyOutcome, type GraphOp } from "../src/index.js";
+import { createStagedWrite, createSqliteBackend, type ManagedExecutor, type ManagedAsyncRule, type Step, type ApplyOutcome, type EditBatch } from "../src/index.js";
 import { definition, selector, rules, initial, userIntent, chosen, value } from "./fixtures/project-tasks-managed.js";
 // Actual library and SQLite execution. The remote service and user choices are fictional.
 const effects = new Map<string, {
@@ -22,7 +22,7 @@ const executor: ManagedExecutor = { ...selector, id: "example.project-service", 
         let output: ApplyOutcome;
         if (step.id === "task-1" && step.payload.assignee === "lin")
             output = { kind: "not_applied", reason: "Owner unavailable; request rejected before creation", code: "OWNER_UNAVAILABLE", message: "负责人暂不可用，任务未创建。",
-                diagnostics: [{ code: "task.owner_unavailable", path: "/nodes/task-1/fields/owner", message: "林无法接手，请选择其他负责人后续作。", candidates: [{ value: "chen", label: "陈", message: "目前可接手（虚构候选）", repairOps: [{ op: "set", nodeId: "task-1", path: "/owner", value: "chen" }] }] }] };
+                diagnostics: [{ code: "task.owner_unavailable", path: "/nodes/task-1/fields/owner", message: "林无法接手，请选择其他负责人后续作。", candidates: [{ value: "chen", label: "陈", message: "目前可接手（虚构候选）", repairOps: { patches: [{ op: "set", ref: "task-1", scope: "canonical", path: "/owner", value: "chen" }] } }] }] };
         else {
             let resource = effects.get(key);
             if (!resource) {
@@ -67,12 +67,12 @@ try {
     let draft: { id: string; version: number } = await call("create", "创建就有初始工作意图。Graph 为普通值，fieldIntents 保存三态，initialSnapshot 固定初始基线。", [selector, initial], () => engine.create(selector, initial));
     assert.equal(draft.version, 0);
     assert.deepEqual((await engine.getDraft(draft.id)).graph, initial);
-    const editName = (text: string): GraphOp[] => [{ op: "set", nodeId: "project-1", path: "/name", value: text }];
+    const editName = (text: string): EditBatch => ({ patches: [{ op: "set", ref: "project-1", scope: "canonical", path: "/name", value: text }] });
     for (const name of ["临时名称 A", "临时名称 B"]) {
         const ops = editName(name);
         draft = await call("edit", "先连续修改名称，供下一步验证 reset 的固定基线。", [draft.id, draft.version, ops], () => engine.edit(draft.id, draft.version, ops)).then(receipt => ({ id: receipt.draftId, version: receipt.version }));
     }
-    const reset: GraphOp[] = [{ op: "reset", nodeId: "project-1", path: "/name" }];
+    const reset: EditBatch = { patches: [{ op: "reset", ref: "project-1", scope: "canonical", path: "/name" }] };
     draft = await call("edit", "reset 回到 create 时的“文档发布”，不会回到上一版的“临时名称 A”。", [draft.id, draft.version, reset], () => engine.edit(draft.id, draft.version, reset)).then(receipt => ({ id: receipt.draftId, version: receipt.version }));
     assert.equal((await engine.getDraft(draft.id)).graph.nodes["project-1"]!.fields.name, "文档发布");
     const pending = await call("preflight", "静态规则给出 3 条具体诊断；异步检查返回 pending，无发布凭据。", [draft.id], () => engine.preflight(draft.id));

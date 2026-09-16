@@ -1,6 +1,6 @@
 import type { Json } from "../registry/json.js";
 import type { DefinitionSelector } from "../registry/types.js";
-import type { GraphEdge, GraphChange } from "../graph/types.js";
+import type { GraphEdge } from "../graph/types.js";
 import type { Value, Step, ExecutionStep, Event, ApplyOutcome, ReconcileOutcome } from "../types.js";
 import type { GraphDiagnostic, GraphCheck } from "../preflight/types.js";
 export type Intent = {
@@ -39,12 +39,7 @@ export interface ManagedDraft extends IntentSnapshot, DefinitionSelector {
     updatedAt: string;
 }
 /** Edit acknowledgement, not a storage snapshot or publication certificate. */
-export interface ManagedEditResult {
-    draftId: string;
-    version: number;
-    preflightRequired: true;
-    changes: GraphChange[];
-}
+export type ManagedEditResult = import("../edit/results.js").EditReceipt;
 export interface ManagedCheck extends GraphCheck {
     /** Diagnostic-only until the update execution path is enabled. Never a certificate. */
     updatePreview?: { slots: readonly import("./update-plan.js").UpdateSlot[]; plan?: readonly Step[] };

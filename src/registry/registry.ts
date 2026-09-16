@@ -80,8 +80,8 @@ export class DefinitionRegistry {
         if (!name.trim()) invalid(path, "Relation type name must be nonempty");
         if (!isObject(relation)) { invalid(path, "Relation type must be an object"); continue; }
         keys(relation, ["from", "to", "ownership", "cardinality"], path);
-        if ("ownership" in relation && (typeof relation.ownership !== "string" || !["owned", "reference"].includes(relation.ownership))) invalid(`${path}/ownership`, "Expected owned or reference");
-        if ("cardinality" in relation && (typeof relation.cardinality !== "string" || !["one", "many"].includes(relation.cardinality))) invalid(`${path}/cardinality`, "Expected one or many");
+        if ((typeof relation.ownership !== "string" || !["owned", "reference"].includes(relation.ownership))) invalid(`${path}/ownership`, "Expected owned or reference");
+        if ((typeof relation.cardinality !== "string" || !["one", "many"].includes(relation.cardinality))) invalid(`${path}/cardinality`, "Expected one or many");
         for (const end of ["from", "to"]) {
           const names = relation[end];
           if (!Array.isArray(names) || !names.length) { invalid(`${path}/${end}`, "Expected a nonempty node type array"); continue; }

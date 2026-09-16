@@ -40,7 +40,7 @@ Draft 从创建时就带有实际工作意图，发布后仍保留自身身份�
 
 ---
 
-早期原型 v0.0.1 · Node.js 22.13+（`node:sqlite`）· 尚未发布 npm 包。三态 OP 双通道迁移正在进行，新增嵌套字段组件尚未接入公开引擎。[迁移账本](docs/tasks/three-state-op-migration.md) · [项目原则](docs/design/000-project-principles.md)。
+早期原型 v0.0.1 · Node.js 22.13+（`node:sqlite`）· 尚未发布 npm 包。公开 edit/preview 与候选修复已接入三态双通道协议及嵌套字段；create 仍接受初始图，roots/spec 初始化尚待迁移。[迁移账本](docs/tasks/three-state-op-migration.md) · [项目原则](docs/design/000-project-principles.md)。
 
 ## 快速开始
 
@@ -84,11 +84,21 @@ await engine.close();
 - 当前字段 reset 恢复固定初始意图，不是撤销上一次 edit；显式清空、null 与未声明不同。
 - 首次 publish 原子认领一个 Run，再次 publish 只观察，不重试；明确指定不同 Run ID 会被拒绝。独立创建另一组资源需要新 Draft。
 - 未完成工作使用 resume，不以进程崩溃为前提。当前修复只允许改未完成节点的字段，成功节点和拓扑受保护。
-- 当前 edit 只返回 `{draftId, version, preflightRequired: true, changes}`。完整存储快照用 getDraft，当前 preview 和诊断用 preflight；已有 Run 编辑后仍通过 resume 继续。
+- 当前 edit 只返回 `{draftId, version, preflightRequired: true, changes, createdRefs}`。完整存储快照用 getDraft，当前 preview 和诊断用 preflight；已有 Run 编辑后仍通过 resume 继续。
 - 节点成功立即保存 Binding；pending 可能已经有部分远端资源，全量成功才标 published。
 - 所有管理 API 都是异步。未注册执行器时预检只诊断；未注册后端时，存储和锁仅在进程内。
 
-预检响应使用 `formatVersion: 3`。preview 的字段键是节点内的 JSON Pointer（如 `fields["/profile/name"]`），展示重建后的对象值与子字段三态；数组仍为整值。旧检查需要重新预检。公开 create/edit 协议仍在迁移中。
+预检响应使用 `formatVersion: 3`。preview 的字段键是节点内的 JSON Pointer（如 `fields["/profile/name"]`），展示重建后的对象值与子字段三态；数组仍为整值。旧检查需要重新预检。公开 edit/preview 和候选修复使用 EditBatch；create 的 roots/spec 迁移仍未完成。
+
+编辑现有节点时，使用 Draft/preview 返回的 ref：
+
+```ts
+const updated = await engine.edit(draft.id, draft.version, {
+  patches: [{ op: "set", ref: nodeRef, scope: "canonical", path: "/profile/name", value: "选定的名称" }],
+});
+```
+
+拓扑放在 `graphPatches`，OP 同样只有 set/remove/reset。候选 `repairOps` 和 `repairs[].ops` 使用同一 EditBatch 结构。关系注册必填 ownership/cardinality；重复字段坐标整批拒绝并返回 message/hint。拓扑新增节点由服务端分配 ID，通过 createdRefs 返回；preview 的临时 ID 不能提交编辑。
 
 ## 恢复边界
 

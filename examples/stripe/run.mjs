@@ -87,7 +87,7 @@ try {
         throw new Error('Unexpected refusal: inspect trace and repair the original Draft; do not create a replacement');
       }
       report.refusedKey = run.steps.find(s => s.id === 'monthly').key;
-      const ops = [{ op: 'set', nodeId: 'monthly', path: '/currency', value: 'hkd' }];
+      const ops = { patches: [{ op: 'set', ref: 'monthly', scope: "canonical", path: '/currency', value: 'hkd' }] };
       await call('edit', [draft.id, draft.version, ops], () => engine.edit(draft.id, draft.version, ops));
     }
     await reopen();

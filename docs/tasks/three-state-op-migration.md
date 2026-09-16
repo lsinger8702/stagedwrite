@@ -2,7 +2,7 @@
 
 **唯一进度账本。2026-09-16 用户要求：先方案、任务拆分，再逐项完成并及时更新。方案见 [022](../design/022-three-state-op-migration.md)。**
 
-**已确认：所有编辑 OP 只允许 set/remove/reset；移除 node/edge 专用动作；双通道；新建携带内容/复制来源；固定基线 reset 与执行保护保留。运行时仍是旧协议，不能宣称已迁移。**
+**已确认：所有编辑 OP 只允许 set/remove/reset；移除 node/edge 专用动作；双通道；新建携带内容/复制来源；固定基线 reset 与执行保护保留。公开 edit/preview 与候选修复已切换双通道；create 仍待 roots/spec 迁移，不能宣称全项完成。**
 
 ## 记账规则
 
@@ -210,3 +210,21 @@
 - 验证：核心 132/132（含 TSC）；walkthrough 6/6；Stripe 离线 13/13；打包消费检查与 git diff --check 通过。Stripe 只改离线测试对 preview 字段键的读取，五个运行时样例模块及历史录制未改。
 - **M05 仍进行中。已完成受管 JSON 类型及读/预检链路；待完成公开 roots/createdRefs、prepareEdit 的事务接入、候选 repairOps 双通道、调用方身份迁移及旧编辑器删除。** ManagedInitialIntent 暂保留当前标量 create 输入约束，不表示新 roots 协议已经上线。
 - 本轮新增修改尚未提交/推送；私有评审目录未纳入。
+
+
+### M05 增量 — 公开 edit/preview 与候选修复切换
+
+- 上一批 JSON 预检接线已推送：919ae7a。
+- 唯一 createStagedWrite 的 edit/preview 现在只收 EditBatch（graphPatches / patches），直接调用 prepareEdit，并在原租约/事务内提交；旧数组入口运行时和类型层都拒绝，没有兼容分支或第二工厂。
+- edit 返回轻回执 + createdRefs，preview 返回显式 preview 标记及临时身份；成功节点/拓扑保护仍在提交前执行，unknown 原请求查证机制未改。
+- 移除旧 editIntent 函数及公开 GraphOp/GraphChange 导出。旧 GraphEditError/内部七动作求值器当前仅为旧 create 初始化保留，必须随下一项 roots/spec 迁移删除；不能标 M05/M07 完成。
+- 关系 ownership/cardinality 已在共享注册层及公开类型强制必填。现有定义逐项声明 owned/reference/many；不猜默认语义。
+- preflight 与执行诊断候选 repairOps、repairs[].ops 统一改成 EditBatch，使用同一注册求值器按固定基线纯预演；建议不自动执行、不授予 Run 修复权限。message-only 规则仍有效。
+- 迁移原有标量编辑/执行/恢复/预检用例与包消费者；旧图测试按批准语义重写，保留共享引用、失败原子性、身份隔离、墓碑/基线恢复、三态、版本等覆盖。旧“同坐标连续覆盖”用例改成整批拒绝 + message/hint，不能再以旧测试覆盖原则。
+- 新增公开嵌套闭环：create 初始工作 → edit 写入对象/数组 → preflight → 远端具体拒绝 → 取响应中的单坐标 repairOps → edit → resume 同一 Run；未改兄弟字段与数组，最终 published。
+- Stripe 三个运行时样例模块因接入新协议变更，已真实重跑 sandbox，并核对新公开录制后更新文件和 checksum：publish blocked → edit → resume unknown → resume published；1 Product、2 Prices、3 Bindings、同一 Run；unknown 查证阶段无 POST。没有通过改历史摘要冒充重跑。
+- 新文档与 walkthrough 正在同步；M06/M08 的调用方适配/重录属于本次接口切换的必要验证，最终总验收仍需等 create 迁移完成，未提前勾完成。
+- **下一项明确：公开 create roots/createdRefs、服务端初始节点 ID、调用方初始身份迁移，然后删除剩余旧初始化器。** 当前 create 仍使用已有初始 graph 参数，这一限制已写 README。
+- 本轮新增修改尚未提交/推送；私有评审目录未纳入。
+
+- 最终验证：核心 133/133（TSC 干净）；walkthrough 6/6；Stripe 离线 13/13（含新真实录制的源码摘要、字节和场景闸门）；隔离安装/TypeScript 包消费通过；git diff --check 通过。HTML/JSON/Markdown/ZIP 已由实际执行生成并复验。

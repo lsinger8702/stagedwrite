@@ -8,7 +8,7 @@ import { evaluateTopology, initializeTopology, type TopologySnapshot, type Topol
 import type { Relations, RelationDefinition } from "./topology.js";
 
 /** Bind once to the same immutable definition identity used by preflight and execution.
- * Internal until M05: no fallback ownership inference and no second public engine. */
+ * Shared by public editing and candidate diagnostics; no ownership inference. */
 export function registeredTopology(registry: DefinitionRegistry, selector: DefinitionSelector) {
   const { definition, digest } = registry.getDefinition(selector);
   const relations: Record<string, RelationDefinition> = {};

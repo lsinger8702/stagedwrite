@@ -50,7 +50,7 @@ export function createCatalogExecutor({ request, experiment, target, loseAnnualR
         const message = error.message || 'Stripe rejected the currency parameter';
         return { kind: 'not_applied', reason: message, code: 'STRIPE_CURRENCY_VALIDATION', message,
           diagnostics: [{ code: 'STRIPE_CURRENCY_VALIDATION', path: `/nodes/${step.id}/fields/currency`, message,
-            candidates: [{ value: 'hkd', label: 'HKD', repairOps: [{ op: 'set', nodeId: step.id, path: '/currency', value: 'hkd' }] }] }] };
+            candidates: [{ value: 'hkd', label: 'HKD', repairOps: { patches: [{ op: 'set', ref: step.id, scope: "canonical", path: '/currency', value: 'hkd' }] } }] }] };
       }
       return { kind: 'unknown', reason: `Unclassified Stripe response (${result.status})`,
         message: error?.message || 'Response does not establish a matching successful effect' };

@@ -75,7 +75,7 @@ for (const sqlite of [false, true]) {
                 try { assert.deepEqual(await other.storage.read(f.draft.id), before); } finally { await other.storage.close(); }
             }
             assert.deepEqual(await f.backend.storage.read(f.draft.id), before);
-            await assert.rejects(f.engine.edit(f.draft.id, 0, [{ op: "set", nodeId: "a", path: "/title", value: "B" }]), /DRAFT_BUSY/);
+            await assert.rejects(f.engine.edit(f.draft.id, 0, { patches: [{ op: "set", ref: "a", scope: "canonical", path: "/title", value: "B" }] }), /DRAFT_BUSY/);
         } finally { await f.cleanup(); }
     });
 }

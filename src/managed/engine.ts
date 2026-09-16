@@ -13,11 +13,12 @@ import { validatePlan } from "../execution/plan.js";
 import { publicationId } from "../execution/publication.js";
 import { performance } from "node:perf_hooks";
 import type { DefinitionSelector } from "../registry/types.js";
-import type { GraphOp } from "../graph/types.js";
+import type { EditBatch } from "../edit/protocol.js";
+import { prepareEdit } from "./prepare-edit.js";
 import type { Step, ApplyOutcome, ReconcileOutcome, Event } from "../types.js";
 import type { GraphDiagnostic } from "../preflight/types.js";
 import { createMemoryBackend, lockResource } from "./storage.js";
-import { initialize, editIntent, snapshot, same } from "./intent.js";
+import { initialize, snapshot, same } from "./intent.js";
 import type { ManagedOptions, ManagedEditResult, ManagedDraft, ManagedInitialIntent, ManagedState, ManagedRun, ManagedExecutor, ManagedCheck, Artifact, DraftLease, Attempt } from "./types.js";
 const key = (s: DefinitionSelector) => JSON.stringify([s.type, s.typeVersion]);
 const copy = <T>(v: T): T => structuredClone(v);
@@ -445,28 +446,28 @@ export function createStagedWrite(options: ManagedOptions) {
         async getBindings(id: string) { return copy((await need(id)).bindings); },
         async getArtifact(id: string, artifactId: string) { const artifacts = (await need(id)).artifacts; const a = Object.hasOwn(artifacts, artifactId) ? artifacts[artifactId] : undefined; if (!a)
             throw new Error("ARTIFACT_NOT_FOUND"); return copy(a); },
-        async preview(id: string, version: number, ops: readonly GraphOp[]) {
+        async preview(id: string, version: number, batch: EditBatch) {
             const s = await need(id);
             if (s.draft.status === "published") throw new Error("UPDATE_NOT_SUPPORTED");
             const baseline = baselineOf(s);
-            const out = editIntent(registry, s.draft, baseline, version, ops);
+            const out = prepareEdit(registry, s.draft, baseline, version, batch, { preview: true, now: new Date().toISOString() });
             protect(s, out.candidate);
-            return out;
+            return out.preview;
         },
-        async edit(id: string, version: number, ops: readonly GraphOp[]): Promise<ManagedEditResult> {
+        async edit(id: string, version: number, batch: EditBatch): Promise<ManagedEditResult> {
             return withLease(id, async (l) => {
-                let changes: ReturnType<typeof editIntent>["changes"] = [];
-                const s = await tx(id, l, current => {
+                let receipt: ManagedEditResult;
+                await tx(id, l, current => {
                     if (current.draft.status === "published")
                         throw new Error("UPDATE_NOT_SUPPORTED");
                     const baseline = baselineOf(current);
-                    const out = editIntent(registry, current.draft, baseline, version, ops);
+                    const out = prepareEdit(registry, current.draft, baseline, version, batch, { preview: false, now: new Date().toISOString() });
                     protect(current, out.candidate);
-                    changes = out.changes;
+                    receipt = out.receipt;
                     current.draft = out.candidate;
                     current.check = null;
                 });
-                return { draftId: s.draft.id, version: s.draft.version, preflightRequired: true, changes: copy(changes) };
+                return copy(receipt!);
             });
         },
         async preflight(id: string) { open(); active++; try {

@@ -16,9 +16,9 @@ test("preflight: candidate reset validation uses the fixed baseline in both rule
     const engine = createStagedWrite({ definitions: [definition] });
     try {
         const created = await engine.create(selector, { nodes: { a: { id: "a", nodeType: "item", fields: { name: "original", note: null } } }, edges: {} });
-        await engine.edit(created.id, 0, [{ op: "set", nodeId: "a", path: "/name", value: "edited" }, { op: "remove", nodeId: "a", path: "/note" }]);
+        await engine.edit(created.id, 0, { patches: [{ op: "set", ref: "a", scope: "canonical" as const, path: "/name", value: "edited" }, { op: "remove", ref: "a", scope: "canonical" as const, path: "/note" }] });
         const draft = await engine.getDraft(created.id);
-        const ops = [{ op: "reset" as const, nodeId: "a", path: "/name" }, { op: "reset" as const, nodeId: "a", path: "/note" }];
+        const ops = { patches: [{ op: "reset" as const, ref: "a", scope: "canonical" as const, path: "/name" }, { op: "reset" as const, ref: "a", scope: "canonical" as const, path: "/note" }] };
         const expected = (await engine.preview(draft.id, draft.version, ops)).candidate.graph.nodes.a!.fields;
         const diagnostic: GraphDiagnostic = { code: "example.restore", path: "/nodes/a", message: "Consider restoring the original intent.", repairs: [{ message: "Restore initial values.", ops }] };
         const registry = new DefinitionRegistry([definition]);
@@ -27,11 +27,13 @@ test("preflight: candidate reset validation uses the fixed baseline in both rule
         registry.validateValues = (...args) => { observed.push(structuredClone(args[2])); return validate(...args); };
         const sync = new GraphPreflight(registry, [{ ...selector, id: "sync", version: "1", check: () => [diagnostic] }]);
         const result = sync.run(draft, draft.initialSnapshot);
+        assert.deepEqual(observed.at(-1), expected);
+        observed.length = 0;
         const asyncCheck = new AsyncPreflight(registry, [], [{ ...selector, id: "async", version: "1", check: async () => ({ status: "complete", diagnostics: [diagnostic] }) }], 5000);
         await asyncCheck.run(draft, result, performance.now() + 5000, draft.initialSnapshot);
         assert.equal(result.status, "blocked");
         assert.equal(result.diagnostics.length, 2);
-        assert.deepEqual(observed, [expected, expected]);
+        assert.deepEqual(observed.at(-1), expected);
         assert.deepEqual(expected, { name: "original", note: null });
         assert.deepEqual(await engine.getDraft(draft.id), draft);
     } finally { await engine.close(); }

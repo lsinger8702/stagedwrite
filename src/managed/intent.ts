@@ -69,15 +69,3 @@ export function initialize(registry: DefinitionRegistry, draft: ManagedDraft, in
     const out = evaluateGraphEdit(registry, toInternal(draft), 0, ops).candidate;
     return { ...draft, ...fromInternal(out), initialSnapshot: fromInternal(out) };
 }
-export function editIntent(registry: DefinitionRegistry, draft: ManagedDraft, baseline: IntentSnapshot, version: number, ops: readonly GraphOp[]) {
-    // A fixed baseline for the entire batch. Reset never means "undo the previous OP".
-    const restored = ops.map(op => {
-        if (op.op !== "reset")
-            return op;
-        const intent = baseline.fieldIntents[op.nodeId]?.[op.path];
-        return intent?.kind === "set" ? { op: "set" as const, nodeId: op.nodeId, path: op.path, value: scalar(intent.value) }
-            : intent?.kind === "remove" ? { op: "remove" as const, nodeId: op.nodeId, path: op.path } : op;
-    });
-    const { candidate, changes } = evaluateGraphEdit(registry, toInternal(draft), version, restored);
-    return { candidate: { ...draft, ...fromInternal(candidate), version: candidate.version, tombstones: candidate.tombstones, status: "pending" as const, updatedAt: new Date().toISOString() }, changes };
-}

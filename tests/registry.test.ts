@@ -22,7 +22,7 @@ function definition(version = "1") {
                 requiredAtPublish: ["name", "capacity"]
             }
         },
-        relationTypes: { related: { from: ["project"], to: ["project"] } }
+        relationTypes: { related: { from: ["project"], to: ["project"], ownership: "reference" as const, cardinality: "many" as const } }
     };
 }
 const selector = { type: "example.project", typeVersion: "1" };

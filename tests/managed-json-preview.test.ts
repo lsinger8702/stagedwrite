@@ -73,3 +73,32 @@ for (const sqlite of [false, true]) test(`${sqlite ? "sqlite" : "memory"}: manag
         assert.deepEqual((await engine.getDraft(draft.id)).graph.nodes[ref]!.fields.items, ["one", "two"]);
     } finally { await engine.close(); rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("public nested edit: targeted remote repair updates one coordinate and resumes the same Run", async () => {
+    const requests: unknown[] = [];
+    const engine = createStagedWrite({ definitions: [definition], executors: [{ ...selector, id: "nested-repair", version: "1", target: "mock:repair",
+        plan: d => [{ id: "task", payload: { body: JSON.stringify(d.graph.nodes.task!.fields) }, effect: { kind: "create", nodeId: "task" } }],
+        apply: async step => {
+            const body = JSON.parse(String(step.payload.body)); requests.push(body);
+            return body.profile.name === "reserved" ? { kind: "not_applied", reason: "Reserved name", diagnostics: [{
+                code: "name.reserved", path: "/nodes/task/fields/profile/name", message: "Choose another profile name.",
+                candidates: [{ value: "fixed", repairOps: { patches: [{ op: "set", ref: "task", scope: "canonical", path: "/profile/name", value: "fixed" }] } }]
+            }] } : { kind: "applied", remoteRef: "created-task" };
+        }, reconcile: { unsupported: "This adapter provides definitive rejection in the test" }
+    }] });
+    try {
+        const draft = await engine.create(selector, { nodes: { task: { id: "task", nodeType: "task", fields: {} } }, edges: {} });
+        await engine.edit(draft.id, 0, { patches: [{ op: "set", ref: "task", scope: "canonical", path: "/profile", value: { name: "reserved", note: "keep" } }, { op: "set", ref: "task", scope: "canonical", path: "/items", value: ["one"] }] });
+        const check = await engine.preflight(draft.id), first = await engine.publish(draft.id, check.certificate!);
+        assert.equal(first.state, "blocked");
+        const repair = first.diagnostics[0]!.candidates![0]!.repairOps!;
+        assert.equal(repair.patches![0]!.path, "/profile/name");
+        await engine.edit(draft.id, first.preview.version, repair);
+        const resumed = await engine.resume(first.id);
+        assert.equal(resumed.id, first.id); assert.equal(resumed.state, "published");
+        assert.deepEqual(requests, [{ profile: { name: "reserved", note: "keep" }, items: ["one"] }, { profile: { name: "fixed", note: "keep" }, items: ["one"] }]);
+        assert.equal(resumed.attempts.length, 2);
+        assert.deepEqual(resumed.preview.nodes.task!.fields["/profile/note"], { kind: "value", value: "keep" });
+        await assert.rejects(engine.edit(draft.id, 2, repair), /UPDATE_NOT_SUPPORTED/);
+    } finally { await engine.close(); }
+});
