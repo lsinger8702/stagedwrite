@@ -62,17 +62,22 @@ export function validateTopology(graph: TopologyGraph, relations: Relations, inp
 
 /** Compute the deletion set only. No graph or intent mutation happens here. */
 export function removableOwnedClosure(graph: TopologyGraph, relations: Relations, ref: string, inputPath: string): Set<string> {
+  return removableOwnedClosures(graph, relations, [ref], inputPath);
+}
+
+/** A slot replacement can remove multiple siblings together; references within that union are not external. */
+export function removableOwnedClosures(graph: TopologyGraph, relations: Relations, refs: readonly string[], inputPath: string): Set<string> {
   validateTopology(graph, relations, inputPath);
-  if (!Object.hasOwn(graph.nodes, ref)) throw new EditInputError([issue(inputPath, `Node ${ref} does not exist.`, "Use a node ref from the current persisted Draft.")]);
+  for (const ref of refs) if (!Object.hasOwn(graph.nodes, ref)) throw new EditInputError([issue(inputPath, `Node ${ref} does not exist.`, "Use a node ref from the current persisted Draft.")]);
   const children = new Map<string, string[]>();
   for (const edge of Object.values(graph.edges)) if (relations[edge.relationType]!.ownership === "owned") {
     const group = children.get(edge.from) ?? []; group.push(edge.to); children.set(edge.from, group);
   }
-  const removed = new Set<string>(), pending = [ref];
+  const removed = new Set<string>(), pending = [...refs];
   while (pending.length) { const id = pending.pop()!; if (removed.has(id)) continue; removed.add(id); pending.push(...(children.get(id) ?? [])); }
   const inbound = Object.values(graph.edges).filter(e => !removed.has(e.from) && removed.has(e.to) && relations[e.relationType]!.ownership === "reference");
   if (inbound.length) throw new EditInputError(inbound.map(e => issue(inputPath,
-    `Cannot remove ${ref}: surviving node ${e.from} references ${e.to} through ${e.relationType}.`,
+    `Cannot remove ${refs.join(", ")}: surviving node ${e.from} references ${e.to} through ${e.relationType}.`,
     `Clear the ${e.relationType} slot on ${e.from} before deleting the owned subtree. No referencing node is deleted automatically.`)));
   return removed;
 }
