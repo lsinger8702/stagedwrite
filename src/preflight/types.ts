@@ -1,6 +1,6 @@
 import type { Json } from "../registry/json.js";
 import type { GraphDraft, GraphNode, GraphOp } from "../graph/types.js";
-import type { Diagnostic, Field } from "../types.js";
+import type { Diagnostic } from "../types.js";
 
 /** Paths are JSON Pointers from the graph root, including related locations. */
 export interface GraphCandidate {
@@ -39,13 +39,13 @@ export interface SourcedGraphDiagnostic extends GraphDiagnostic {
   source: { kind: "builtin"; version: string } | { kind: "rule" | "executor"; id: string; version: string };
 }
 /** Preview-only state: reset/absent fields become explicit undeclared entries. */
-export type PreviewField = Field | { kind: "undeclared" };
+export type PreviewField = { kind: "value"; value: Json } | { kind: "clear" } | { kind: "undeclared" };
 export interface GraphDraftPreview extends Omit<GraphDraft, "nodes"> {
   nodes: Record<string, Omit<GraphNode, "fields"> & { fields: Record<string, PreviewField> }>;
 }
 export interface GraphCheck {
   /** Response contract version, separate from execution rule identity. */
-  formatVersion: 2;
+  formatVersion: 3;
   scope: "draft" | "execution";
   certificate?: string;
   execution?: import("../types.js").ExecutionBinding;

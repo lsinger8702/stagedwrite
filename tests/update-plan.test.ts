@@ -7,7 +7,7 @@ const value = (v: string | number | boolean | null): NormalizedValue => ({ kind:
 async function setup(B = value("A"), D = value("B"), O = value("A")) {
     const definition = defineDraftType({ id: "plan.tasks", version: "1", nodeTypes: { task: { valueSchema: { type: "object", properties: { title: { type: ["string", "null"] }, note: { type: "string" } }, additionalProperties: false } } }, relationTypes: {} });
     const selector = { type: definition.id, typeVersion: "1" }, backend = createMemoryBackend();
-    const e = createStagedWrite({ definitions: [definition], ...backend, executors: [{ ...selector, id: "tasks", version: "1", target: "test", plan: d => Object.values(d.graph.nodes).map(n => ({ id: n.id, payload: n.fields, effect: { kind: "create", nodeId: n.id } })), apply: async () => ({ kind: "applied", remoteRef: "remote-a" }), reconcile: { unsupported: "no evidence" } }] });
+    const e = createStagedWrite({ definitions: [definition], ...backend, executors: [{ ...selector, id: "tasks", version: "1", target: "test", plan: d => Object.values(d.graph.nodes).map(n => ({ id: n.id, payload: n.fields as Record<string, import("../src/index.js").Value>, effect: { kind: "create", nodeId: n.id } })), apply: async () => ({ kind: "applied", remoteRef: "remote-a" }), reconcile: { unsupported: "no evidence" } }] });
     const draft = await e.create(selector, { nodes: { "a/b": { id: "a/b", nodeType: "task", fields: { title: "A" } } }, edges: {} });
     const check = await e.preflight(draft.id), run = await e.publish(draft.id, check.certificate!);
     const s = (await backend.storage.read(draft.id))!; await e.close();

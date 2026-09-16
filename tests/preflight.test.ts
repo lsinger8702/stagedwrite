@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createStagedWrite, defineDraftType, type ManagedRule, type GraphDiagnostic, type ManagedOptions } from "../src/index.js";
+import { createStagedWrite, createMemoryBackend, defineDraftType, type ManagedRule, type GraphDiagnostic, type ManagedOptions } from "../src/index.js";
 const definition = defineDraftType({ id: "example.check", version: "1", nodeTypes: { project: { valueSchema: { type: "object", properties: { capacity: { type: "number", minimum: 0 }, note: { type: ["string", "null"] } }, additionalProperties: false }, requiredAtPublish: ["capacity", "note"] } }, relationTypes: {} });
 const selector = { type: definition.id, typeVersion: definition.version };
 const rule = (check: ManagedRule["check"], version = "1"): ManagedRule => ({ ...selector, id: "capacity-policy", version, check });
@@ -11,7 +11,7 @@ test("preflight: missing fields and explicit clearing are diagnosed; reset resto
     const { engine, draft } = await setup(), missing = await engine.create(selector, initial({})), check = await engine.preflight(missing.id);
     assert.equal(check.status, "blocked");
     assert.deepEqual(check.diagnostics.map(d => d.path), ["/nodes/c~11/fields/capacity", "/nodes/c~11/fields/note"]);
-    assert.deepEqual(check.preview.nodes["c/1"]!.fields, { capacity: { kind: "undeclared" }, note: { kind: "undeclared" } });
+    assert.deepEqual(check.preview.nodes["c/1"]!.fields, { "/capacity": { kind: "undeclared" }, "/note": { kind: "undeclared" } });
     assert.equal((await engine.preflight(draft.id)).status, "passed");
     await engine.edit(draft.id, 0, [{ op: "remove", nodeId: "c/1", path: "/note" }]);
     assert.equal((await engine.preflight(draft.id)).status, "blocked");
@@ -77,7 +77,7 @@ test("preflight: frozen inputs and detached outputs cannot corrupt subsequent ru
     assert.equal(observed, 20);
     assert.equal(check.status, "incomplete");
     check.diagnostics.length = 0;
-    check.preview.nodes["c/1"]!.fields.capacity = { kind: "value", value: 999 };
+    check.preview.nodes["c/1"]!.fields["/capacity"] = { kind: "value", value: 999 };
     assert.equal((await engine.getCheck(draft.id)).diagnostics.length, 2);
     assert.deepEqual(await engine.getDraft(draft.id), draft);
     await engine.close();
@@ -122,5 +122,31 @@ test("preflight: synchronous and asynchronous callbacks receive detached managed
         }
         assert.equal(calls, 4);
         assert.deepEqual(await engine.getDraft(draft.id), draft);
+    } finally { await engine.close(); }
+});
+
+
+test("preflight: an older preview contract must be checked again before first publication", async () => {
+    const backend = createMemoryBackend();
+    const engine = createStagedWrite({ definitions: [definition], ...backend, executors: [{ ...selector,
+        id: "contract", version: "1", target: "mock", plan: () => [{ id: "create", payload: {}, effect: { kind: "create", nodeId: "c/1" } }],
+        apply: async () => ({ kind: "applied", remoteRef: "created" }), reconcile: { unsupported: "test" }
+    }] });
+    try {
+        const draft = await engine.create(selector, initial()), check = await engine.preflight(draft.id);
+        const { lockResource } = await import("../src/managed/storage.js");
+        const lease = await backend.locks.acquire(lockResource(backend.storage.namespace, draft.id), { ttlMs: 30000 });
+        assert.ok(lease);
+        try { await backend.storage.transact(draft.id, lease, state => {
+            assert.ok(state?.check);
+            // Simulate a persisted pre-migration check, not a supported new response.
+            Object.assign(state.check, { formatVersion: 2 }); return state;
+        }); } finally { await lease.release(); }
+        await assert.rejects(engine.getCheck(draft.id), /CHECK_NOT_CURRENT/);
+        await assert.rejects(engine.publish(draft.id, check.certificate!), /PREFLIGHT_REQUIRED/);
+        assert.equal((await engine.getDraft(draft.id)).currentRunId, null);
+        const refreshed = await engine.preflight(draft.id);
+        assert.equal(refreshed.formatVersion, 3);
+        assert.equal((await engine.publish(draft.id, refreshed.certificate!)).state, "published");
     } finally { await engine.close(); }
 });

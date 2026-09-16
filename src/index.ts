@@ -1,3 +1,4 @@
+export type { Json } from "./registry/json.js";
 export { createStagedWrite } from "./managed/engine.js";
 export { createMemoryBackend, createSqliteBackend } from "./managed/storage.js";
 export type * from "./managed/types.js";

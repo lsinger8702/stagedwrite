@@ -34,14 +34,14 @@ export function projectDeclarations(intents: Record<string, FieldDeclaration>): 
   }
   return fields;
 }
-function stateAt(intents: Record<string, FieldDeclaration>, path: string): EditFieldState {
+function stateAt(intents: Record<string, FieldDeclaration>, path: string, projected?: Record<string, Json>): EditFieldState {
   const parts = decodeEditPath(path)!;
   for (let n = 1; n <= parts.length; n++) {
     if (intents[encoded(parts.slice(0, n))]?.kind === "remove") return { kind: "remove" };
   }
   const intent = intents[path];
   if (!intent) return { kind: "undeclared" };
-  let value: Json = projectDeclarations(intents);
+  let value: Json = projected ?? projectDeclarations(intents);
   for (const part of parts) value = (value as Record<string, Json>)[part]!;
   return { kind: "set", value: structuredClone(value) };
 }
@@ -116,8 +116,9 @@ export function previewFields(registry: DefinitionRegistry, selector: Definition
     const schema = registry.getValueSchema(selector, node.nodeType);
     const intents = snapshot.fieldIntents[ref] ?? {};
     const fields: Record<string, EditFieldState> = {};
+    const projected = projectDeclarations(intents);
     const visit = (current: Record<string, Json>, parts: string[]) => {
-      if (parts.length) fields[encoded(parts)] = stateAt(intents, encoded(parts));
+      if (parts.length) fields[encoded(parts)] = stateAt(intents, encoded(parts), projected);
       if (isObject(current.properties)) for (const [key, child] of Object.entries(current.properties)) visit(child as Record<string, Json>, [...parts, key]);
     };
     visit(schema, []); nodes[ref] = fields;

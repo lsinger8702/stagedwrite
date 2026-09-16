@@ -72,8 +72,8 @@ export class GraphPreflight {
           severity: "error", hint: "The rule implementation must be corrected before preflight can complete.", source });
       }
     }
-    return { formatVersion: 2, scope: "draft", checkId: randomUUID(), draftId: draft.id, version: draft.version, definitionDigest: draft.definitionDigest,
-      rulesDigest: this.rulesDigest(draft), preview: previewDraft(draft, definition),
+    return { formatVersion: 3, scope: "draft", checkId: randomUUID(), draftId: draft.id, version: draft.version, definitionDigest: draft.definitionDigest,
+      rulesDigest: this.rulesDigest(draft), preview: previewDraft(draft, this.registry),
       status: incomplete ? "incomplete" : diagnostics.some(d => d.severity === "error") ? "blocked" : "passed", diagnostics };
   }
 }

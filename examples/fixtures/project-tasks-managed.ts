@@ -16,7 +16,11 @@ export const definition = defineDraftType({ id: "example.project-tasks", version
                 }, additionalProperties: false }, requiredAtPublish: ["name", "estimateHours", "dueDay", "priority"] }
     }, relationTypes: { contains: { from: ["project"], to: ["task"] } } });
 export const selector = { type: definition.id, typeVersion: definition.version };
-export const value = (node: ManagedDraft["graph"]["nodes"][string], field: string): Value => node.fields[field] ?? null;
+export const value = (node: ManagedDraft["graph"]["nodes"][string], field: string): Value => {
+  const v = node.fields[field] ?? null;
+  if (v !== null && typeof v === "object") throw new Error(`Expected scalar field ${field}`);
+  return v;
+};
 const at = (id: string, field: string) => `/nodes/${id.replaceAll("~", "~0").replaceAll("/", "~1")}/fields/${field}`;
 const tasksFor = (draft: ManagedDraft, project: ManagedDraft["graph"]["nodes"][string]) => Object.values(draft.graph.edges)
     .filter(edge => edge.relationType === "contains" && edge.from === project.id).map(edge => draft.graph.nodes[edge.to]!);

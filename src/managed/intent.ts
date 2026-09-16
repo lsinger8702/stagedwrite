@@ -2,9 +2,15 @@ import { DefinitionRegistry } from "../registry/registry.js";
 import { definitionDigest, type Json, pointer } from "../registry/json.js";
 import { evaluateGraphEdit } from "../graph/edit.js";
 import type { GraphDraft, GraphOp } from "../graph/types.js";
+import type { Value } from "../types.js";
 import type { ManagedDraft, IntentSnapshot, ManagedInitialIntent } from "./types.js";
 export const same = (a: unknown, b: unknown) => definitionDigest(a as Json) === definitionDigest(b as Json);
 export const snapshot = (d: IntentSnapshot): IntentSnapshot => structuredClone({ graph: d.graph, fieldIntents: d.fieldIntents });
+// This temporary bridge belongs only to the old edit protocol, never storage reads or preflight.
+function scalar(value: Json): Value {
+    if (value !== null && typeof value === "object") throw new Error("EDIT_PROTOCOL_MIGRATION_REQUIRED");
+    return value;
+}
 export function toInternal(d: ManagedDraft): GraphDraft {
     const nodes: GraphDraft["nodes"] = {};
     for (const [id, node] of Object.entries(d.graph.nodes)) {
@@ -14,7 +20,7 @@ export function toInternal(d: ManagedDraft): GraphDraft {
                 throw new Error("INTENT_PROJECTION_MISMATCH");
             const key = path.slice(1).replaceAll("~1", "/").replaceAll("~0", "~");
             if (intent.kind === "set")
-                fields[key] = { kind: "value", value: intent.value };
+                fields[key] = { kind: "value", value: scalar(intent.value) };
             else if (intent.kind === "remove")
                 fields[key] = { kind: "clear" };
             else
@@ -69,7 +75,7 @@ export function editIntent(registry: DefinitionRegistry, draft: ManagedDraft, ba
         if (op.op !== "reset")
             return op;
         const intent = baseline.fieldIntents[op.nodeId]?.[op.path];
-        return intent?.kind === "set" ? { op: "set" as const, nodeId: op.nodeId, path: op.path, value: intent.value }
+        return intent?.kind === "set" ? { op: "set" as const, nodeId: op.nodeId, path: op.path, value: scalar(intent.value) }
             : intent?.kind === "remove" ? { op: "remove" as const, nodeId: op.nodeId, path: op.path } : op;
     });
     const { candidate, changes } = evaluateGraphEdit(registry, toInternal(draft), version, restored);

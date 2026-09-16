@@ -140,6 +140,8 @@ See the [complete registered schema and rules](examples/fixtures/project-tasks-m
 - Bindings are saved as individual nodes succeed. `pending` may already have remote resources; only full success marks the Draft `published`.
 - All managed APIs are asynchronous. Without executors, preflight is diagnostic-only. Without a registered backend, storage and locking are in-process memory only.
 
+Preflight responses use `formatVersion: 3`. Preview fields are keyed by node-relative JSON Pointers (`fields["/profile/name"]`), with reconstructed object values and explicit child states. Arrays remain whole values. Older saved checks require a fresh preflight. The public create/edit protocol migration is still in progress.
+
 ## Recovery boundary
 
 **Continue unfinished work with `resume(run.id)`. Repeating `publish` only observes the existing Run; it does not retry it.** Inspect `getRun(run.id)` for the current preview, diagnostics and recorded attempts.

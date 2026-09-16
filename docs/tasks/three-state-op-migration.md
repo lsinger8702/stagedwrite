@@ -197,3 +197,16 @@
 - 核心 npm test 129/129（含 TSC）。M05 公开协议切换仍未完成；未把这次 review 修复记为迁移完成。
 - 物化 Graph 与读取时派生的取舍已记 Roadmap R2，待公开协议/读路径收敛后讨论；当前保持批准模型。本轮新增改动尚未推送。
 - 补充验证：walkthrough 5/5、Stripe 离线 13/13、打包消费测试及 git diff --check 均通过；生成产物和 Stripe 历史证据保持原字节。
+
+### M05 增量 — 受管 JSON 类型与预检投影贯通
+
+- 存储 review 修复已按要求推送：fe52854。
+- ManagedDraft 的普通字段和 set 声明值改为 Json，公开导出 Json 类型；Step.payload 和 NormalizedValue 不随之放宽，适配器仍负责映射。样例的标量读取器显式校验类型，测试中的标量 schema 在 planner 处收窄类型。
+- 存储读取/getDraft 不再经过旧标量 toInternal，改用注册 Schema/声明投影校验。旧桥仅暂存于尚未切换的编辑路径；不添加另一工厂或兼容 API。
+- preflight / publish / getRun 的 preview 共用嵌套字段投影：fields 键是 canonical JSON Pointer，含解析后 $ref 的对象子路径、继承 clear、未声明、显式 null、数组整值。对象父值从声明重建，不是内部 set {} 标识。每个节点只重建一次投影供所有路径读取。
+- 检查响应升级 formatVersion=3；旧格式 getCheck/首次 publish 拒绝，须重新预检。已采用 Run 的执行身份与原凭据不被响应格式更改覆盖。
+- 内存/SQLite 集成测试以新求值器生成的 JSON 意图，通过实际存储契约落库，验证 getDraft → preflight → Mock publish → getRun 和 SQLite 重开。**测试没有伪称公开 create/edit 已迁移：本轮嵌套初始数据由测试通过存储写入。**
+- 更新中英文 README、004 预检设计、样例读取方和 HTML renderer；重新执行生成 JSON/Markdown/HTML/离线 ZIP。新增页面运行检查，覆盖字段标题、嵌套对象值及转义节点的诊断定位。
+- 验证：核心 132/132（含 TSC）；walkthrough 6/6；Stripe 离线 13/13；打包消费检查与 git diff --check 通过。Stripe 只改离线测试对 preview 字段键的读取，五个运行时样例模块及历史录制未改。
+- **M05 仍进行中。已完成受管 JSON 类型及读/预检链路；待完成公开 roots/createdRefs、prepareEdit 的事务接入、候选 repairOps 双通道、调用方身份迁移及旧编辑器删除。** ManagedInitialIntent 暂保留当前标量 create 输入约束，不表示新 roots 协议已经上线。
+- 本轮新增修改尚未提交/推送；私有评审目录未纳入。

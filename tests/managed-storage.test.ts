@@ -10,7 +10,7 @@ import { lockResource } from "../src/managed/storage.js";
 
 const definition = defineDraftType({ id: "storage.tasks", version: "1", nodeTypes: { task: { valueSchema: { type: "object", properties: { title: { type: "string" } }, additionalProperties: false } } }, relationTypes: {} });
 const selector = { type: definition.id, typeVersion: "1" };
-const executor: ManagedExecutor = { ...selector, id: "storage.executor", version: "1", target: "test", plan: d => Object.values(d.graph.nodes).map(n => ({ id: n.id, payload: n.fields, effect: { kind: "create", nodeId: n.id } })), apply: async s => ({ kind: "applied", remoteRef: `remote:${s.id}`, confirmed: { projectionDigest: "title-v1", values: { title: { kind: "value", value: "A" } } } }), reconcile: { unsupported: "test" } };
+const executor: ManagedExecutor = { ...selector, id: "storage.executor", version: "1", target: "test", plan: d => Object.values(d.graph.nodes).map(n => ({ id: n.id, payload: n.fields as Record<string, import("../src/index.js").Value>, effect: { kind: "create", nodeId: n.id } })), apply: async s => ({ kind: "applied", remoteRef: `remote:${s.id}`, confirmed: { projectionDigest: "title-v1", values: { title: { kind: "value", value: "A" } } } }), reconcile: { unsupported: "test" } };
 async function fixture(sqlite: boolean) {
     const dir = mkdtempSync(join(tmpdir(), "sw-model-")), path = join(dir, "state.sqlite");
     const backend = sqlite ? createSqliteBackend(path) : createMemoryBackend();

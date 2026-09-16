@@ -1,10 +1,11 @@
+import type { Json } from "../registry/json.js";
 import type { DefinitionSelector } from "../registry/types.js";
 import type { GraphEdge, GraphChange } from "../graph/types.js";
 import type { Value, Step, ExecutionStep, Event, ApplyOutcome, ReconcileOutcome } from "../types.js";
 import type { GraphDiagnostic, GraphCheck } from "../preflight/types.js";
 export type Intent = {
     kind: "set";
-    value: Value;
+    value: Json;
 } | {
     kind: "remove";
 };
@@ -13,7 +14,7 @@ export interface IntentSnapshot {
         nodes: Record<string, {
             id: string;
             nodeType: string;
-            fields: Record<string, Value>;
+            fields: Record<string, Json>;
         }>;
         edges: Record<string, GraphEdge>;
     };
@@ -226,4 +227,8 @@ export interface ManagedOptions {
     leaseTtlMs?: number;
     preflightTimeoutMs?: number;
 }
-export type ManagedInitialIntent = IntentSnapshot["graph"];
+/** Temporary scalar create input; roots/spec migration is tracked in M05. */
+export interface ManagedInitialIntent {
+    nodes: Record<string, { id: string; nodeType: string; fields: Record<string, Value> }>;
+    edges: Record<string, GraphEdge>;
+}

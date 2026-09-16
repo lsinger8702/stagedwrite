@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-09-16T09:13:20.517Z",
+  "recordedAt": "2026-09-16T11:18:59.277Z",
   "runtime": "v24.19.0",
   "environment": "Real library + temporary SQLite; simulated remote; no HTTP or LLM calls.",
   "registration": {
@@ -321,7 +321,7 @@
           }
         },
         "formatVersion": 3,
-        "id": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+        "id": "ace27800-08e5-493f-860c-727cbc07dc35",
         "version": 0,
         "type": "example.project-tasks",
         "typeVersion": "2",
@@ -446,8 +446,8 @@
           "nodes": [],
           "edges": []
         },
-        "createdAt": "2026-09-16T09:13:20.494Z",
-        "updatedAt": "2026-09-16T09:13:20.494Z"
+        "createdAt": "2026-09-16T11:18:59.242Z",
+        "updatedAt": "2026-09-16T11:18:59.242Z"
       },
       "remoteCalls": [],
       "checkCalls": [],
@@ -457,7 +457,7 @@
       "method": "edit",
       "note": "先连续修改名称，供下一步验证 reset 的固定基线。",
       "input": [
-        "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+        "ace27800-08e5-493f-860c-727cbc07dc35",
         0,
         [
           {
@@ -469,7 +469,7 @@
         ]
       ],
       "output": {
-        "draftId": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
         "version": 1,
         "preflightRequired": true,
         "changes": [
@@ -497,7 +497,7 @@
       "method": "edit",
       "note": "先连续修改名称，供下一步验证 reset 的固定基线。",
       "input": [
-        "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+        "ace27800-08e5-493f-860c-727cbc07dc35",
         1,
         [
           {
@@ -509,7 +509,7 @@
         ]
       ],
       "output": {
-        "draftId": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
         "version": 2,
         "preflightRequired": true,
         "changes": [
@@ -537,7 +537,7 @@
       "method": "edit",
       "note": "reset 回到 create 时的“文档发布”，不会回到上一版的“临时名称 A”。",
       "input": [
-        "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+        "ace27800-08e5-493f-860c-727cbc07dc35",
         2,
         [
           {
@@ -548,7 +548,7 @@
         ]
       ],
       "output": {
-        "draftId": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
         "version": 3,
         "preflightRequired": true,
         "changes": [
@@ -576,18 +576,18 @@
       "method": "preflight",
       "note": "静态规则给出 3 条具体诊断；异步检查返回 pending，无发布凭据。",
       "input": [
-        "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89"
+        "ace27800-08e5-493f-860c-727cbc07dc35"
       ],
       "output": {
-        "formatVersion": 2,
+        "formatVersion": 3,
         "scope": "execution",
-        "checkId": "5f2bc1ae-3e5f-445e-9c12-501f325ebc03",
-        "draftId": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+        "checkId": "ad77bd52-52bd-45ab-b0e2-4d3ecffaac7b",
+        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
         "version": 3,
         "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
         "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
         "preview": {
-          "id": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+          "id": "ace27800-08e5-493f-860c-727cbc07dc35",
           "version": 3,
           "type": "example.project-tasks",
           "typeVersion": "2",
@@ -597,17 +597,17 @@
               "id": "project-1",
               "nodeType": "project",
               "fields": {
-                "name": {
-                  "kind": "value",
-                  "value": "文档发布"
-                },
-                "capacityHours": {
+                "/capacityHours": {
                   "kind": "value",
                   "value": 16
                 },
-                "deadlineDay": {
+                "/deadlineDay": {
                   "kind": "value",
                   "value": 20
+                },
+                "/name": {
+                  "kind": "value",
+                  "value": "文档发布"
                 }
               }
             },
@@ -615,25 +615,25 @@
               "id": "task-1",
               "nodeType": "task",
               "fields": {
-                "name": {
-                  "kind": "value",
-                  "value": "编写快速入门"
-                },
-                "estimateHours": {
-                  "kind": "value",
-                  "value": 12
-                },
-                "dueDay": {
+                "/dueDay": {
                   "kind": "value",
                   "value": 22
                 },
-                "priority": {
+                "/estimateHours": {
                   "kind": "value",
-                  "value": "urgent"
+                  "value": 12
                 },
-                "owner": {
+                "/name": {
+                  "kind": "value",
+                  "value": "编写快速入门"
+                },
+                "/owner": {
                   "kind": "value",
                   "value": null
+                },
+                "/priority": {
+                  "kind": "value",
+                  "value": "urgent"
                 }
               }
             },
@@ -641,25 +641,25 @@
               "id": "task-2",
               "nodeType": "task",
               "fields": {
-                "name": {
-                  "kind": "value",
-                  "value": "评审使用示例"
-                },
-                "estimateHours": {
-                  "kind": "value",
-                  "value": 10
-                },
-                "dueDay": {
+                "/dueDay": {
                   "kind": "value",
                   "value": 18
                 },
-                "priority": {
+                "/estimateHours": {
                   "kind": "value",
-                  "value": "normal"
+                  "value": 10
                 },
-                "owner": {
+                "/name": {
+                  "kind": "value",
+                  "value": "评审使用示例"
+                },
+                "/owner": {
                   "kind": "value",
                   "value": "chen"
+                },
+                "/priority": {
+                  "kind": "value",
+                  "value": "normal"
                 }
               }
             }
@@ -860,7 +860,7 @@
         {
           "method": "queryExport",
           "input": {
-            "draftId": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+            "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
             "version": 3
           },
           "output": {
@@ -876,18 +876,18 @@
       "method": "preflight",
       "note": "外部检查完成，仍有 3 条业务问题。完整 preview、message、候选值和 repair OP 都来自实际检查。",
       "input": [
-        "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89"
+        "ace27800-08e5-493f-860c-727cbc07dc35"
       ],
       "output": {
-        "formatVersion": 2,
+        "formatVersion": 3,
         "scope": "execution",
-        "checkId": "bdd9ab81-71d9-4ec8-97d7-09d98a003dce",
-        "draftId": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+        "checkId": "4947b0d1-637c-4ee2-80ee-f9dffad43315",
+        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
         "version": 3,
         "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
         "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
         "preview": {
-          "id": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+          "id": "ace27800-08e5-493f-860c-727cbc07dc35",
           "version": 3,
           "type": "example.project-tasks",
           "typeVersion": "2",
@@ -897,17 +897,17 @@
               "id": "project-1",
               "nodeType": "project",
               "fields": {
-                "name": {
-                  "kind": "value",
-                  "value": "文档发布"
-                },
-                "capacityHours": {
+                "/capacityHours": {
                   "kind": "value",
                   "value": 16
                 },
-                "deadlineDay": {
+                "/deadlineDay": {
                   "kind": "value",
                   "value": 20
+                },
+                "/name": {
+                  "kind": "value",
+                  "value": "文档发布"
                 }
               }
             },
@@ -915,25 +915,25 @@
               "id": "task-1",
               "nodeType": "task",
               "fields": {
-                "name": {
-                  "kind": "value",
-                  "value": "编写快速入门"
-                },
-                "estimateHours": {
-                  "kind": "value",
-                  "value": 12
-                },
-                "dueDay": {
+                "/dueDay": {
                   "kind": "value",
                   "value": 22
                 },
-                "priority": {
+                "/estimateHours": {
                   "kind": "value",
-                  "value": "urgent"
+                  "value": 12
                 },
-                "owner": {
+                "/name": {
+                  "kind": "value",
+                  "value": "编写快速入门"
+                },
+                "/owner": {
                   "kind": "value",
                   "value": null
+                },
+                "/priority": {
+                  "kind": "value",
+                  "value": "urgent"
                 }
               }
             },
@@ -941,25 +941,25 @@
               "id": "task-2",
               "nodeType": "task",
               "fields": {
-                "name": {
-                  "kind": "value",
-                  "value": "评审使用示例"
-                },
-                "estimateHours": {
-                  "kind": "value",
-                  "value": 10
-                },
-                "dueDay": {
+                "/dueDay": {
                   "kind": "value",
                   "value": 18
                 },
-                "priority": {
+                "/estimateHours": {
                   "kind": "value",
-                  "value": "normal"
+                  "value": 10
                 },
-                "owner": {
+                "/name": {
+                  "kind": "value",
+                  "value": "评审使用示例"
+                },
+                "/owner": {
                   "kind": "value",
                   "value": "chen"
+                },
+                "/priority": {
+                  "kind": "value",
+                  "value": "normal"
                 }
               }
             }
@@ -1153,7 +1153,7 @@
         {
           "method": "queryExport",
           "input": {
-            "draftId": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+            "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
             "version": 3
           },
           "output": {
@@ -1168,7 +1168,7 @@
       "method": "edit",
       "note": "调用方依据用户意图选定 4 个 OP。规则建议不自动执行。",
       "input": [
-        "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+        "ace27800-08e5-493f-860c-727cbc07dc35",
         3,
         [
           {
@@ -1198,7 +1198,7 @@
         ]
       ],
       "output": {
-        "draftId": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
         "version": 4,
         "preflightRequired": true,
         "changes": [
@@ -1268,18 +1268,18 @@
       "method": "preflight",
       "note": "检查通过，保存不可变 Artifact。执行器的 plan 将图映射成请求参数。",
       "input": [
-        "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89"
+        "ace27800-08e5-493f-860c-727cbc07dc35"
       ],
       "output": {
-        "formatVersion": 2,
+        "formatVersion": 3,
         "scope": "execution",
-        "checkId": "b42e4093-a4de-4b1b-bdd2-ae317c48853f",
-        "draftId": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+        "checkId": "c4989d2a-d470-432b-9640-f62f436abbbd",
+        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
         "version": 4,
         "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
         "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
         "preview": {
-          "id": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+          "id": "ace27800-08e5-493f-860c-727cbc07dc35",
           "version": 4,
           "type": "example.project-tasks",
           "typeVersion": "2",
@@ -1289,17 +1289,17 @@
               "id": "project-1",
               "nodeType": "project",
               "fields": {
-                "name": {
-                  "kind": "value",
-                  "value": "文档发布"
-                },
-                "capacityHours": {
+                "/capacityHours": {
                   "kind": "value",
                   "value": 16
                 },
-                "deadlineDay": {
+                "/deadlineDay": {
                   "kind": "value",
                   "value": 20
+                },
+                "/name": {
+                  "kind": "value",
+                  "value": "文档发布"
                 }
               }
             },
@@ -1307,25 +1307,25 @@
               "id": "task-1",
               "nodeType": "task",
               "fields": {
-                "name": {
-                  "kind": "value",
-                  "value": "编写快速入门"
-                },
-                "estimateHours": {
-                  "kind": "value",
-                  "value": 8
-                },
-                "dueDay": {
+                "/dueDay": {
                   "kind": "value",
                   "value": 20
                 },
-                "priority": {
+                "/estimateHours": {
                   "kind": "value",
-                  "value": "urgent"
+                  "value": 8
                 },
-                "owner": {
+                "/name": {
+                  "kind": "value",
+                  "value": "编写快速入门"
+                },
+                "/owner": {
                   "kind": "value",
                   "value": "lin"
+                },
+                "/priority": {
+                  "kind": "value",
+                  "value": "urgent"
                 }
               }
             },
@@ -1333,25 +1333,25 @@
               "id": "task-2",
               "nodeType": "task",
               "fields": {
-                "name": {
-                  "kind": "value",
-                  "value": "评审使用示例"
-                },
-                "estimateHours": {
-                  "kind": "value",
-                  "value": 8
-                },
-                "dueDay": {
+                "/dueDay": {
                   "kind": "value",
                   "value": 18
                 },
-                "priority": {
+                "/estimateHours": {
                   "kind": "value",
-                  "value": "normal"
+                  "value": 8
                 },
-                "owner": {
+                "/name": {
+                  "kind": "value",
+                  "value": "评审使用示例"
+                },
+                "/owner": {
                   "kind": "value",
                   "value": "chen"
+                },
+                "/priority": {
+                  "kind": "value",
+                  "value": "normal"
                 }
               }
             }
@@ -1378,10 +1378,10 @@
         "status": "passed",
         "diagnostics": [],
         "pendingRules": [],
-        "certificate": "942dc603-3287-4860-ae2c-fd66bf8245ff",
-        "artifactId": "942dc603-3287-4860-ae2c-fd66bf8245ff",
+        "certificate": "eed08655-6bf2-4341-850f-8004140371d6",
+        "artifactId": "eed08655-6bf2-4341-850f-8004140371d6",
         "execution": {
-          "checkId": "b42e4093-a4de-4b1b-bdd2-ae317c48853f",
+          "checkId": "c4989d2a-d470-432b-9640-f62f436abbbd",
           "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
           "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
           "executorId": "example.project-service",
@@ -1395,7 +1395,7 @@
         {
           "method": "queryExport",
           "input": {
-            "draftId": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+            "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
             "version": 4
           },
           "output": {
@@ -1410,21 +1410,21 @@
       "method": "publish",
       "note": "同事务建立 Run 和 currentRunId。项目创建成功，任务 1 明确拒绝，任务 2 尚未发送。Draft 仍 pending。",
       "input": [
-        "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
-        "942dc603-3287-4860-ae2c-fd66bf8245ff",
+        "ace27800-08e5-493f-860c-727cbc07dc35",
+        "eed08655-6bf2-4341-850f-8004140371d6",
         {
           "runId": "demo-run-1"
         }
       ],
       "output": {
         "id": "demo-run-1",
-        "draftId": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
         "kind": "initial_create",
         "version": 4,
         "state": "blocked",
-        "artifactId": "942dc603-3287-4860-ae2c-fd66bf8245ff",
-        "initialArtifactId": "942dc603-3287-4860-ae2c-fd66bf8245ff",
-        "certificate": "942dc603-3287-4860-ae2c-fd66bf8245ff",
+        "artifactId": "eed08655-6bf2-4341-850f-8004140371d6",
+        "initialArtifactId": "eed08655-6bf2-4341-850f-8004140371d6",
+        "certificate": "eed08655-6bf2-4341-850f-8004140371d6",
         "revision": 0,
         "revisions": [],
         "attempts": [
@@ -1535,25 +1535,25 @@
             "sequence": 1,
             "stepId": "project-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T09:13:20.505Z"
+            "recordedAt": "2026-09-16T11:18:59.257Z"
           },
           {
             "sequence": 2,
             "stepId": "project-1",
             "kind": "applied",
-            "recordedAt": "2026-09-16T09:13:20.505Z"
+            "recordedAt": "2026-09-16T11:18:59.258Z"
           },
           {
             "sequence": 3,
             "stepId": "task-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T09:13:20.506Z"
+            "recordedAt": "2026-09-16T11:18:59.259Z"
           },
           {
             "sequence": 4,
             "stepId": "task-1",
             "kind": "not_applied",
-            "recordedAt": "2026-09-16T09:13:20.506Z",
+            "recordedAt": "2026-09-16T11:18:59.260Z",
             "reason": "Owner unavailable; request rejected before creation"
           }
         ],
@@ -1661,7 +1661,7 @@
         ],
         "previewVersion": 4,
         "preview": {
-          "id": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+          "id": "ace27800-08e5-493f-860c-727cbc07dc35",
           "version": 4,
           "type": "example.project-tasks",
           "typeVersion": "2",
@@ -1671,17 +1671,17 @@
               "id": "project-1",
               "nodeType": "project",
               "fields": {
-                "name": {
-                  "kind": "value",
-                  "value": "文档发布"
-                },
-                "capacityHours": {
+                "/capacityHours": {
                   "kind": "value",
                   "value": 16
                 },
-                "deadlineDay": {
+                "/deadlineDay": {
                   "kind": "value",
                   "value": 20
+                },
+                "/name": {
+                  "kind": "value",
+                  "value": "文档发布"
                 }
               }
             },
@@ -1689,25 +1689,25 @@
               "id": "task-1",
               "nodeType": "task",
               "fields": {
-                "name": {
-                  "kind": "value",
-                  "value": "编写快速入门"
-                },
-                "estimateHours": {
-                  "kind": "value",
-                  "value": 8
-                },
-                "dueDay": {
+                "/dueDay": {
                   "kind": "value",
                   "value": 20
                 },
-                "priority": {
+                "/estimateHours": {
                   "kind": "value",
-                  "value": "urgent"
+                  "value": 8
                 },
-                "owner": {
+                "/name": {
+                  "kind": "value",
+                  "value": "编写快速入门"
+                },
+                "/owner": {
                   "kind": "value",
                   "value": "lin"
+                },
+                "/priority": {
+                  "kind": "value",
+                  "value": "urgent"
                 }
               }
             },
@@ -1715,25 +1715,25 @@
               "id": "task-2",
               "nodeType": "task",
               "fields": {
-                "name": {
-                  "kind": "value",
-                  "value": "评审使用示例"
-                },
-                "estimateHours": {
-                  "kind": "value",
-                  "value": 8
-                },
-                "dueDay": {
+                "/dueDay": {
                   "kind": "value",
                   "value": 18
                 },
-                "priority": {
+                "/estimateHours": {
                   "kind": "value",
-                  "value": "normal"
+                  "value": 8
                 },
-                "owner": {
+                "/name": {
+                  "kind": "value",
+                  "value": "评审使用示例"
+                },
+                "/owner": {
                   "kind": "value",
                   "value": "chen"
+                },
+                "/priority": {
+                  "kind": "value",
+                  "value": "normal"
                 }
               }
             }
@@ -1866,7 +1866,7 @@
       "method": "getDraft",
       "note": "失败后 currentRunId 保留；pending 不意味着远端没有资源。",
       "input": [
-        "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89"
+        "ace27800-08e5-493f-860c-727cbc07dc35"
       ],
       "output": {
         "graph": {
@@ -1979,7 +1979,7 @@
           }
         },
         "formatVersion": 3,
-        "id": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+        "id": "ace27800-08e5-493f-860c-727cbc07dc35",
         "version": 4,
         "type": "example.project-tasks",
         "typeVersion": "2",
@@ -2104,8 +2104,8 @@
           "nodes": [],
           "edges": []
         },
-        "createdAt": "2026-09-16T09:13:20.494Z",
-        "updatedAt": "2026-09-16T09:13:20.502Z"
+        "createdAt": "2026-09-16T11:18:59.242Z",
+        "updatedAt": "2026-09-16T11:18:59.253Z"
       },
       "remoteCalls": [],
       "checkCalls": [],
@@ -2115,7 +2115,7 @@
       "method": "edit",
       "note": "假设用户同意改由陈接手，只修复未完成任务。成功项目不允许修改。",
       "input": [
-        "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+        "ace27800-08e5-493f-860c-727cbc07dc35",
         4,
         [
           {
@@ -2127,7 +2127,7 @@
         ]
       ],
       "output": {
-        "draftId": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
         "version": 5,
         "preflightRequired": true,
         "changes": [
@@ -2159,17 +2159,17 @@
       ],
       "output": {
         "id": "demo-run-1",
-        "draftId": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
         "kind": "initial_create",
         "version": 5,
         "state": "unknown",
-        "artifactId": "b45f9060-a4d1-423f-b025-7447281e8655",
-        "initialArtifactId": "942dc603-3287-4860-ae2c-fd66bf8245ff",
-        "certificate": "b45f9060-a4d1-423f-b025-7447281e8655",
+        "artifactId": "194fa738-0d6a-486f-ac26-fe536a65a3f3",
+        "initialArtifactId": "eed08655-6bf2-4341-850f-8004140371d6",
+        "certificate": "194fa738-0d6a-486f-ac26-fe536a65a3f3",
         "revision": 1,
         "revisions": [
           {
-            "artifactId": "942dc603-3287-4860-ae2c-fd66bf8245ff",
+            "artifactId": "eed08655-6bf2-4341-850f-8004140371d6",
             "version": 4,
             "steps": [
               {
@@ -2473,56 +2473,56 @@
             "sequence": 1,
             "stepId": "project-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T09:13:20.505Z"
+            "recordedAt": "2026-09-16T11:18:59.257Z"
           },
           {
             "sequence": 2,
             "stepId": "project-1",
             "kind": "applied",
-            "recordedAt": "2026-09-16T09:13:20.505Z"
+            "recordedAt": "2026-09-16T11:18:59.258Z"
           },
           {
             "sequence": 3,
             "stepId": "task-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T09:13:20.506Z"
+            "recordedAt": "2026-09-16T11:18:59.259Z"
           },
           {
             "sequence": 4,
             "stepId": "task-1",
             "kind": "not_applied",
-            "recordedAt": "2026-09-16T09:13:20.506Z",
+            "recordedAt": "2026-09-16T11:18:59.260Z",
             "reason": "Owner unavailable; request rejected before creation"
           },
           {
             "sequence": 5,
             "stepId": "",
             "kind": "plan_repaired",
-            "recordedAt": "2026-09-16T09:13:20.510Z"
+            "recordedAt": "2026-09-16T11:18:59.264Z"
           },
           {
             "sequence": 6,
             "stepId": "task-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T09:13:20.511Z"
+            "recordedAt": "2026-09-16T11:18:59.266Z"
           },
           {
             "sequence": 7,
             "stepId": "task-1",
             "kind": "applied",
-            "recordedAt": "2026-09-16T09:13:20.511Z"
+            "recordedAt": "2026-09-16T11:18:59.267Z"
           },
           {
             "sequence": 8,
             "stepId": "task-2",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T09:13:20.512Z"
+            "recordedAt": "2026-09-16T11:18:59.268Z"
           },
           {
             "sequence": 9,
             "stepId": "task-2",
             "kind": "unknown",
-            "recordedAt": "2026-09-16T09:13:20.513Z",
+            "recordedAt": "2026-09-16T11:18:59.269Z",
             "reason": "Response timed out; creation outcome requires lookup"
           }
         ],
@@ -2619,7 +2619,7 @@
         ],
         "previewVersion": 5,
         "preview": {
-          "id": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+          "id": "ace27800-08e5-493f-860c-727cbc07dc35",
           "version": 5,
           "type": "example.project-tasks",
           "typeVersion": "2",
@@ -2629,17 +2629,17 @@
               "id": "project-1",
               "nodeType": "project",
               "fields": {
-                "name": {
-                  "kind": "value",
-                  "value": "文档发布"
-                },
-                "capacityHours": {
+                "/capacityHours": {
                   "kind": "value",
                   "value": 16
                 },
-                "deadlineDay": {
+                "/deadlineDay": {
                   "kind": "value",
                   "value": 20
+                },
+                "/name": {
+                  "kind": "value",
+                  "value": "文档发布"
                 }
               }
             },
@@ -2647,25 +2647,25 @@
               "id": "task-1",
               "nodeType": "task",
               "fields": {
-                "name": {
-                  "kind": "value",
-                  "value": "编写快速入门"
-                },
-                "estimateHours": {
-                  "kind": "value",
-                  "value": 8
-                },
-                "dueDay": {
+                "/dueDay": {
                   "kind": "value",
                   "value": 20
                 },
-                "priority": {
+                "/estimateHours": {
                   "kind": "value",
-                  "value": "urgent"
+                  "value": 8
                 },
-                "owner": {
+                "/name": {
+                  "kind": "value",
+                  "value": "编写快速入门"
+                },
+                "/owner": {
                   "kind": "value",
                   "value": "chen"
+                },
+                "/priority": {
+                  "kind": "value",
+                  "value": "urgent"
                 }
               }
             },
@@ -2673,25 +2673,25 @@
               "id": "task-2",
               "nodeType": "task",
               "fields": {
-                "name": {
-                  "kind": "value",
-                  "value": "评审使用示例"
-                },
-                "estimateHours": {
-                  "kind": "value",
-                  "value": 8
-                },
-                "dueDay": {
+                "/dueDay": {
                   "kind": "value",
                   "value": 18
                 },
-                "priority": {
+                "/estimateHours": {
                   "kind": "value",
-                  "value": "normal"
+                  "value": 8
                 },
-                "owner": {
+                "/name": {
+                  "kind": "value",
+                  "value": "评审使用示例"
+                },
+                "/owner": {
                   "kind": "value",
                   "value": "chen"
+                },
+                "/priority": {
+                  "kind": "value",
+                  "value": "normal"
                 }
               }
             }
@@ -2793,7 +2793,7 @@
         {
           "method": "queryExport",
           "input": {
-            "draftId": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+            "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
             "version": 5
           },
           "output": {
@@ -2812,17 +2812,17 @@
       ],
       "output": {
         "id": "demo-run-1",
-        "draftId": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+        "draftId": "ace27800-08e5-493f-860c-727cbc07dc35",
         "kind": "initial_create",
         "version": 5,
         "state": "published",
-        "artifactId": "b45f9060-a4d1-423f-b025-7447281e8655",
-        "initialArtifactId": "942dc603-3287-4860-ae2c-fd66bf8245ff",
-        "certificate": "b45f9060-a4d1-423f-b025-7447281e8655",
+        "artifactId": "194fa738-0d6a-486f-ac26-fe536a65a3f3",
+        "initialArtifactId": "eed08655-6bf2-4341-850f-8004140371d6",
+        "certificate": "194fa738-0d6a-486f-ac26-fe536a65a3f3",
         "revision": 1,
         "revisions": [
           {
-            "artifactId": "942dc603-3287-4860-ae2c-fd66bf8245ff",
+            "artifactId": "eed08655-6bf2-4341-850f-8004140371d6",
             "version": 4,
             "steps": [
               {
@@ -3124,69 +3124,69 @@
             "sequence": 1,
             "stepId": "project-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T09:13:20.505Z"
+            "recordedAt": "2026-09-16T11:18:59.257Z"
           },
           {
             "sequence": 2,
             "stepId": "project-1",
             "kind": "applied",
-            "recordedAt": "2026-09-16T09:13:20.505Z"
+            "recordedAt": "2026-09-16T11:18:59.258Z"
           },
           {
             "sequence": 3,
             "stepId": "task-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T09:13:20.506Z"
+            "recordedAt": "2026-09-16T11:18:59.259Z"
           },
           {
             "sequence": 4,
             "stepId": "task-1",
             "kind": "not_applied",
-            "recordedAt": "2026-09-16T09:13:20.506Z",
+            "recordedAt": "2026-09-16T11:18:59.260Z",
             "reason": "Owner unavailable; request rejected before creation"
           },
           {
             "sequence": 5,
             "stepId": "",
             "kind": "plan_repaired",
-            "recordedAt": "2026-09-16T09:13:20.510Z"
+            "recordedAt": "2026-09-16T11:18:59.264Z"
           },
           {
             "sequence": 6,
             "stepId": "task-1",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T09:13:20.511Z"
+            "recordedAt": "2026-09-16T11:18:59.266Z"
           },
           {
             "sequence": 7,
             "stepId": "task-1",
             "kind": "applied",
-            "recordedAt": "2026-09-16T09:13:20.511Z"
+            "recordedAt": "2026-09-16T11:18:59.267Z"
           },
           {
             "sequence": 8,
             "stepId": "task-2",
             "kind": "dispatching",
-            "recordedAt": "2026-09-16T09:13:20.512Z"
+            "recordedAt": "2026-09-16T11:18:59.268Z"
           },
           {
             "sequence": 9,
             "stepId": "task-2",
             "kind": "unknown",
-            "recordedAt": "2026-09-16T09:13:20.513Z",
+            "recordedAt": "2026-09-16T11:18:59.269Z",
             "reason": "Response timed out; creation outcome requires lookup"
           },
           {
             "sequence": 10,
             "stepId": "task-2",
             "kind": "reconciling",
-            "recordedAt": "2026-09-16T09:13:20.514Z"
+            "recordedAt": "2026-09-16T11:18:59.272Z"
           },
           {
             "sequence": 11,
             "stepId": "task-2",
             "kind": "applied",
-            "recordedAt": "2026-09-16T09:13:20.515Z"
+            "recordedAt": "2026-09-16T11:18:59.273Z"
           }
         ],
         "steps": [
@@ -3279,7 +3279,7 @@
         ],
         "previewVersion": 5,
         "preview": {
-          "id": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+          "id": "ace27800-08e5-493f-860c-727cbc07dc35",
           "version": 5,
           "type": "example.project-tasks",
           "typeVersion": "2",
@@ -3289,17 +3289,17 @@
               "id": "project-1",
               "nodeType": "project",
               "fields": {
-                "name": {
-                  "kind": "value",
-                  "value": "文档发布"
-                },
-                "capacityHours": {
+                "/capacityHours": {
                   "kind": "value",
                   "value": 16
                 },
-                "deadlineDay": {
+                "/deadlineDay": {
                   "kind": "value",
                   "value": 20
+                },
+                "/name": {
+                  "kind": "value",
+                  "value": "文档发布"
                 }
               }
             },
@@ -3307,25 +3307,25 @@
               "id": "task-1",
               "nodeType": "task",
               "fields": {
-                "name": {
-                  "kind": "value",
-                  "value": "编写快速入门"
-                },
-                "estimateHours": {
-                  "kind": "value",
-                  "value": 8
-                },
-                "dueDay": {
+                "/dueDay": {
                   "kind": "value",
                   "value": 20
                 },
-                "priority": {
+                "/estimateHours": {
                   "kind": "value",
-                  "value": "urgent"
+                  "value": 8
                 },
-                "owner": {
+                "/name": {
+                  "kind": "value",
+                  "value": "编写快速入门"
+                },
+                "/owner": {
                   "kind": "value",
                   "value": "chen"
+                },
+                "/priority": {
+                  "kind": "value",
+                  "value": "urgent"
                 }
               }
             },
@@ -3333,25 +3333,25 @@
               "id": "task-2",
               "nodeType": "task",
               "fields": {
-                "name": {
-                  "kind": "value",
-                  "value": "评审使用示例"
-                },
-                "estimateHours": {
-                  "kind": "value",
-                  "value": 8
-                },
-                "dueDay": {
+                "/dueDay": {
                   "kind": "value",
                   "value": 18
                 },
-                "priority": {
+                "/estimateHours": {
                   "kind": "value",
-                  "value": "normal"
+                  "value": 8
                 },
-                "owner": {
+                "/name": {
+                  "kind": "value",
+                  "value": "评审使用示例"
+                },
+                "/owner": {
                   "kind": "value",
                   "value": "chen"
+                },
+                "/priority": {
+                  "kind": "value",
+                  "value": "normal"
                 }
               }
             }
@@ -3417,7 +3417,7 @@
       "method": "getDraft",
       "note": "全部成功才设置 published、publishedArtifactId 和 lastPublishedAt。currentRunId 仍保留。",
       "input": [
-        "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89"
+        "ace27800-08e5-493f-860c-727cbc07dc35"
       ],
       "output": {
         "graph": {
@@ -3530,7 +3530,7 @@
           }
         },
         "formatVersion": 3,
-        "id": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+        "id": "ace27800-08e5-493f-860c-727cbc07dc35",
         "version": 5,
         "type": "example.project-tasks",
         "typeVersion": "2",
@@ -3649,14 +3649,14 @@
             }
           }
         },
-        "publishedArtifactId": "b45f9060-a4d1-423f-b025-7447281e8655",
-        "lastPublishedAt": "2026-09-16T09:13:20.516Z",
+        "publishedArtifactId": "194fa738-0d6a-486f-ac26-fe536a65a3f3",
+        "lastPublishedAt": "2026-09-16T11:18:59.275Z",
         "tombstones": {
           "nodes": [],
           "edges": []
         },
-        "createdAt": "2026-09-16T09:13:20.494Z",
-        "updatedAt": "2026-09-16T09:13:20.516Z"
+        "createdAt": "2026-09-16T11:18:59.242Z",
+        "updatedAt": "2026-09-16T11:18:59.275Z"
       },
       "remoteCalls": [],
       "checkCalls": [],
@@ -3666,7 +3666,7 @@
       "method": "getBindings",
       "note": "每个成功节点都已绑定远端资源；这些是确认事实，不是远端实时漂移检测。",
       "input": [
-        "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89"
+        "ace27800-08e5-493f-860c-727cbc07dc35"
       ],
       "output": {
         "project-1": {
@@ -3729,7 +3729,7 @@
         "demo-run-1"
       ],
       "output": {
-        "id": "b45f9060-a4d1-423f-b025-7447281e8655",
+        "id": "194fa738-0d6a-486f-ac26-fe536a65a3f3",
         "intentDigest": "sha256:stagedwrite-json-v1:733962fd9cbccc460c1183cc4a07667ccdcb077d314378610d91408a5756706f",
         "draft": {
           "graph": {
@@ -3842,7 +3842,7 @@
             }
           },
           "formatVersion": 3,
-          "id": "b8ef9fbb-5976-4e8d-810c-c735cbb3cc89",
+          "id": "ace27800-08e5-493f-860c-727cbc07dc35",
           "version": 5,
           "type": "example.project-tasks",
           "typeVersion": "2",
@@ -3967,8 +3967,8 @@
             "nodes": [],
             "edges": []
           },
-          "createdAt": "2026-09-16T09:13:20.494Z",
-          "updatedAt": "2026-09-16T09:13:20.507Z"
+          "createdAt": "2026-09-16T11:18:59.242Z",
+          "updatedAt": "2026-09-16T11:18:59.261Z"
         },
         "plan": [
           {
@@ -4025,7 +4025,7 @@
           }
         ],
         "binding": {
-          "checkId": "4dbd7ac8-7543-4432-a062-83bcc821de45",
+          "checkId": "6c33d73b-3510-42fe-abf1-e383258ade1a",
           "definitionDigest": "sha256:stagedwrite-json-v1:e35b00c507a2094ac016898c6eece10559c0daf1358fab06349f32798749a6b7",
           "rulesDigest": "sha256:stagedwrite-json-v1:e537952d66ea39a287c827339c85fd61811965985b88673d51e23a6905a11f10",
           "executorId": "example.project-service",

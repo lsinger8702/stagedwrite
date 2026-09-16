@@ -1,3 +1,4 @@
+import { validateIntentSnapshot } from "../edit/fields.js";
 import { protectIntentRepair } from "./edit-guards.js";
 import { compileUpdate, validateUpdatePlan, type UpdateProjection } from "./update-plan.js";
 import type { RemoteObservation } from "./types.js";
@@ -16,7 +17,7 @@ import type { GraphOp } from "../graph/types.js";
 import type { Step, ApplyOutcome, ReconcileOutcome, Event } from "../types.js";
 import type { GraphDiagnostic } from "../preflight/types.js";
 import { createMemoryBackend, lockResource } from "./storage.js";
-import { initialize, editIntent, toInternal, snapshot, same } from "./intent.js";
+import { initialize, editIntent, snapshot, same } from "./intent.js";
 import type { ManagedOptions, ManagedEditResult, ManagedDraft, ManagedInitialIntent, ManagedState, ManagedRun, ManagedExecutor, ManagedCheck, Artifact, DraftLease, Attempt } from "./types.js";
 const key = (s: DefinitionSelector) => JSON.stringify([s.type, s.typeVersion]);
 const copy = <T>(v: T): T => structuredClone(v);
@@ -56,7 +57,7 @@ export function createStagedWrite(options: ManagedOptions) {
     const open = () => { if (closed)
         throw new Error("STORE_CLOSED"); };
     const need = async (id: string) => { open(); const s = await storage.read(id); if (!s)
-        throw new Error("DRAFT_NOT_FOUND"); toInternal(s.draft); if (registry.getDefinition(s.draft).digest !== s.draft.definitionDigest)
+        throw new Error("DRAFT_NOT_FOUND"); validateIntentSnapshot(registry, s.draft, s.draft); if (registry.getDefinition(s.draft).digest !== s.draft.definitionDigest)
         throw new Error("DEFINITION_MISMATCH"); return s; };
     async function withLease<T>(id: string, work: (lease: DraftLease, signal: AbortSignal) => Promise<T>): Promise<T> {
         open();
@@ -141,7 +142,7 @@ export function createStagedWrite(options: ManagedOptions) {
                 if (!accepted.length)
                     diagnostics.push({ code: f.code ?? `execution.${step.status}`, path: `/nodes/${step.effect!.nodeId.replaceAll("~", "~0").replaceAll("/", "~1")}`, message: f.message ?? f.reason ?? "Execution needs attention", ...(step.status === "applied" ? { severity: "warning" as const } : {}) });
             }
-        return { ...copy(r), previewVersion: s.draft.version, preview: check?.preview ?? previewDraft(d, registry.getDefinition(s.draft).definition), diagnostics: check?.diagnostics ?? diagnostics, ...(check ? { check } : {}) };
+        return { ...copy(r), previewVersion: s.draft.version, preview: check?.preview ?? previewDraft(d, registry), diagnostics: check?.diagnostics ?? diagnostics, ...(check ? { check } : {}) };
     }
     function rulesDigest(d: ManagedDraft) {
         return asyncCheck.digest(d, preflight.rulesDigest(d));
@@ -474,7 +475,7 @@ export function createStagedWrite(options: ManagedOptions) {
         finally {
             active--;
         } },
-        async getCheck(id: string) { const s = await need(id); if (!s.check || s.check.version !== s.draft.version || s.check.rulesDigest !== rulesDigest(s.draft))
+        async getCheck(id: string) { const s = await need(id); if (!s.check || s.check.formatVersion !== 3 || s.check.version !== s.draft.version || s.check.rulesDigest !== rulesDigest(s.draft))
             throw new Error("CHECK_NOT_CURRENT"); return copy(s.check); },
         async getRun(runId: string) { const id = await storage.findRun(runId); if (!id)
             throw new Error("RUN_NOT_FOUND"); const s = await need(id); return response(s, s.runs[runId]!); },
@@ -504,7 +505,7 @@ export function createStagedWrite(options: ManagedOptions) {
                     if (current.draft.currentRunId)
                         throw new Error("INITIAL_RUN_ALREADY_EXISTS");
                     const check = current.check, a = current.artifacts[certificate];
-                    if (!check || check.status !== "passed" || check.certificate !== certificate || !a || a.draft.version !== current.draft.version || a.resourceRevision !== current.resourceRevision || !same(snapshot(a.draft), snapshot(current.draft)))
+                    if (!check || check.formatVersion !== 3 || check.status !== "passed" || check.certificate !== certificate || !a || a.draft.version !== current.draft.version || a.resourceRevision !== current.resourceRevision || !same(snapshot(a.draft), snapshot(current.draft)))
                         throw new Error("PREFLIGHT_REQUIRED");
                     if (a.binding.definitionDigest !== current.draft.definitionDigest || a.binding.rulesDigest !== rulesDigest(current.draft))
                         throw new Error("REGISTRATION_BINDING_MISMATCH");

@@ -2,7 +2,7 @@
 
 **设计约束：遵循 [000 项目原则](000-project-principles.md)；原则冲突须先与项目所有者讨论并取得明确同意。本文中的阶段实现记录不覆盖主线，publish/resume 目标及当前差异以 [018](018-draft-lifecycle-proposal.md) 为准。**
 
-状态：已实现；管理协议仍使用诊断与 preview 契约 formatVersion=2。持久化 Draft 为 formatVersion=3，规则输入是 ManagedDraft，字段为普通值并另附 fieldIntents；编译与发布见 [018](018-draft-lifecycle-proposal.md)。
+状态：已实现；诊断与 preview 契约为 formatVersion=3（fields 键为 canonical JSON Pointer）。持久化 Draft 为 formatVersion=3，规则输入是 ManagedDraft，字段为普通值并另附 fieldIntents；编译与发布见 [018](018-draft-lifecycle-proposal.md)。
 
 ## 目的与边界
 
@@ -48,7 +48,9 @@ Preflight 检查当前图，向调用方返回具体问题和足够的当前状�
 
 GraphCheck 始终包含 preview: GraphDraftPreview，包括 passed、blocked、pending、incomplete 四种结果及计划生成失败。它与 diagnostics 使用同一个被检查的 Draft 版本，而非额外读取的最新草稿。
 
-预览保留 Draft 身份、定义绑定、节点 ID/类型、全部边、tombstones 和现有来源元数据。每个已有节点列出 schema 定义的所有字段：
+预览保留 Draft 身份、定义绑定、节点 ID/类型、全部边、tombstones 和现有来源元数据。每个已有节点按解析后 Schema 列出全部注册字段路径：fields["/profile/name"] 对应该节点的 /profile/name。对象父路径的 value 是重建后的业务对象，子路径分别展示三态；父 remove 向子字段展示 clear。数组整值展示，不列索引路径。包括本地 $ref 展开和 JSON Pointer 转义。
+
+字段状态：
 
 - `{kind:"value",value:...}`：显式值，包括 schema 允许的 null。
 - `{kind:"clear"}`：显式清空（remove）。
@@ -86,7 +88,7 @@ check 绑定 draftId/version/definitionDigest/rulesDigest 和随机 checkId。�
 - 失败编辑和 OP 预演保留有效检查。LLM 返回的旧版本 OP 被 CAS 拒绝。
 - 同草稿回调重入编辑/预检被 CHECK_BUSY 拒绝。跨连接编辑或较新检查通过版本/epoch 校验阻止旧结果落库。
 - getCheck 只返回最新匹配结果。blocked/incomplete 也可读取，但调用方必须检查 status。
-- 本次新增字段全部可选，保持 formatVersion: 2；原有最小规则及持久化检查仍可读取。formatVersion: 2 标识诊断与 preview 响应契约；旧格式检查必须重新 preflight。格式版本独立于执行绑定的 rulesDigest，单纯响应升级不改变已记录执行的规则身份。
+- 当前 formatVersion: 3 标识诊断与 preview 响应契约。fields 键由字段名改为 JSON Pointer，列出嵌套对象路径及全部已注册子路径；旧格式检查必须重新 preflight，不能经 getCheck 或首次 publish 使用。格式版本独立于执行绑定的 rulesDigest，已采用 Run 仍按原执行身份恢复。
 - 旧规则中的 resolution 需移除并升规则版本。改变实际规则身份仍受现有恢复绑定约束；不要为恢复旧 run 悄悄替换其规则。
 
 ## 验证
@@ -141,4 +143,6 @@ resume 接受修复后的 Draft 时会重新执行本节预检；未通过则响
 
 预检内部直接读取 ManagedDraft，与规则公开输入保持一致，不再先转成标量包装图再用回调闭包转换回来。候选修复校验使用当前 Draft 的固定基线，与真实 edit 的 reset 一致；基线由引擎从 initialSnapshot 或 publishedArtifactId 对应 Artifact 选取，规则不能另行指定。
 
-本项不改变公开编辑输入：双通道 EditBatch 和嵌套预览尚待迁移，准确状态见 [任务账本](../tasks/three-state-op-migration.md)。规则注册复用不代表检查结果缓存；每次 preflight 仍执行适用规则。
+本项不改变公开编辑输入：双通道 EditBatch 尚待迁移；嵌套 preview 已在后续 JSON 读链路中接通，准确状态见 [任务账本](../tasks/three-state-op-migration.md)。规则注册复用不代表检查结果缓存；每次 preflight 仍执行适用规则。
+
+当前 ManagedDraft 的 graph.fields 与 set 声明值使用 Json，Step.payload 与远端归一化事实仍保持独立类型。公开旧 create/edit 的输入尚待下一步迁移；JSON 存储/预检贯通不能当作新编辑入口已开放。

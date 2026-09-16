@@ -88,6 +88,8 @@ await engine.close();
 - 节点成功立即保存 Binding；pending 可能已经有部分远端资源，全量成功才标 published。
 - 所有管理 API 都是异步。未注册执行器时预检只诊断；未注册后端时，存储和锁仅在进程内。
 
+预检响应使用 `formatVersion: 3`。preview 的字段键是节点内的 JSON Pointer（如 `fields["/profile/name"]`），展示重建后的对象值与子字段三态；数组仍为整值。旧检查需要重新预检。公开 create/edit 协议仍在迁移中。
+
 ## 恢复边界
 
 **未完成工作调用 `resume(run.id)`；重复 publish 只观察已有 Run。** `getRun(run.id)` 可查看当前 preview、诊断和请求尝试记录。

@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { runInNewContext } from 'node:vm';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { verifyTrace, verifyArtifacts, zipFiles } from './walkthrough-artifacts.mjs';
@@ -57,4 +58,27 @@ test('walkthrough: ZIP bytes and embedded HTML, JSON and Markdown match checked-
     assert.deepEqual(expected.subarray(offset + 30 + length, offset + 30 + length + size), content);
     offset += 30 + length + size;
   }
+});
+
+
+test('walkthrough: pointer-keyed previews render titles, nested values and diagnostic locations', () => {
+  const html = readFileSync(new URL('../docs/examples/publish-resume.html', import.meta.url), 'utf8');
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+  const elements = new Map();
+  const context = { TextDecoder, Uint8Array, atob,
+    document: { addEventListener() {}, getElementById(id) {
+      if (!elements.has(id)) elements.set(id, { innerHTML: '', addEventListener() {} });
+      return elements.get(id);
+    } }, window: { scrollTo() {} }
+  };
+  runInNewContext(script, context);
+  assert.ok(elements.get('main').innerHTML.length > 100);
+  const rendered = context.graph({ nodes: { 'a/b~c': { id: 'a/b~c', nodeType: 'task', fields: {
+    '/name': { kind: 'value', value: 'Nested task' }, '/profile': { kind: 'value', value: { title: 'A' } },
+    '/profile/note': { kind: 'clear' }
+  } } }, edges: {} }, [{ path: '/nodes/a~1b~0c/fields/profile/note' }]);
+  assert.match(rendered, /Nested task/);
+  assert.match(rendered, /&quot;title&quot;:&quot;A&quot;/);
+  assert.match(rendered, /field-val bad/);
+  assert.doesNotMatch(rendered, /\[object Object\]/);
 });
