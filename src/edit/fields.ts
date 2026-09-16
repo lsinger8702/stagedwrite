@@ -45,6 +45,22 @@ function stateAt(intents: Record<string, FieldDeclaration>, path: string): EditF
   for (const part of parts) value = (value as Record<string, Json>)[part]!;
   return { kind: "set", value: structuredClone(value) };
 }
+/** Validate before mutation: a reset must not hide a corrupt source or baseline. */
+export function validateIntentSnapshot(registry: DefinitionRegistry, selector: DefinitionSelector, snapshot: TopologySnapshot): void {
+  for (const ref of Object.keys(snapshot.fieldIntents)) if (!Object.hasOwn(snapshot.graph.nodes, ref)) fail(`/nodes/${pointer(ref)}`, "Intent declarations belong to a missing node.", "Load graph and intent declarations from the same stored snapshot.");
+  for (const [ref, node] of Object.entries(snapshot.graph.nodes)) {
+    const intents = snapshot.fieldIntents[ref] ?? {};
+    const schema = registry.getValueSchema(selector, node.nodeType);
+    for (const path of Object.keys(intents)) {
+      const parts = decodeEditPath(path);
+      if (!parts) fail(path, "Invalid stored intent path.", "Restore a valid canonical intent snapshot.");
+      locate(schema, parts!, `/nodes/${pointer(ref)}/fields${path}`);
+    }
+    if (node.id !== ref || canonicalJson(projectDeclarations(intents)) !== canonicalJson(node.fields)) fail(`/nodes/${pointer(ref)}`, "Intent projection does not match graph fields.", "Load the graph and field declarations from the same atomic snapshot.");
+    const result = registry.validateValues(selector, node.nodeType, node.fields);
+    if (!result.valid) throw new EditInputError(result.issues.map(issue => ({ code: "INVALID_EDIT_INPUT", path: `/nodes/${pointer(ref)}/fields${issue.path}`, message: issue.message, hint: "The stored source must match its registered schema before it can be edited." })));
+  }
+}
 export function evaluateFields(registry: DefinitionRegistry, selector: DefinitionSelector, current: TopologyState, baseline: TopologySnapshot, raw: readonly FieldPatch[]) {
   const patches = raw.length ? parseEditBatch({ patches: raw }).patches! : [];
   const candidate = structuredClone(current), changes: EditChange[] = [];

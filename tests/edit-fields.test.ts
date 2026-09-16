@@ -89,3 +89,18 @@ test("nested fields: topology reset then field edits still read the fixed baseli
   assert.equal(result.changes[0]!.inputPath, "/graphPatches/0");
   assert.equal(result.changes[1]!.inputPath, "/patches/0");
 });
+
+test("nested snapshots: topology reset cannot conceal source or baseline corruption", () => {
+  const { initial, ref, engine } = setup();
+  const reset = { graphPatches: [{ op: "reset", ref }] };
+  const corrupt = structuredClone(initial);
+  corrupt.graph.nodes[ref]!.fields.profile = { name: "not the declared value" };
+  assert.throws(() => engine.evaluate(corrupt, initial, engine.definitionDigest, reset), e => e instanceof EditInputError && /projection/.test(e.message));
+  assert.throws(() => engine.evaluate(initial, corrupt, engine.definitionDigest, reset), e => e instanceof EditInputError && /projection/.test(e.message));
+  const hidden = structuredClone(initial);
+  hidden.fieldIntents[ref]!["/unregistered"] = { kind: "remove" };
+  assert.throws(() => engine.evaluate(hidden, initial, engine.definitionDigest, reset), EditInputError);
+  const orphan = structuredClone(initial);
+  orphan.fieldIntents.missing = { "/title": { kind: "remove" } };
+  assert.throws(() => engine.evaluate(orphan, initial, engine.definitionDigest, reset), e => e instanceof EditInputError && /missing node/.test(e.message));
+});

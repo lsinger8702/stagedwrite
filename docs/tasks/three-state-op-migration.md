@@ -21,7 +21,7 @@
 | M02 | 完成 | M01 | 新 PatchOp、EditBatch、TopologySpec、回执和工具 schema | 静态/运行时只接受三种 op，互斥字段验证；不保留旧公开别名 |
 | M03 | 完成 | M02 | 拓扑通道求值、初始内容展开、服务端身份及 createdRefs | 引用按请求前图；全批失败不写；无幽灵 refs；图的关系/共享引用正确 |
 | M04 | 完成 | M03 | 嵌套 Schema/三态字段求值/显式 scope | 父子路径优先级、null/remove/未声明、固定基线 reset、非法 scope 测试通过 |
-| M05 | 待做 | M04 | create 与 edit/preview 单入口接线、复制 spec | 非空初始意图；复制只带意图、不带 Binding/Run；输入位置映射；CAS/租约/成功保护保持 |
+| M05 | 进行中 | M04 | create 与 edit/preview 单入口接线、复制 spec | 非空初始意图；复制只带意图、不带 Binding/Run；输入位置映射；CAS/租约/成功保护保持 |
 | M06 | 待做 | M05 | 诊断候选修复、preview、SDK/示例调用全部迁移 | message-only 仍可用；候选批次可预演；模型不需要 node.op 或真实远端 payload |
 | M07 | 待做 | M06 | 核心/存储/恢复回归、隔离包验证及文档清理 | 旧动作只出现在迁移说明与拒绝测试；合法批次/失败原子性/unknown/成功保护测试通过 |
 | M08 | 待做 | M07 | walkthrough HTML/ZIP、Stripe 样例与证据刷新 | walkthrough 闸门、Stripe 离线闸门通过；样例源码变化后需真实重录，不能仅改 digest。缺凭证标待外部条件 |
@@ -143,3 +143,23 @@
 - 新增 7 项字段/Schema/混合批次测试；核心 `npm test` 115/115，Stripe 离线 13/13，`git diff --check` 通过。
 - M04 完成指内部组件。当前公开 managed 仍使用旧编辑路径；M05 必须一次切换 create/edit/preview、持久化投影及成功保护，不可把内部测试当成已迁移公开 API。
 - 本轮未提交/推送；下一项 M05。此前本地注册改动仍一起保留。
+
+### M05 — 进行中
+
+- M03/M04 与存储式规则 TODO 已推送：3a2db6b。
+- 先核对公开 preview/edit 的安全一致性，以及新候选求值在修改前对当前/基线快照的完整性校验；再切换公开协议。
+
+### M05 增量 — 预演保护与修改前快照校验
+
+- 公开 managed preview 原先只求值、不执行 edit 的成功节点/拓扑/发布状态保护；已与 edit 对齐，发布成功后仍 UPDATE_NOT_SUPPORTED。预演不写入，不消费检查凭据。
+- 新字段模块增加 validateIntentSnapshot，并在拓扑求值前检查当前与固定基线：图/声明一致、声明路径已注册、无孤儿声明、值匹配 schema。防止 topology reset 先覆盖损坏输入而绕过检查。
+- 新增公开 API 保护一致性及损坏快照拒绝测试。核心 117/117；walkthrough 5/5；Stripe 离线 13/13；git diff --check 通过。
+- M05 仍进行中：尚未切换公开 create/edit/preview 协议、存储格式和所有调用方；当前改动不能记为迁移完成。本段本地未推送。
+
+### M05 增量 — 共用受管编辑边界
+
+- 新增 edit-guards.ts，公开引擎 protect 已复用其图/成功节点保护；新候选准备使用同一逻辑，不保留两套 Run 修复语义。执行计划保护仍由引擎处理。
+- 新增内部 prepare-edit.ts：版本 CAS 前置、版本溢出拒绝、三态批次求值、成功保护、轻回执及显式预演；保持 currentRunId 与固定基线等元数据。它是纯候选准备，不是新公开引擎或持久化入口。
+- 新增 3 项边界测试：preview/提交候选的安全一致性、planner 未使用字段保护、unknown 未完成节点修复、published 拒绝、回执/候选隔离与基线不变。核心 npm test 120/120；git diff --check 通过。
+- **公开切换未完成**：create roots/createdRefs 返回、managed 快照与预检投影、候选 repairOps、现有调用方必须一起迁移；不能仅改公开方法签名宣称完成。M05 保持进行中。
+- 本轮未提交/推送；没有修改真实 Stripe 样例与历史证据。

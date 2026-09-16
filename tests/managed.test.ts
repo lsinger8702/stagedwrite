@@ -491,3 +491,30 @@ test("managed: failed adoption commit cannot leave a run or dispatch an effect",
         assert.equal(s.draft.currentRunId, null); assert.deepEqual(s.publications, {}); assert.deepEqual(s.runs, {}); assert.equal(calls, 0);
     } finally { await e.close(); }
 });
+
+test("managed: preview enforces the same publication and successful-node repair boundaries as edit", async () => {
+    const e = engine(executor({ apply: async step => step.id === "a"
+        ? { kind: "applied", remoteRef: "remote:a" }
+        : { kind: "not_applied", reason: "Fix the second node" } }));
+    try {
+        const d = await e.create(selector, initial()), check = await e.preflight(d.id);
+        const run = await e.publish(d.id, check.certificate!);
+        assert.equal(run.state, "blocked");
+        const before = await e.getDraft(d.id);
+        const changeA = [{ op: "set" as const, nodeId: "a", path: "/name", value: "Changed" }];
+        await assert.rejects(e.preview(d.id, 0, changeA), /APPLIED_STEP_IMMUTABLE/);
+        await assert.rejects(e.edit(d.id, 0, changeA), /APPLIED_STEP_IMMUTABLE/);
+        await assert.rejects(e.preview(d.id, 0, [{ op: "node.add", id: "extra", nodeType: "task" }]), /REPAIR_TOPOLOGY_CHANGED/);
+        const allowed = await e.preview(d.id, 0, [{ op: "set", nodeId: "b", path: "/name", value: "Repaired" }]);
+        assert.equal(allowed.candidate.graph.nodes.b!.fields.name, "Repaired");
+        assert.deepEqual(await e.getDraft(d.id), before);
+        assert.deepEqual(await e.getCheck(d.id), check);
+    } finally { await e.close(); }
+    const { e: completed, d, c } = await ready();
+    try {
+        await completed.publish(d.id, c.certificate!);
+        const patch = [{ op: "set" as const, nodeId: "a", path: "/name", value: "Update" }];
+        await assert.rejects(completed.preview(d.id, 0, patch), /UPDATE_NOT_SUPPORTED/);
+        await assert.rejects(completed.edit(d.id, 0, patch), /UPDATE_NOT_SUPPORTED/);
+    } finally { await completed.close(); }
+});

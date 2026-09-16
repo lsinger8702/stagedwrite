@@ -1,4 +1,4 @@
-import { evaluateFields } from "./fields.js";
+import { evaluateFields, validateIntentSnapshot } from "./fields.js";
 import { parseEditBatch } from "./protocol.js";
 import type { DefinitionRegistry } from "../registry/registry.js";
 import type { DefinitionSelector } from "../registry/types.js";
@@ -39,6 +39,8 @@ export function registeredTopology(registry: DefinitionRegistry, selector: Defin
     },
     evaluate(state: TopologyState, baseline: TopologySnapshot, expectedDigest: string, batch: unknown, allocation: { preview?: boolean; nextId?: () => string } = {}) {
       if (expectedDigest !== digest) throw new EditInputError([{ code: "INVALID_EDIT_INPUT", path: "/definitionDigest", message: "The Draft definition does not match the registered definition.", hint: "Use the original definition version; do not reinterpret an existing Draft under changed relationship semantics." }]);
+      validateIntentSnapshot(registry, selector, state);
+      validateIntentSnapshot(registry, selector, baseline);
       const parsed = parseEditBatch(batch);
       const topology = evaluateTopology(state, baseline, parsed, { ...options, ...allocation });
       const fields = evaluateFields(registry, selector, topology.candidate, baseline, parsed.patches ?? []);

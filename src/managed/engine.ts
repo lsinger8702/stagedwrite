@@ -1,3 +1,4 @@
+import { protectIntentRepair } from "./edit-guards.js";
 import { compileUpdate, validateUpdatePlan, type UpdateProjection } from "./update-plan.js";
 import type { RemoteObservation } from "./types.js";
 import { randomUUID } from "node:crypto";
@@ -114,20 +115,9 @@ export function createStagedWrite(options: ManagedOptions) {
         const r = s.draft.currentRunId ? s.runs[s.draft.currentRunId] : undefined;
         if (!r)
             return;
-        if (r.state === "published")
-            throw new Error("UPDATE_NOT_SUPPORTED");
         const old = s.artifacts[r.artifactId]!.draft;
-        if (!same(old.graph.edges, d.graph.edges) || !same(Object.keys(old.graph.nodes).sort(), Object.keys(d.graph.nodes).sort()))
-            throw new Error("REPAIR_TOPOLOGY_CHANGED");
-        for (const n of Object.keys(old.graph.nodes))
-            if (old.graph.nodes[n]!.nodeType !== d.graph.nodes[n]!.nodeType)
-                throw new Error("REPAIR_TOPOLOGY_CHANGED");
-        for (const step of r.steps)
-            if (step.status === "applied") {
-                const n = step.effect!.nodeId;
-                if (!same(old.graph.nodes[n], d.graph.nodes[n]) || !same(old.fieldIntents[n], d.fieldIntents[n]))
-                    throw new Error("APPLIED_STEP_IMMUTABLE");
-            }
+        protectIntentRepair(d, { state: r.state, adopted: old,
+            successfulNodes: r.steps.filter(step => step.status === "applied").map(step => step.effect!.nodeId) });
         if (nextPlan) {
             if (nextPlan.length !== r.steps.length)
                 throw new Error("REPAIR_TOPOLOGY_CHANGED");
@@ -461,7 +451,14 @@ export function createStagedWrite(options: ManagedOptions) {
         async getBindings(id: string) { return copy((await need(id)).bindings); },
         async getArtifact(id: string, artifactId: string) { const artifacts = (await need(id)).artifacts; const a = Object.hasOwn(artifacts, artifactId) ? artifacts[artifactId] : undefined; if (!a)
             throw new Error("ARTIFACT_NOT_FOUND"); return copy(a); },
-        async preview(id: string, version: number, ops: readonly GraphOp[]) { const s = await need(id); const baseline = s.draft.publishedArtifactId ? s.artifacts[s.draft.publishedArtifactId]!.draft : s.draft.initialSnapshot; return editIntent(registry, s.draft, baseline, version, ops); },
+        async preview(id: string, version: number, ops: readonly GraphOp[]) {
+            const s = await need(id);
+            if (s.draft.status === "published") throw new Error("UPDATE_NOT_SUPPORTED");
+            const baseline = s.draft.publishedArtifactId ? s.artifacts[s.draft.publishedArtifactId]!.draft : s.draft.initialSnapshot;
+            const out = editIntent(registry, s.draft, baseline, version, ops);
+            protect(s, out.candidate);
+            return out;
+        },
         async edit(id: string, version: number, ops: readonly GraphOp[]): Promise<ManagedEditResult> {
             return withLease(id, async (l) => {
                 let changes: ReturnType<typeof editIntent>["changes"] = [];
