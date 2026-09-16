@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 export interface PublishOptions {
-    /** Optional caller-chosen identity for the Draft's first Run. Subsequent publication observes it. */
+    /** Caller-chosen identity for a new write Run. Reusing its certificate observes that Run; no-op publication rejects runId. */
     runId: string;
 }
 export function publicationId(options: PublishOptions | undefined): string {

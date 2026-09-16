@@ -1,4 +1,5 @@
-import { verifyRunUpdateReadback } from "./update-readback.js";
+import { adoptUpdate } from "./update-adoption.js";
+import { verifyRunUpdateReadback, verifyUpdateReadback } from "./update-readback.js";
 import { updateOutcome, updateContext, updateRequest, satisfyNoop } from "./update-evidence.js";
 import { registeredTopology } from "../edit/registered-topology.js";
 import { validateIntentSnapshot } from "../edit/fields.js";
@@ -129,16 +130,18 @@ export function createStagedWrite(options: ManagedOptions) {
         if (!r)
             return;
         const old = s.artifacts[r.artifactId]!.draft;
-        protectIntentRepair(d, { state: r.state, adopted: old,
-            successfulNodes: r.steps.filter(step => ["applied", "satisfied"].includes(step.status)).map(step => step.effect!.nodeId) });
+        if (r.state === "published" && !executor(s).updateWrites) throw Error("UPDATE_NOT_SUPPORTED");
+        protectIntentRepair(d, { state: r.state === "published" ? "blocked" : r.state, adopted: old,
+            successfulNodes: r.state === "published" ? [] : r.steps.filter(step => ["applied", "satisfied"].includes(step.status)).map(step => step.effect!.nodeId) });
         if (nextPlan) {
             if (nextPlan.length !== r.steps.length)
                 throw new Error("REPAIR_TOPOLOGY_CHANGED");
             for (let i = 0; i < nextPlan.length; i++) {
                 const prev = r.steps[i]!, next = nextPlan[i]!;
-                if (!same({ ...declaration(prev), payload: {} }, { ...declaration(next), payload: {} }))
+                const identity = (st: Step) => r.kind === "update" ? { id: st.id, nodeId: st.effect.nodeId, dependsOn: st.dependsOn ?? [] } : { ...declaration(st), payload: {} };
+                if (!same(identity(prev), identity(next)))
                     throw new Error("REPAIR_TOPOLOGY_CHANGED");
-                if (["applied", "satisfied"].includes(prev.status) && !same(declaration(prev), declaration(next)))
+                if (r.kind !== "update" && ["applied", "satisfied"].includes(prev.status) && !same(declaration(prev), declaration(next)))
                     throw new Error("APPLIED_STEP_IMMUTABLE");
             }
         }
@@ -154,7 +157,7 @@ export function createStagedWrite(options: ManagedOptions) {
                 if (!accepted.length)
                     diagnostics.push({ code: f.code ?? `execution.${step.status}`, path: `/nodes/${step.effect!.nodeId.replaceAll("~", "~0").replaceAll("/", "~1")}`, message: f.message ?? f.reason ?? "Execution needs attention", ...(step.status === "applied" ? { severity: "warning" as const } : {}) });
             }
-        return { ...copy(r), previewVersion: s.draft.version, preview: check?.preview ?? previewDraft(d, registry), diagnostics: check?.diagnostics ?? diagnostics, ...(check ? { check } : {}) };
+        return { ...copy(r), currentRunId: s.draft.currentRunId, isCurrentIntent: r.version === s.draft.version && (s.draft.status === "published" ? s.draft.publishedArtifactId === r.artifactId : s.draft.currentRunId === r.id), previewVersion: s.draft.version, preview: check?.preview ?? previewDraft(d, registry), diagnostics: check?.diagnostics ?? diagnostics, ...(check ? { check } : {}) };
     }
     function rulesDigest(d: ManagedDraft) {
         return asyncCheck.digest(d, preflight.rulesDigest(d));
@@ -187,6 +190,7 @@ export function createStagedWrite(options: ManagedOptions) {
             check.scope = "draft";
             if (check.status !== "passed") return { check };
             let slots: ManagedCheck["updatePreview"];
+            let compilation: Artifact["update"];
             const inspector = e.update;
             const reader = new AsyncPreflight(registry, [], [{
                 ...{ type: e.type, typeVersion: e.typeVersion }, id: `${e.id}.update.inspect`, version: e.version,
@@ -201,6 +205,7 @@ export function createStagedWrite(options: ManagedOptions) {
                         data.diagnostics !== undefined && !Array.isArray(data.diagnostics)) throw new Error("INVALID_UPDATE_OBSERVATION");
                     const compiled = compileUpdate(s, data.projections as unknown as UpdateProjection[], data.observations as unknown as RemoteObservation[]);
                     if (compiled.status === "passed") {
+                        compilation = compiled;
                         slots = { slots: compiled.slots };
                         if (inspector.plan) slots.plan = validateUpdatePlan(inspector.plan(frozen, deepFreeze(copy(compiled))), compiled, s);
                     }
@@ -209,6 +214,15 @@ export function createStagedWrite(options: ManagedOptions) {
             }], timeout);
             check = await reader.run(draft, check, deadline, baseline);
             if (check.status === "passed" && slots) check.updatePreview = copy(slots);
+            if (check.status === "passed" && e.updateWrites && compilation && slots?.plan) {
+                const owner = draft.currentRunId && s.runs[draft.currentRunId];
+                if (owner && owner.state !== "published") protect(s, draft, [...slots.plan]);
+                const binding = { checkId: check.checkId, definitionDigest: check.definitionDigest, rulesDigest: check.rulesDigest, executorId: e.id, executorVersion: e.version, target: e.target, planDigest: definitionDigest(slots.plan as unknown as Json) };
+                const artifact: Artifact = { id: randomUUID(), intentDigest: definitionDigest(snapshot(draft) as unknown as Json), draft, plan: copy([...slots.plan]), binding, resourceRevision: s.resourceRevision, update: compilation };
+                if (owner && owner.state === "published") check.executionHint = { runId: owner.id, nextAction: "publish" };
+                check.scope = "execution"; check.certificate = artifact.id; check.artifactId = artifact.id; check.execution = binding;
+                return { check, artifact };
+            }
             return { check };
         }
         check.scope = "execution";
@@ -321,7 +335,7 @@ export function createStagedWrite(options: ManagedOptions) {
             throw error;
         }
     }
-    async function readUpdateForDispatch(s: ManagedState, runId: string, signal: AbortSignal): Promise<GraphDiagnostic[]> {
+    async function readUpdateForDispatch(s: ManagedState, runId: string | null, signal: AbortSignal, artifactId?: string): Promise<GraphDiagnostic[]> {
         const e = executor(s);
         if (!e.updateWrites) return [{ code: "update.write_capability_required", path: "", message: "This executor has not declared update write capability.", hint: "Register a confirmed-receipt update executor before continuing this Run." }];
         let passed = false;
@@ -340,7 +354,8 @@ export function createStagedWrite(options: ManagedOptions) {
                 let diagnostics = fresh.diagnostics;
                 if (fresh.status === "passed") {
                     const plan = e.update.plan(deepFreeze(copy(s.draft)), deepFreeze(copy(fresh)));
-                    const result = verifyRunUpdateReadback(s, runId, projections, observations, plan);
+                    const a = artifactId ? s.artifacts[artifactId] : undefined;
+                    const result = a?.update ? verifyUpdateReadback(s, a.update, a.plan, projections, observations, plan) : verifyRunUpdateReadback(s, runId!, projections, observations, plan);
                     passed = result.status === "passed";
                     diagnostics = result.status === "blocked" ? result.diagnostics : [];
                 }
@@ -369,7 +384,7 @@ export function createStagedWrite(options: ManagedOptions) {
             if (!step) {
                 if (!reconcileOnly)
                     s = await tx(id, l, current => { const run = current.runs[runId]!; if (current.draft.version !== run.version)
-                        throw new Error("STALE_RUN_INPUT"); delete run.interruption; run.state = "published"; current.draft.status = "published"; current.draft.publishedArtifactId = run.artifactId; current.draft.lastPublishedAt ??= new Date().toISOString(); current.draft.updatedAt = new Date().toISOString(); });
+                        throw new Error("STALE_RUN_INPUT"); delete run.interruption; run.state = "published"; current.draft.status = "published"; current.draft.publishedArtifactId = run.artifactId; current.draft.lastPublishedAt = new Date().toISOString(); current.draft.updatedAt = new Date().toISOString(); });
                 return s;
             }
             const pending = [...r.attempts].reverse().find(a => a.stepId === step.id && ["pending", "unknown"].includes(a.status));
@@ -517,9 +532,9 @@ export function createStagedWrite(options: ManagedOptions) {
             throw new Error("ARTIFACT_NOT_FOUND"); return copy(a); },
         async preview(id: string, version: number, batch: EditBatch) {
             const s = await need(id);
-            if (s.draft.status === "published") throw new Error("UPDATE_NOT_SUPPORTED");
+            if (s.draft.publishedArtifactId && !executor(s).updateWrites) throw new Error("UPDATE_NOT_SUPPORTED");
             const baseline = baselineOf(s);
-            const out = prepareEdit(registry, s.draft, baseline, version, batch, { preview: true, now: new Date().toISOString() });
+            const out = prepareEdit(registry, s.draft, baseline, version, batch, { preview: true, allowPublished: executors.get(key(s.draft))?.updateWrites === true, now: new Date().toISOString() });
             protect(s, out.candidate);
             return out.preview;
         },
@@ -527,13 +542,14 @@ export function createStagedWrite(options: ManagedOptions) {
             return withLease(id, async (l) => {
                 let receipt: ManagedEditResult;
                 await tx(id, l, current => {
-                    if (current.draft.status === "published")
+                    if (current.draft.publishedArtifactId && !executor(current).updateWrites)
                         throw new Error("UPDATE_NOT_SUPPORTED");
                     const baseline = baselineOf(current);
-                    const out = prepareEdit(registry, current.draft, baseline, version, batch, { preview: false, now: new Date().toISOString() });
+                    const out = prepareEdit(registry, current.draft, baseline, version, batch, { preview: false, allowPublished: executors.get(key(current.draft))?.updateWrites === true, now: new Date().toISOString() });
                     protect(current, out.candidate);
                     receipt = out.receipt;
                     current.draft = out.candidate;
+                    current.draft.status = "pending";
                     current.check = null;
                 });
                 return copy(receipt!);
@@ -558,15 +574,44 @@ export function createStagedWrite(options: ManagedOptions) {
                 if (publishOptions !== undefined)
                     publicationId(publishOptions);
                 let s = await need(id);
+                const nonRunResponse = (state: ManagedState, kind: "noop" | "not_started", version: number, diagnostics: GraphDiagnostic[] = []) => {
+                    const common = { id: null, certificate, version, currentRunId: state.draft.currentRunId,
+                        isCurrentIntent: kind === "noop" && state.draft.publishedArtifactId === certificate && state.draft.version === version,
+                        previewVersion: state.draft.version, preview: previewDraft(state.draft, registry), diagnostics };
+                    return kind === "noop" ? { ...common, kind: "noop" as const, state: "published" as const } : { ...common, kind: "not_started" as const, state: "blocked" as const };
+                };
                 const adopted = s.publications[certificate];
+                if (adopted?.kind === "noop") {
+                    if (publishOptions !== undefined) throw Error("NOOP_RUN_ID_NOT_ALLOWED");
+                    return nonRunResponse(s, "noop", adopted.version);
+                }
                 if (adopted?.kind === "run") {
                     if (publishOptions?.runId && publishOptions.runId !== adopted.runId) throw new Error(`RUN_ID_CONFLICT: ${adopted.runId}`);
                     return response(s, s.runs[adopted.runId]!);
                 }
-                if (s.draft.currentRunId) {
+                if (s.draft.currentRunId && (s.runs[s.draft.currentRunId]!.state !== "published" || !executor(s).updateWrites)) {
                     if (publishOptions?.runId && publishOptions.runId !== s.draft.currentRunId)
                         throw new Error(`RUN_ID_CONFLICT: ${s.draft.currentRunId}`);
                     return response(s, s.runs[s.draft.currentRunId]!);
+                }
+                if (s.draft.publishedArtifactId) {
+                    const a = s.artifacts[certificate], e = executor(s);
+                    if (!a?.update || s.check?.certificate !== certificate || s.check.status !== "passed") throw Error("PREFLIGHT_REQUIRED");
+                    if (a.binding.definitionDigest !== s.draft.definitionDigest || a.binding.rulesDigest !== rulesDigest(s.draft) || a.binding.executorId !== e.id || a.binding.executorVersion !== e.version || a.binding.target !== e.target) throw Error("REGISTRATION_BINDING_MISMATCH");
+                    const noop = a.update.slots.every(slot => slot.kind === "noop");
+                    if (noop && publishOptions !== undefined) throw Error("NOOP_RUN_ID_NOT_ALLOWED");
+                    const diagnostics = await readUpdateForDispatch(s, null, signal, certificate);
+                    if (diagnostics.length) return nonRunResponse(s, "not_started", a.draft.version, diagnostics);
+                    const newId = noop ? undefined : publicationId(publishOptions);
+                    if (newId && await storage.findRun(newId)) throw Error("RUN_ID_CONFLICT");
+                    const prior = s;
+                    s = await tx(id, l, current => {
+                        if (current.resourceRevision !== prior.resourceRevision || current.draft.version !== prior.draft.version || current.draft.currentRunId !== prior.draft.currentRunId || !same(snapshot(current.draft), snapshot(prior.draft))) throw Error("STALE_UPDATE_READBACK");
+                        adoptUpdate(current, certificate, new Date().toISOString(), newId);
+                    });
+                    if (noop) return nonRunResponse(s, "noop", a.draft.version);
+                    s = await dispatch(id, newId!, l, signal);
+                    return response(s, s.runs[newId!]!);
                 }
                 const runId = publicationId(publishOptions), e = executor(s);
                 if (await storage.findRun(runId))
@@ -596,10 +641,8 @@ export function createStagedWrite(options: ManagedOptions) {
                 throw new Error("RUN_NOT_FOUND");
             return withLease(id, async (l, signal) => {
                 let s = await need(id), r = s.runs[runId]!;
-                if (s.draft.currentRunId !== runId)
-                    throw new Error("RUN_POINTER_MISMATCH");
-                if (r.state === "published")
-                    return response(s, r);
+                if (r.state === "published") return response(s, r);
+                if (s.draft.currentRunId !== runId) throw new Error("RUN_POINTER_MISMATCH");
                 validateBinding(s, r, executor(s));
                 if (r.attempts.some(a => ["pending", "unknown"].includes(a.status))) {
                     s = await dispatch(id, runId, l, signal, true);
@@ -607,7 +650,7 @@ export function createStagedWrite(options: ManagedOptions) {
                     if (r.attempts.some(a => ["pending", "unknown"].includes(a.status)))
                         return response(s, r);
                 }
-                if (s.draft.version !== r.version) {
+                if (s.draft.version !== r.version || r.kind === "update" && s.check?.certificate !== r.certificate && !!s.artifacts[s.check?.certificate ?? ""]?.update) {
                     const check = await runCheck(id, l);
                     s = await need(id);
                     r = s.runs[runId]!;
@@ -626,7 +669,11 @@ export function createStagedWrite(options: ManagedOptions) {
                             const old = run.steps[i]!;
                             if (["applied", "satisfied"].includes(old.status))
                                 return old;
-                            const changed = !same(declaration(old), declaration(st));
+                            const last = [...run.attempts].reverse().find(a => a.stepId === st.id);
+                            const oldObservation = last?.request.update && current.artifacts[last.request.update.artifactId]?.update?.context.observations.find(o => o.id === last.request.update!.observationId);
+                            const newObservation = a.update?.context.observations.find(o => o.nodeId === st.effect.nodeId);
+                            const conditions = (o: RemoteObservation | undefined) => o ? { nodeId: o.nodeId, remoteId: o.remoteId, targetId: o.targetId, projectionDigest: o.projectionDigest, values: o.values, remoteVersion: o.remoteVersion ?? null } : null;
+                            const changed = !same(declaration(old), declaration(st)) || !!a.update && !same(conditions(oldObservation || undefined), conditions(newObservation));
                             const attempted = run.attempts.some(a => a.stepId === st.id);
                             return { ...copy(st), key: changed && attempted ? JSON.stringify([runId, st.id, run.revision]) : old.key, status: "ready", ...(changed && attempted ? { requestRevision: run.revision } : {}) };
                         });

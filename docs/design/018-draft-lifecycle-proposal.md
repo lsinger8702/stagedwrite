@@ -1,5 +1,8 @@
 # 018：Draft 生命周期与首次发布闭环
 
+**当前实现（2026-09-17）：固定图字段 update 已接公开 edit/preflight/publish/resume，含 noop 提交、drift 阻断与原请求恢复。详见 [更新指南](../guides/update.md) 和 [U3 账本](../tasks/update-execution.md)。下文按阶段记录的“未实现/未开放”保留为历史实施记录，不代表当前状态。真实 Stripe update 尚待凭据联调；原有 Stripe create 录制不作 update 证据。**
+
+
 **状态：2026-09-15，按项目所有者批准的方向实施。原则见 [000](000-project-principles.md)；如需改变固定基线 reset、首次发布归属、图与意图分工或修复保护，必须先讨论。**
 
 **本版不做成功后的远端 update。长期 Draft 身份、成功产物与逐节点 Binding 已保留；不承诺未来无任何数据库迁移。**

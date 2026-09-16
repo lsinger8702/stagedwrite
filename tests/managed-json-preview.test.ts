@@ -49,7 +49,7 @@ for (const sqlite of [false, true]) test(`${sqlite ? "sqlite" : "memory"}: manag
             "/a~1b~0c": { kind: "value", value: null }, "/absent": { kind: "undeclared" }
         });
         assert.equal("/items/0" in fields, false);
-        const run = await engine.publish(draft.id, check.certificate!);
+        const run = await engine.publish(draft.id, check.certificate!); assert.ok(run.id !== null);
         assert.equal(run.state, "published");
         assert.deepEqual(run.preview.nodes[ref]!.fields, fields);
         assert.deepEqual((await engine.getRun(run.id)).preview.nodes[ref]!.fields, fields);
@@ -80,7 +80,7 @@ test("public nested edit: targeted remote repair updates one coordinate and resu
         const { draft, createdRefs } = await engine.create(selector, { roots: [{ nodeType: "task", fields: { profile: { name: "initial" } } }] });
         ref = createdRefs[0]!.ref;
         await engine.edit(draft.id, 0, { patches: [{ op: "set", ref, scope: "canonical", path: "/profile", value: { name: "reserved", note: "keep" } }, { op: "set", ref, scope: "canonical", path: "/items", value: ["one"] }] });
-        const check = await engine.preflight(draft.id), first = await engine.publish(draft.id, check.certificate!);
+        const check = await engine.preflight(draft.id), first = await engine.publish(draft.id, check.certificate!); assert.ok(first.id !== null);
         assert.equal(first.state, "blocked");
         const repair = first.diagnostics[0]!.candidates![0]!.repairOps!;
         assert.equal(repair.patches![0]!.path, "/profile/name");

@@ -19,11 +19,12 @@ export interface EditableDraft extends TopologyState, DefinitionSelector {
 export function prepareEdit<D extends EditableDraft>(registry: DefinitionRegistry, draft: D, baseline: TopologySnapshot,
   expectedVersion: number, batch: EditBatch, context: {
     preview: boolean;
+    allowPublished?: boolean;
     run?: RepairProtection;
     nextId?: () => string;
     now: string;
   }): { candidate: D; receipt: EditReceipt; preview: EditPreview<D> } {
-  if (draft.status === "published" || context.run?.state === "published") throw new Error("UPDATE_NOT_SUPPORTED");
+  if (draft.status === "published" && !context.allowPublished || context.run?.state === "published") throw new Error("UPDATE_NOT_SUPPORTED");
   requireEditVersion(draft.version, expectedVersion);
   const result = registeredTopology(registry, draft).evaluate(draft, baseline, draft.definitionDigest, batch, { preview: context.preview, nextId: context.nextId });
   protectIntentRepair(result.candidate, context.run);

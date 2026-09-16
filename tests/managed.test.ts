@@ -46,7 +46,7 @@ test("managed: atomic batches and preview neither mutate the draft nor turn rese
 test("managed: partial create is owned by one run, repairs resume only unfinished effects", async () => {
     const calls: string[] = [], keys: string[] = [];
     const e = engine(executor({ apply: async (s, k) => { calls.push(`${s.id}:${s.payload.name}`); keys.push(k); return s.payload.name === "Second" ? { kind: "not_applied", reason: "Name reserved", diagnostics: [{ code: "name.reserved", path: `/nodes/${nodeRef(d, "b")}/fields/name`, message: "Choose another name", candidates: [{ value: "Fixed", repairOps: { patches: [{ op: "set", ref: nodeRef(d, "b"), scope: "canonical" as const, path: "/name", value: "Fixed" }] } }] }] } : { kind: "applied", remoteRef: `remote:${s.id}` }; } }));
-    const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!, { runId: "initial-create" });
+    const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!, { runId: "initial-create" }); assert.ok(r.id !== null);
     assert.equal(r.state, "blocked");
     assert.equal(r.diagnostics[0]?.message, "Choose another name");
     assert.equal(r.diagnostics[0]?.candidates?.[0]?.repairOps?.patches?.length, 1);
@@ -80,7 +80,7 @@ test("managed: unknown is reconciled with original payload before adopting edits
     const inputs: string[] = [], keys: string[] = [];
     let calls = 0;
     const e = engine(executor({ apply: async (s, k) => { calls++; keys.push(k); return s.id === "b" && calls === 2 ? { kind: "unknown", reason: "Timeout" } : { kind: "applied", remoteRef: s.id }; }, reconcile: async (s, k) => { inputs.push(String(s.payload.name)); assert.equal(k, keys[1]); return { kind: "no_effect", reason: "Cancelled before acceptance" }; } }));
-    const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!);
+    const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!); assert.ok(r.id !== null);
     await e.edit(d.id, 0, { patches: [{ op: "set", ref: nodeRef(d, "b"), scope: "canonical" as const, path: "/name", value: "Repaired" }] });
     const done = await e.resume(r.id);
     assert.equal(done.state, "published");
@@ -92,7 +92,7 @@ test("managed: unknown is reconciled with original payload before adopting edits
 test("managed: unknown that resolves applied blocks contradictory repair until intent matches receipt", async () => {
     let calls = 0;
     const e = engine(executor({ apply: async (s) => { calls++; return s.id === "b" ? { kind: "unknown", reason: "Timeout" } : { kind: "applied", remoteRef: s.id }; }, reconcile: async (s) => ({ kind: "applied", remoteRef: s.id }) }));
-    const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!);
+    const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!); assert.ok(r.id !== null);
     await e.edit(d.id, 0, { patches: [{ op: "set", ref: nodeRef(d, "b"), scope: "canonical" as const, path: "/name", value: "Different" }] });
     const blocked = await e.resume(r.id);
     assert.equal(blocked.check?.status, "blocked");
@@ -106,7 +106,7 @@ test("managed: same-input refusal can resume without edit, same request key and 
     const keys: string[] = [];
     let count = 0;
     const { e, d, c } = await ready(engine(executor({ apply: async (s, k) => { keys.push(k); count++; return count === 2 ? { kind: "not_applied", reason: "Temporary refusal", retryable: true } : { kind: "applied", remoteRef: s.id }; } })));
-    const r = await e.publish(d.id, c.certificate!);
+    const r = await e.publish(d.id, c.certificate!); assert.ok(r.id !== null);
     assert.equal((await e.resume(r.id)).state, "published");
     assert.equal(keys[1], keys[2]);
     assert.equal(keys.length, 3);
@@ -158,7 +158,7 @@ test("managed: SQLite reopen restores partial facts, baseline, run pointer and s
     const dir = mkdtempSync(join(tmpdir(), "sw-managed-")), path = join(dir, "state.sqlite");
     try {
         const backend = createSqliteBackend(path), e = engine(executor({ apply: async (s) => s.id === "b" ? { kind: "unknown", reason: "Disconnected" } : { kind: "applied", remoteRef: s.id } }), backend);
-        const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!);
+        const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!); assert.ok(r.id !== null);
         await e.close();
         let calls = 0;
         const next = engine(executor({ apply: async () => { calls++; throw Error("must not create"); }, reconcile: async (s, k) => { assert.equal(k, r.steps[1]!.key); return { kind: "applied", remoteRef: s.id }; } }), createSqliteBackend(path));
@@ -423,7 +423,7 @@ test("managed: confirmed remote values persist with creation evidence and origin
     const e = engine(executor({ apply: async s => first ? (first = false, { kind: "unknown", reason: "lost" }) : { kind: "applied", remoteRef: `remote:${s.id}`, confirmed },
         reconcile: async (s, _key) => { assert.deepEqual(s.payload, { name: "First", note: null }); return { kind: "applied", remoteRef: "remote:a", confirmed }; } }), backend);
     try {
-        const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!);
+        const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!); assert.ok(r.id !== null);
         const unknown = (await backend.storage.read(d.id))!;
         assert.equal(Object.keys(unknown.remoteFacts).length, 0);
         assert.equal(unknown.runs[r.id]!.attempts[0]!.request.target, "mock:test");
@@ -441,7 +441,7 @@ test("managed: malformed optional confirmation does not erase an applied creatio
     const backend = createMemoryBackend(); let calls = 0;
     const e = engine(executor({ apply: async s => { calls++; return { kind: "applied", remoteRef: s.id, confirmed: { projectionDigest: "v1", values: { name: { kind: "value", value: NaN } } } }; } }), backend);
     try {
-        const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!);
+        const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!); assert.ok(r.id !== null);
         assert.equal(r.state, "published"); assert.equal(calls, 2);
         assert.equal(r.diagnostics.length, 2);
         assert.ok(r.diagnostics.every(d => d.code === "CONFIRMED_FACT_INVALID" && d.severity === "warning"));
@@ -469,7 +469,7 @@ test("managed: initial and repair certificates durably adopt the same run", asyn
     const backend = createMemoryBackend(); let calls = 0;
     const e = engine(executor({ apply: async s => { calls++; return s.payload.name === "Second" ? { kind: "not_applied", reason: "repair" } : { kind: "applied", remoteRef: s.id }; } }), backend);
     try {
-        const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!);
+        const { d, c } = await ready(e), r = await e.publish(d.id, c.certificate!); assert.ok(r.id !== null);
         await e.edit(d.id, 0, { patches: [{ op: "set", ref: nodeRef(d, "b"), scope: "canonical" as const, path: "/name", value: "Fixed" }] });
         const done = await e.resume(r.id); assert.equal(done.state, "published");
         const s = (await backend.storage.read(d.id))!;
@@ -500,7 +500,7 @@ test("managed: preview enforces the same publication and successful-node repair 
         : { kind: "not_applied", reason: "Fix the second node" } }));
     try {
         const d = rememberRefs(await e.create(selector, initial()), ["a","b"]), check = await e.preflight(d.id);
-        const run = await e.publish(d.id, check.certificate!);
+        const run = await e.publish(d.id, check.certificate!); assert.ok(run.id !== null);
         assert.equal(run.state, "blocked");
         const before = await e.getDraft(d.id);
         const changeA = { patches: [{ op: "set" as const, ref: nodeRef(d, "a"), scope: "canonical" as const, path: "/name", value: "Changed" }] };

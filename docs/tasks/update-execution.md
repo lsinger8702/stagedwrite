@@ -1,15 +1,15 @@
 # U3：固定图 update 执行账本
 
-**2026-09-17：三态 OP 迁移已结项。按已批准的 [020](../design/020-update-contract-proposal.md) / [021](../design/021-update-data-model.md) 恢复 U3；本账本只记录执行阶段。U4 真实 Stripe update 与 U5 文档验收仍在后面。当前公开 edit/publish 尚未开放远端 update。**
+**2026-09-17：三态 OP 迁移已结项。按已批准的 [020](../design/020-update-contract-proposal.md) / [021](../design/021-update-data-model.md) 恢复 U3；本账本只记录执行阶段。U3 与 U5 文档/离线验收已完成；U4 样例已就绪，真实 Stripe update 待凭据验收。当前已开放显式 update 写能力 executor 的固定图字段更新；真实 Stripe update 单独验收。**
 
 | 任务 | 状态 | 交付与验收 |
 |---|---|---|
-| U3.1 写前复核组件 | 完成（内部） | 当前本地基线/Run/事实修订一致；新观察值/令牌与已检查条件一致；不静默更换计划。未接入 publish，不是执行授权 |
+| U3.1 写前复核组件 | 完成（已接公开派发） | 当前本地基线/Run/事实修订一致；新观察值/令牌与已检查条件一致；不静默更换计划。通过调用方持租约复核并在事务内校验 |
 | U3.2 产物与原请求证据 | 完成（模型与存储边界） | Artifact 保存编译基线、投影/观察；Attempt 固定 update 目标/前置条件；读写边界验证完整证据 |
 | U3.3 共用执行槽位 | 完成（已认领 Run 的执行路径） | 现有 dispatch 支持 update/noop；update 保留原 Binding，严格匹配确认值；noop 用独立满意证据，不伪造 applied Attempt |
-| U3.4 认领与提交 | 待做 | certificate 采用优先、单未决 Run、update Run 原子认领；全图 noop 持久采用；历史响应区分当前意图；事务失败无半提交 |
-| U3.5 edit/resume 接线 | 待做 | 成功后仅字段编辑；固定成功基线 reset；每次 update 续作重新读取；旧 unknown 原信封先查证，本 Run 成功节点保护 |
-| U3.6 故障验收与开启 | 待做 | Memory/SQLite、并发/失锁/迟到回执/收尾失败、A→B→A/无差异/历史观察；能力完整后开启公开 update |
+| U3.4 认领与提交 | 完成 | certificate 采用优先、单未决 Run、update Run 原子认领；全图 noop 持久采用；历史响应区分当前意图；事务失败无半提交 |
+| U3.5 edit/resume 接线 | 完成 | 成功后仅字段编辑；固定成功基线 reset；每次 update 续作重新读取；旧 unknown 原信封先查证，本 Run 成功节点保护 |
+| U3.6 故障验收与开启 | 完成（本地后端） | Memory/SQLite、并发/失锁/迟到回执/收尾失败、A→B→A/无差异/历史观察；能力完整后开启公开 update |
 
 ## U3.1 — 2026-09-17
 
@@ -68,3 +68,23 @@
 - 修复实际接线发现的诊断包装差异：检查结果的 source 包装在转换为执行反馈时去掉，保留真实 code/message/hint/metadata，避免 drift 被丢成泛化错误。
 - 验证：核心 167/167（含 TSC）；两后端实际 resume 覆盖 drift/令牌变化/映射变化/pending/事务内状态变化的零写入、自动 noop，以及两节点逐次 update 后重新检查。Stripe 离线 13/13；首次创建 walkthrough 实录对照通过。
 - **测试仍由存储 fixture 预置已认领 update Run；这次实际运行了读取/事务/派发/回执闭环，但没有证明公开 publish 的 update 认领已完成。** U3.4 负责公开凭据与认领、全图 noop 采用及收尾；U3.5 负责成功后 edit 和修复重新采用；U3.6 补齐故障矩阵后才开放。未调用真实远端服务。本批新改动未推送。
+
+## U3.4 原子采用 — 2026-09-17
+
+- U3.3 派发接线已推送 `bde6f72`。
+- 新增内部 adoptUpdate 事务变更：先识别已采用凭据，再校验无未决 Run、固定基线、当前执行凭据、意图与 resourceRevision。存在写入时同事务创建 update Run/采用记录/归属，新 key 包含新 Run ID；不派发 I/O。
+- 全图 noop 不建 Run，不产生 Attempt，原子保存观察 RemoteFact/latest 指针、采用记录与成功基线/时间；currentRunId 保留。显式传 runId 拒绝。存储边界要求 noop 采用确有全图 noop 编译证据与相应观察事实，不能只写一行 published。
+- 两后端测试覆盖：事务异常整体回滚、过期检查拒绝、重复凭据不改状态、不同 Run ID 拒绝、未决 Run 禁止第二次认领、SQLite 重开、noop 后基于新基线认领 update，以及旧 noop 凭据重放不回退当前 Run/基线。
+- 验证：核心 171/171（含 TSC）；Stripe 离线 13/13；首次创建 walkthrough 实录对照通过。
+- **本批是内部事务组件与实际后端测试，不是公开 publish 的端到端验收。** 持锁新鲜读取、注册绑定验证须由公开认领调用方串联；组件本身不授予派发权限。U3.4 的公开检查凭据/结果区分、全图成功收尾仍待接线；公开 update 继续关闭。本批新增改动尚未推送。
+
+## U3.4–U3.6 连续收尾 — 2026-09-17
+
+- update-capable preflight 生成 Artifact/凭据；只读 inspector 保持 draft scope。publish 先返回历史采用，再检查未决 Run，持锁复核后原子认领 update 或提交全图 noop。返回 kind 区分 Run/noop/not_started；无写入结果 id=null，不伪造 Run。currentRunId、previewVersion、isCurrentIntent 明确区分历史结果和当前意图。
+- 成功后 edit/preview 只开放字段变更，固定图约束仍在；reset 使用最近全量成功产物。当前未决 Run 的成功节点保护保留，历史成功节点不永久锁死新 update。未知请求先使用原请求/条件/key 查证，矛盾修复拒绝；修复采用新证书仍属于原 Run，条件改变参与新 key 判断。显式重新预检后可重新采用同版本的新条件。
+- 收尾更新成功基线和时间；存储要求 published update 有每个槽位的 applied/satisfied 证据。历史 completed Run 的 resume 只观察，不与当前 Run 指针争用。
+- 新增 tests/update-lifecycle.test.ts，完全走公开 create/edit/preflight/publish/resume，不预置 Run。两后端覆盖 A→B→A、新 key、no-op、旧凭据、部分成功保护/修复、unknown 与矛盾修复、认领/回执/最终收尾/no-op 提交失败、并发 publish/edit、读取超时迟到、读取失锁、远端生效后失锁与迟到回执。
+- 核心 195/195（含 TSC）。独立 Product update 样例使用原始成功响应的持久回执日志恢复，不以 GET 值相等证明请求成功；日志缺失保持 unknown。离线 HTML/JSON/ZIP 从实际库和 SQLite 调用生成，固定 Mock 时钟/ID 以实现字节检查，CI 增加 verify:update。
+- U4 真实 Stripe update：仓库无凭据文件，当前环境无 STRIPE_SECRET_KEY/STRIPE_SANDBOX_ACCOUNT；已请求本机凭据路径。样例及测试可完成，真实联网验收不能冒充完成。未更改旧 Stripe 录制摘要。
+
+- 最终验收：核心 195/195；Stripe 离线 15/15；原 walkthrough 6/6、实录重跑及 HTML/ZIP 字节一致；新增 update 实录重跑及 HTML/ZIP 字节一致；隔离安装、公开类型、SQLite 重开和打包 smoke 全部通过。U5 中英文入口、接入指南、离线下载及 CI 闸门已完成。

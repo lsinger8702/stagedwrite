@@ -1,0 +1,789 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>StagedWrite update · actual I/O</title><style>body{font:16px system-ui;max-width:960px;margin:24px auto;padding:16px;background:#f5f7fa;color:#172238}details{background:white;padding:16px;margin:12px 0;border-radius:10px}summary{cursor:pointer;font-weight:700}pre{overflow:auto;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere}h1{font-size:28px}</style><h1>更新同一个远端资源</h1><p>实际执行 StagedWrite 与 SQLite。远端为 Stripe 形状的 Mock，无网络或大模型调用。包含创建、编辑、预检、更新回执丢失、重开后 resume、noop 发布。</p><details><summary>1. create · </summary><h3>输入</h3><pre>[
+  {
+    "type": "stripe.product-update",
+    "typeVersion": "1"
+  },
+  {
+    "roots": [
+      {
+        "nodeType": "product",
+        "fields": {
+          "name": "StagedWrite update example A"
+        }
+      }
+    ]
+  }
+]</pre><h3>输出</h3><pre>{
+  "draft": {
+    "graph": {
+      "nodes": {
+        "node_00000000-0000-4000-8000-000000000003": {
+          "id": "node_00000000-0000-4000-8000-000000000003",
+          "nodeType": "product",
+          "fields": {
+            "name": "StagedWrite update example A"
+          }
+        }
+      },
+      "edges": {}
+    },
+    "fieldIntents": {
+      "node_00000000-0000-4000-8000-000000000003": {
+        "/name": {
+          "kind": "set",
+          "value": "StagedWrite update example A"
+        }
+      }
+    },
+    "tombstones": {
+      "nodes": [],
+      "edges": []
+    },
+    "formatVersion": 3,
+    "id": "00000000-0000-4000-8000-000000000002",
+    "version": 0,
+    "type": "stripe.product-update",
+    "typeVersion": "1",
+    "definitionDigest": "sha256:stagedwrite-json-v1:b0300bb01488b008b0a21649654a29cac51613bd36244022540cf0c33a77c3e6",
+    "status": "pending",
+    "currentRunId": null,
+    "targetId": null,
+    "initialSnapshot": {
+      "graph": {
+        "nodes": {
+          "node_00000000-0000-4000-8000-000000000003": {
+            "id": "node_00000000-0000-4000-8000-000000000003",
+            "nodeType": "product",
+            "fields": {
+              "name": "StagedWrite update example A"
+            }
+          }
+        },
+        "edges": {}
+      },
+      "fieldIntents": {
+        "node_00000000-0000-4000-8000-000000000003": {
+          "/name": {
+            "kind": "set",
+            "value": "StagedWrite update example A"
+          }
+        }
+      }
+    },
+    "publishedArtifactId": null,
+    "lastPublishedAt": null,
+    "createdAt": "2026-09-17T00:00:00.000Z",
+    "updatedAt": "2026-09-17T00:00:00.000Z"
+  },
+  "createdRefs": [
+    {
+      "path": "/roots/0",
+      "ref": "node_00000000-0000-4000-8000-000000000003"
+    }
+  ]
+}</pre></details><details><summary>2. preflight · passed</summary><h3>输入</h3><pre>[
+  "00000000-0000-4000-8000-000000000002"
+]</pre><h3>输出</h3><pre>{
+  "formatVersion": 3,
+  "scope": "execution",
+  "checkId": "00000000-0000-4000-8000-000000000006",
+  "draftId": "00000000-0000-4000-8000-000000000002",
+  "version": 0,
+  "definitionDigest": "sha256:stagedwrite-json-v1:b0300bb01488b008b0a21649654a29cac51613bd36244022540cf0c33a77c3e6",
+  "rulesDigest": "sha256:stagedwrite-json-v1:9834977a94cb361a8232bed44b5096a8e67e93ea5f9ae35604675e0ad29f831b",
+  "preview": {
+    "id": "00000000-0000-4000-8000-000000000002",
+    "version": 0,
+    "type": "stripe.product-update",
+    "typeVersion": "1",
+    "definitionDigest": "sha256:stagedwrite-json-v1:b0300bb01488b008b0a21649654a29cac51613bd36244022540cf0c33a77c3e6",
+    "nodes": {
+      "node_00000000-0000-4000-8000-000000000003": {
+        "id": "node_00000000-0000-4000-8000-000000000003",
+        "nodeType": "product",
+        "fields": {
+          "/name": {
+            "kind": "value",
+            "value": "StagedWrite update example A"
+          }
+        }
+      }
+    },
+    "edges": {},
+    "tombstones": {
+      "nodes": [],
+      "edges": []
+    }
+  },
+  "status": "passed",
+  "diagnostics": [],
+  "certificate": "00000000-0000-4000-8000-000000000007",
+  "artifactId": "00000000-0000-4000-8000-000000000007",
+  "execution": {
+    "checkId": "00000000-0000-4000-8000-000000000006",
+    "definitionDigest": "sha256:stagedwrite-json-v1:b0300bb01488b008b0a21649654a29cac51613bd36244022540cf0c33a77c3e6",
+    "rulesDigest": "sha256:stagedwrite-json-v1:9834977a94cb361a8232bed44b5096a8e67e93ea5f9ae35604675e0ad29f831b",
+    "executorId": "stripe.product-update",
+    "executorVersion": "1",
+    "target": "mock:stripe-products",
+    "planDigest": "sha256:stagedwrite-json-v1:5d87a14c50e404a0bffbb2a0f6f8d9656a41f97aba7bf3bcaf39189b3474a9e6"
+  }
+}</pre></details><details><summary>3. publish · published</summary><h3>输入</h3><pre>[
+  "00000000-0000-4000-8000-000000000002",
+  "00000000-0000-4000-8000-000000000007"
+]</pre><h3>输出</h3><pre>{
+  "id": "00000000-0000-4000-8000-00000000000a",
+  "draftId": "00000000-0000-4000-8000-000000000002",
+  "kind": "initial_create",
+  "version": 0,
+  "state": "published",
+  "artifactId": "00000000-0000-4000-8000-000000000007",
+  "initialArtifactId": "00000000-0000-4000-8000-000000000007",
+  "certificate": "00000000-0000-4000-8000-000000000007",
+  "revision": 0,
+  "revisions": [],
+  "attempts": [
+    {
+      "stepId": "node_00000000-0000-4000-8000-000000000003",
+      "key": "[\"00000000-0000-4000-8000-00000000000a\",\"node_00000000-0000-4000-8000-000000000003\",0]",
+      "number": 1,
+      "input": {
+        "name": "StagedWrite update example A"
+      },
+      "request": {
+        "step": {
+          "id": "node_00000000-0000-4000-8000-000000000003",
+          "payload": {
+            "name": "StagedWrite update example A"
+          },
+          "effect": {
+            "kind": "create",
+            "nodeId": "node_00000000-0000-4000-8000-000000000003"
+          }
+        },
+        "target": "mock:stripe-products",
+        "executorId": "stripe.product-update",
+        "executorVersion": "1"
+      },
+      "status": "applied",
+      "outcome": {
+        "kind": "applied",
+        "remoteRef": "prod_mock",
+        "confirmed": {
+          "projectionDigest": "product-name-v1",
+          "values": {
+            "name": {
+              "kind": "value",
+              "value": "StagedWrite update example A"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "events": [
+    {
+      "sequence": 1,
+      "stepId": "node_00000000-0000-4000-8000-000000000003",
+      "kind": "dispatching",
+      "recordedAt": "2026-09-17T00:00:00.000Z"
+    },
+    {
+      "sequence": 2,
+      "stepId": "node_00000000-0000-4000-8000-000000000003",
+      "kind": "applied",
+      "recordedAt": "2026-09-17T00:00:00.000Z"
+    }
+  ],
+  "steps": [
+    {
+      "id": "node_00000000-0000-4000-8000-000000000003",
+      "payload": {
+        "name": "StagedWrite update example A"
+      },
+      "effect": {
+        "kind": "create",
+        "nodeId": "node_00000000-0000-4000-8000-000000000003"
+      },
+      "key": "[\"00000000-0000-4000-8000-00000000000a\",\"node_00000000-0000-4000-8000-000000000003\",0]",
+      "status": "applied",
+      "resolvedPayload": {
+        "name": "StagedWrite update example A"
+      },
+      "feedback": {},
+      "remoteRef": "prod_mock"
+    }
+  ],
+  "currentRunId": "00000000-0000-4000-8000-00000000000a",
+  "isCurrentIntent": true,
+  "previewVersion": 0,
+  "preview": {
+    "id": "00000000-0000-4000-8000-000000000002",
+    "version": 0,
+    "type": "stripe.product-update",
+    "typeVersion": "1",
+    "definitionDigest": "sha256:stagedwrite-json-v1:b0300bb01488b008b0a21649654a29cac51613bd36244022540cf0c33a77c3e6",
+    "nodes": {
+      "node_00000000-0000-4000-8000-000000000003": {
+        "id": "node_00000000-0000-4000-8000-000000000003",
+        "nodeType": "product",
+        "fields": {
+          "/name": {
+            "kind": "value",
+            "value": "StagedWrite update example A"
+          }
+        }
+      }
+    },
+    "edges": {},
+    "tombstones": {
+      "nodes": [],
+      "edges": []
+    }
+  },
+  "diagnostics": []
+}</pre></details><details><summary>4. edit · </summary><h3>输入</h3><pre>[
+  "00000000-0000-4000-8000-000000000002",
+  0,
+  {
+    "patches": [
+      {
+        "op": "set",
+        "ref": "node_00000000-0000-4000-8000-000000000003",
+        "scope": "canonical",
+        "path": "/name",
+        "value": "StagedWrite update example B"
+      }
+    ]
+  }
+]</pre><h3>输出</h3><pre>{
+  "draftId": "00000000-0000-4000-8000-000000000002",
+  "version": 1,
+  "preflightRequired": true,
+  "changes": [
+    {
+      "inputPath": "/patches/0",
+      "op": "set",
+      "ref": "node_00000000-0000-4000-8000-000000000003",
+      "scope": "canonical",
+      "target": "field",
+      "path": "/name",
+      "before": {
+        "kind": "set",
+        "value": "StagedWrite update example A"
+      },
+      "after": {
+        "kind": "set",
+        "value": "StagedWrite update example B"
+      }
+    }
+  ],
+  "createdRefs": []
+}</pre></details><details><summary>5. preflight · passed</summary><h3>输入</h3><pre>[
+  "00000000-0000-4000-8000-000000000002"
+]</pre><h3>输出</h3><pre>{
+  "formatVersion": 3,
+  "scope": "execution",
+  "checkId": "00000000-0000-4000-8000-00000000000d",
+  "draftId": "00000000-0000-4000-8000-000000000002",
+  "version": 1,
+  "definitionDigest": "sha256:stagedwrite-json-v1:b0300bb01488b008b0a21649654a29cac51613bd36244022540cf0c33a77c3e6",
+  "rulesDigest": "sha256:stagedwrite-json-v1:9834977a94cb361a8232bed44b5096a8e67e93ea5f9ae35604675e0ad29f831b",
+  "preview": {
+    "id": "00000000-0000-4000-8000-000000000002",
+    "version": 1,
+    "type": "stripe.product-update",
+    "typeVersion": "1",
+    "definitionDigest": "sha256:stagedwrite-json-v1:b0300bb01488b008b0a21649654a29cac51613bd36244022540cf0c33a77c3e6",
+    "nodes": {
+      "node_00000000-0000-4000-8000-000000000003": {
+        "id": "node_00000000-0000-4000-8000-000000000003",
+        "nodeType": "product",
+        "fields": {
+          "/name": {
+            "kind": "value",
+            "value": "StagedWrite update example B"
+          }
+        }
+      }
+    },
+    "edges": {},
+    "tombstones": {
+      "nodes": [],
+      "edges": []
+    }
+  },
+  "status": "passed",
+  "diagnostics": [],
+  "executionHint": {
+    "runId": "00000000-0000-4000-8000-00000000000a",
+    "nextAction": "publish"
+  },
+  "pendingRules": [],
+  "updatePreview": {
+    "slots": [
+      {
+        "nodeId": "node_00000000-0000-4000-8000-000000000003",
+        "remoteId": "prod_mock",
+        "kind": "update",
+        "changes": [
+          {
+            "field": "name",
+            "path": "/nodes/node_00000000-0000-4000-8000-000000000003/fields/name",
+            "before": {
+              "kind": "value",
+              "value": "StagedWrite update example A"
+            },
+            "after": {
+              "kind": "value",
+              "value": "StagedWrite update example B"
+            }
+          }
+        ],
+        "observationId": "read:node_00000000-0000-4000-8000-000000000003",
+        "factId": "[\"00000000-0000-4000-8000-00000000000a\",\"node_00000000-0000-4000-8000-000000000003\",1]"
+      }
+    ],
+    "plan": [
+      {
+        "id": "node_00000000-0000-4000-8000-000000000003",
+        "payload": {
+          "name": "StagedWrite update example B"
+        },
+        "effect": {
+          "kind": "update",
+          "nodeId": "node_00000000-0000-4000-8000-000000000003",
+          "remoteId": "prod_mock"
+        }
+      }
+    ]
+  },
+  "certificate": "00000000-0000-4000-8000-00000000000e",
+  "artifactId": "00000000-0000-4000-8000-00000000000e",
+  "execution": {
+    "checkId": "00000000-0000-4000-8000-00000000000d",
+    "definitionDigest": "sha256:stagedwrite-json-v1:b0300bb01488b008b0a21649654a29cac51613bd36244022540cf0c33a77c3e6",
+    "rulesDigest": "sha256:stagedwrite-json-v1:9834977a94cb361a8232bed44b5096a8e67e93ea5f9ae35604675e0ad29f831b",
+    "executorId": "stripe.product-update",
+    "executorVersion": "1",
+    "target": "mock:stripe-products",
+    "planDigest": "sha256:stagedwrite-json-v1:4c9d4dbf0ad07cd37077b8c9b945a636a54b049f640ed531c773dee91a010684"
+  }
+}</pre></details><details><summary>6. publish · unknown</summary><h3>输入</h3><pre>[
+  "00000000-0000-4000-8000-000000000002",
+  "00000000-0000-4000-8000-00000000000e"
+]</pre><h3>输出</h3><pre>{
+  "id": "00000000-0000-4000-8000-000000000012",
+  "draftId": "00000000-0000-4000-8000-000000000002",
+  "kind": "update",
+  "version": 1,
+  "state": "unknown",
+  "initialArtifactId": "00000000-0000-4000-8000-00000000000e",
+  "artifactId": "00000000-0000-4000-8000-00000000000e",
+  "certificate": "00000000-0000-4000-8000-00000000000e",
+  "revision": 0,
+  "revisions": [],
+  "attempts": [
+    {
+      "stepId": "node_00000000-0000-4000-8000-000000000003",
+      "key": "[\"00000000-0000-4000-8000-000000000012\",\"node_00000000-0000-4000-8000-000000000003\",0]",
+      "number": 1,
+      "input": {
+        "name": "StagedWrite update example B"
+      },
+      "request": {
+        "step": {
+          "id": "node_00000000-0000-4000-8000-000000000003",
+          "payload": {
+            "name": "StagedWrite update example B"
+          },
+          "effect": {
+            "kind": "update",
+            "nodeId": "node_00000000-0000-4000-8000-000000000003",
+            "remoteId": "prod_mock"
+          }
+        },
+        "target": "mock:stripe-products",
+        "executorId": "stripe.product-update",
+        "executorVersion": "1",
+        "update": {
+          "artifactId": "00000000-0000-4000-8000-00000000000e",
+          "observationId": "read:node_00000000-0000-4000-8000-000000000003"
+        }
+      },
+      "status": "unknown",
+      "outcome": {
+        "kind": "unknown",
+        "reason": "Injected receipt loss after storing the actual Stripe response"
+      }
+    }
+  ],
+  "events": [
+    {
+      "sequence": 1,
+      "stepId": "node_00000000-0000-4000-8000-000000000003",
+      "kind": "dispatching",
+      "recordedAt": "2026-09-17T00:00:00.000Z"
+    },
+    {
+      "sequence": 2,
+      "stepId": "node_00000000-0000-4000-8000-000000000003",
+      "kind": "unknown",
+      "recordedAt": "2026-09-17T00:00:00.000Z",
+      "reason": "Injected receipt loss after storing the actual Stripe response"
+    }
+  ],
+  "steps": [
+    {
+      "id": "node_00000000-0000-4000-8000-000000000003",
+      "payload": {
+        "name": "StagedWrite update example B"
+      },
+      "effect": {
+        "kind": "update",
+        "nodeId": "node_00000000-0000-4000-8000-000000000003",
+        "remoteId": "prod_mock"
+      },
+      "key": "[\"00000000-0000-4000-8000-000000000012\",\"node_00000000-0000-4000-8000-000000000003\",0]",
+      "status": "unknown",
+      "resolvedPayload": {
+        "name": "StagedWrite update example B"
+      },
+      "feedback": {
+        "reason": "Injected receipt loss after storing the actual Stripe response"
+      }
+    }
+  ],
+  "currentRunId": "00000000-0000-4000-8000-000000000012",
+  "isCurrentIntent": true,
+  "previewVersion": 1,
+  "preview": {
+    "id": "00000000-0000-4000-8000-000000000002",
+    "version": 1,
+    "type": "stripe.product-update",
+    "typeVersion": "1",
+    "definitionDigest": "sha256:stagedwrite-json-v1:b0300bb01488b008b0a21649654a29cac51613bd36244022540cf0c33a77c3e6",
+    "nodes": {
+      "node_00000000-0000-4000-8000-000000000003": {
+        "id": "node_00000000-0000-4000-8000-000000000003",
+        "nodeType": "product",
+        "fields": {
+          "/name": {
+            "kind": "value",
+            "value": "StagedWrite update example B"
+          }
+        }
+      }
+    },
+    "edges": {},
+    "tombstones": {
+      "nodes": [],
+      "edges": []
+    }
+  },
+  "diagnostics": [
+    {
+      "code": "execution.unknown",
+      "path": "/nodes/node_00000000-0000-4000-8000-000000000003",
+      "message": "Injected receipt loss after storing the actual Stripe response"
+    }
+  ]
+}</pre></details><details><summary>7. resume · published</summary><h3>输入</h3><pre>[
+  "00000000-0000-4000-8000-000000000012"
+]</pre><h3>输出</h3><pre>{
+  "id": "00000000-0000-4000-8000-000000000012",
+  "draftId": "00000000-0000-4000-8000-000000000002",
+  "kind": "update",
+  "version": 1,
+  "state": "published",
+  "initialArtifactId": "00000000-0000-4000-8000-00000000000e",
+  "artifactId": "00000000-0000-4000-8000-00000000000e",
+  "certificate": "00000000-0000-4000-8000-00000000000e",
+  "revision": 0,
+  "revisions": [],
+  "attempts": [
+    {
+      "stepId": "node_00000000-0000-4000-8000-000000000003",
+      "key": "[\"00000000-0000-4000-8000-000000000012\",\"node_00000000-0000-4000-8000-000000000003\",0]",
+      "number": 1,
+      "input": {
+        "name": "StagedWrite update example B"
+      },
+      "request": {
+        "step": {
+          "id": "node_00000000-0000-4000-8000-000000000003",
+          "payload": {
+            "name": "StagedWrite update example B"
+          },
+          "effect": {
+            "kind": "update",
+            "nodeId": "node_00000000-0000-4000-8000-000000000003",
+            "remoteId": "prod_mock"
+          }
+        },
+        "target": "mock:stripe-products",
+        "executorId": "stripe.product-update",
+        "executorVersion": "1",
+        "update": {
+          "artifactId": "00000000-0000-4000-8000-00000000000e",
+          "observationId": "read:node_00000000-0000-4000-8000-000000000003"
+        }
+      },
+      "status": "applied",
+      "outcome": {
+        "kind": "applied",
+        "remoteRef": "prod_mock",
+        "confirmed": {
+          "projectionDigest": "product-name-v1",
+          "values": {
+            "name": {
+              "kind": "value",
+              "value": "StagedWrite update example B"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "events": [
+    {
+      "sequence": 1,
+      "stepId": "node_00000000-0000-4000-8000-000000000003",
+      "kind": "dispatching",
+      "recordedAt": "2026-09-17T00:00:00.000Z"
+    },
+    {
+      "sequence": 2,
+      "stepId": "node_00000000-0000-4000-8000-000000000003",
+      "kind": "unknown",
+      "recordedAt": "2026-09-17T00:00:00.000Z",
+      "reason": "Injected receipt loss after storing the actual Stripe response"
+    },
+    {
+      "sequence": 3,
+      "stepId": "node_00000000-0000-4000-8000-000000000003",
+      "kind": "reconciling",
+      "recordedAt": "2026-09-17T00:00:00.000Z"
+    },
+    {
+      "sequence": 4,
+      "stepId": "node_00000000-0000-4000-8000-000000000003",
+      "kind": "applied",
+      "recordedAt": "2026-09-17T00:00:00.000Z"
+    }
+  ],
+  "steps": [
+    {
+      "id": "node_00000000-0000-4000-8000-000000000003",
+      "payload": {
+        "name": "StagedWrite update example B"
+      },
+      "effect": {
+        "kind": "update",
+        "nodeId": "node_00000000-0000-4000-8000-000000000003",
+        "remoteId": "prod_mock"
+      },
+      "key": "[\"00000000-0000-4000-8000-000000000012\",\"node_00000000-0000-4000-8000-000000000003\",0]",
+      "status": "applied",
+      "resolvedPayload": {
+        "name": "StagedWrite update example B"
+      },
+      "feedback": {},
+      "remoteRef": "prod_mock"
+    }
+  ],
+  "currentRunId": "00000000-0000-4000-8000-000000000012",
+  "isCurrentIntent": true,
+  "previewVersion": 1,
+  "preview": {
+    "id": "00000000-0000-4000-8000-000000000002",
+    "version": 1,
+    "type": "stripe.product-update",
+    "typeVersion": "1",
+    "definitionDigest": "sha256:stagedwrite-json-v1:b0300bb01488b008b0a21649654a29cac51613bd36244022540cf0c33a77c3e6",
+    "nodes": {
+      "node_00000000-0000-4000-8000-000000000003": {
+        "id": "node_00000000-0000-4000-8000-000000000003",
+        "nodeType": "product",
+        "fields": {
+          "/name": {
+            "kind": "value",
+            "value": "StagedWrite update example B"
+          }
+        }
+      }
+    },
+    "edges": {},
+    "tombstones": {
+      "nodes": [],
+      "edges": []
+    }
+  },
+  "diagnostics": []
+}</pre></details><details><summary>8. preflight · passed</summary><h3>输入</h3><pre>[
+  "00000000-0000-4000-8000-000000000002"
+]</pre><h3>输出</h3><pre>{
+  "formatVersion": 3,
+  "scope": "execution",
+  "checkId": "00000000-0000-4000-8000-000000000017",
+  "draftId": "00000000-0000-4000-8000-000000000002",
+  "version": 1,
+  "definitionDigest": "sha256:stagedwrite-json-v1:b0300bb01488b008b0a21649654a29cac51613bd36244022540cf0c33a77c3e6",
+  "rulesDigest": "sha256:stagedwrite-json-v1:9834977a94cb361a8232bed44b5096a8e67e93ea5f9ae35604675e0ad29f831b",
+  "preview": {
+    "id": "00000000-0000-4000-8000-000000000002",
+    "version": 1,
+    "type": "stripe.product-update",
+    "typeVersion": "1",
+    "definitionDigest": "sha256:stagedwrite-json-v1:b0300bb01488b008b0a21649654a29cac51613bd36244022540cf0c33a77c3e6",
+    "nodes": {
+      "node_00000000-0000-4000-8000-000000000003": {
+        "id": "node_00000000-0000-4000-8000-000000000003",
+        "nodeType": "product",
+        "fields": {
+          "/name": {
+            "kind": "value",
+            "value": "StagedWrite update example B"
+          }
+        }
+      }
+    },
+    "edges": {},
+    "tombstones": {
+      "nodes": [],
+      "edges": []
+    }
+  },
+  "status": "passed",
+  "diagnostics": [],
+  "executionHint": {
+    "runId": "00000000-0000-4000-8000-000000000012",
+    "nextAction": "publish"
+  },
+  "pendingRules": [],
+  "updatePreview": {
+    "slots": [
+      {
+        "nodeId": "node_00000000-0000-4000-8000-000000000003",
+        "remoteId": "prod_mock",
+        "kind": "noop",
+        "changes": [],
+        "observationId": "read:node_00000000-0000-4000-8000-000000000003",
+        "factId": "[\"00000000-0000-4000-8000-000000000012\",\"node_00000000-0000-4000-8000-000000000003\",1]"
+      }
+    ],
+    "plan": [
+      {
+        "id": "node_00000000-0000-4000-8000-000000000003",
+        "payload": {},
+        "effect": {
+          "kind": "noop",
+          "nodeId": "node_00000000-0000-4000-8000-000000000003",
+          "remoteId": "prod_mock"
+        }
+      }
+    ]
+  },
+  "certificate": "00000000-0000-4000-8000-000000000018",
+  "artifactId": "00000000-0000-4000-8000-000000000018",
+  "execution": {
+    "checkId": "00000000-0000-4000-8000-000000000017",
+    "definitionDigest": "sha256:stagedwrite-json-v1:b0300bb01488b008b0a21649654a29cac51613bd36244022540cf0c33a77c3e6",
+    "rulesDigest": "sha256:stagedwrite-json-v1:9834977a94cb361a8232bed44b5096a8e67e93ea5f9ae35604675e0ad29f831b",
+    "executorId": "stripe.product-update",
+    "executorVersion": "1",
+    "target": "mock:stripe-products",
+    "planDigest": "sha256:stagedwrite-json-v1:568d865c68ab2973ccfe41eb2d86e400a69ee8c0a2f3d6c8dd02f257f5a0e22e"
+  }
+}</pre></details><details><summary>9. publish · published</summary><h3>输入</h3><pre>[
+  "00000000-0000-4000-8000-000000000002",
+  "00000000-0000-4000-8000-000000000018"
+]</pre><h3>输出</h3><pre>{
+  "id": null,
+  "certificate": "00000000-0000-4000-8000-000000000018",
+  "version": 1,
+  "currentRunId": "00000000-0000-4000-8000-000000000012",
+  "isCurrentIntent": true,
+  "previewVersion": 1,
+  "preview": {
+    "id": "00000000-0000-4000-8000-000000000002",
+    "version": 1,
+    "type": "stripe.product-update",
+    "typeVersion": "1",
+    "definitionDigest": "sha256:stagedwrite-json-v1:b0300bb01488b008b0a21649654a29cac51613bd36244022540cf0c33a77c3e6",
+    "nodes": {
+      "node_00000000-0000-4000-8000-000000000003": {
+        "id": "node_00000000-0000-4000-8000-000000000003",
+        "nodeType": "product",
+        "fields": {
+          "/name": {
+            "kind": "value",
+            "value": "StagedWrite update example B"
+          }
+        }
+      }
+    },
+    "edges": {},
+    "tombstones": {
+      "nodes": [],
+      "edges": []
+    }
+  },
+  "diagnostics": [],
+  "kind": "noop",
+  "state": "published"
+}</pre></details><details><summary>远端调用与断言</summary><pre>{
+  "http": [
+    {
+      "method": "POST",
+      "path": "/v1/products",
+      "params": {
+        "name": "StagedWrite update example A"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/prod_mock",
+      "params": {},
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/prod_mock",
+      "params": {},
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/prod_mock",
+      "params": {},
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/products/prod_mock",
+      "params": {
+        "name": "StagedWrite update example B"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/prod_mock",
+      "params": {},
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/prod_mock",
+      "params": {},
+      "status": 200
+    }
+  ],
+  "assertions": {
+    "sameRemoteId": true,
+    "noopWithoutWrite": true,
+    "completed": true
+  }
+}</pre></details>

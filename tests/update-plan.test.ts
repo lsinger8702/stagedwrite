@@ -9,7 +9,7 @@ async function setup(B = value("A"), D = value("B"), O = value("A")) {
     const selector = { type: definition.id, typeVersion: "1" }, backend = createMemoryBackend();
     const e = createStagedWrite({ definitions: [definition], ...backend, executors: [{ ...selector, id: "tasks", version: "1", target: "test", plan: d => Object.values(d.graph.nodes).map(n => ({ id: "a/b", payload: n.fields as Record<string, import("../src/index.js").Value>, effect: { kind: "create", nodeId: n.id } })), apply: async () => ({ kind: "applied", remoteRef: "remote-a" }), reconcile: { unsupported: "no evidence" } }] });
     const { draft, createdRefs } = await e.create(selector, { roots: [{ nodeType: "task", fields: { title: "A" } }] });
-    const check = await e.preflight(draft.id), run = await e.publish(draft.id, check.certificate!);
+    const check = await e.preflight(draft.id), run = await e.publish(draft.id, check.certificate!); assert.ok(run.id !== null);
     // Deliberately give this detached pure-compiler fixture an escaped identity.
     // The live engine and its store retain the server-generated ref.
     const s: NonNullable<Awaited<ReturnType<typeof backend.storage.read>>> = JSON.parse(JSON.stringify((await backend.storage.read(draft.id))!).replaceAll(createdRefs[0]!.ref, "a/b")); await e.close();

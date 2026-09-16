@@ -1,5 +1,8 @@
 # Roadmap
 
+**2026-09-17 最新进度：U3 固定图 update 的公开链路与故障回归完成；U5 更新指南及离线 HTML/ZIP 已交付。U4 独立 Product adapter、离线契约和沙盒驱动已就绪，真实沙盒 update 等待本机测试凭据，不能视为完成。A1/A2/A3 仍为后续工作包，本轮没有扩展模型 Harness。**
+
+
 **2026-09-17：[三态 OP 迁移](design/022-three-state-op-migration.md) 已按 [账本](tasks/three-state-op-migration.md) 结项。下一优先级恢复已批准的 update 派发计划，进度见 [U3 执行账本](tasks/update-execution.md)；当前运行时仍未开放 update。包级输入 schema 已交付，不代表 A1 完整 Agent helpers 已完成。**
 
 **当前实现以 [000 原则](design/000-project-principles.md) 和 [018 契约](design/018-draft-lifecycle-proposal.md) 为准。2026-09-16：项目所有者要求将远端 update 与三种 Agent 接入方式纳入下一阶段。本页确定规划方向；具体接口、状态迁移和原则变更见 [019 提案](design/019-update-agent-roadmap.md)，U0 契约已获批准并同步原则，尚未据此开放运行时能力。**

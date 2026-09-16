@@ -51,11 +51,12 @@ test("update registration: explicit writer uses the same engine and preserves co
     try {
         const { draft } = await e.create({ type: definition.id, typeVersion: "1" }, { roots: [{ nodeType: "task", fields: { title: "A" } }] });
         const check = await e.preflight(draft.id);
-        const run = await e.publish(draft.id, check.certificate!);
+        const run = await e.publish(draft.id, check.certificate!); assert.ok(run.id !== null);
         assert.equal(run.state, "published");
         assert.equal(run.attempts[0]!.outcome?.kind, "applied");
         const observed = run.attempts[0]!.outcome;
         assert.ok(observed?.kind === "applied" && observed.confirmed);
-        await assert.rejects(e.edit(draft.id, draft.version, { patches: [] }), /UPDATE_NOT_SUPPORTED/);
+        const edit = await e.edit(draft.id, draft.version, { patches: [{ op: "set", ref: Object.keys(draft.graph.nodes)[0]!, scope: "canonical", path: "/title", value: "B" }] });
+        assert.equal(edit.version, 1);
     } finally { await e.close(); }
 });

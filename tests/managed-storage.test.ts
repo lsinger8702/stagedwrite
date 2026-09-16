@@ -1,3 +1,4 @@
+import { adoptUpdate, noopFactId } from "../src/managed/update-adoption.js";
 import { compileUpdate } from "../src/managed/update-plan.js";
 import { updateRequest, updateOutcome, updateContext, satisfyNoop } from "../src/managed/update-evidence.js";
 import { definitionDigest, type Json } from "../src/registry/json.js";
@@ -21,7 +22,7 @@ async function fixture(sqlite: boolean, implementation = executor, count = 1) {
     const engine = createStagedWrite({ definitions: [definition], executors: [implementation], ...backend });
     const draft = rememberRefs(await engine.create(selector, { roots: Array.from({ length: count }, () => ({ nodeType: "task", fields: { title: "A" } })) }), count === 1 ? ["a"] : ["a", "b"]);
     const check = await engine.preflight(draft.id);
-    const run = await engine.publish(draft.id, check.certificate!);
+    const run = await engine.publish(draft.id, check.certificate!); assert.ok(run.id !== null);
     const lease = await backend.locks.acquire(lockResource(backend.storage.namespace, draft.id), { ttlMs: 60_000 });
     assert.ok(lease);
     const edit = (fn: (s: ManagedState) => void) => backend.storage.transact(draft.id, lease, s => { assert.ok(s); fn(s); return s; });
@@ -531,5 +532,65 @@ for (const sqlite of [false, true]) test(`${sqlite ? "sqlite" : "memory"}: each 
         assert.equal(result.state, "published", JSON.stringify(result.diagnostics));
         assert.equal(writes, 2); assert.equal(reads, 2); assert.equal(result.attempts.length, 2);
         assert.deepEqual(result.steps.map(s => s.status), ["applied", "applied"]);
+    } finally { await f.cleanup(); }
+});
+
+function checkedUpdate(s: ManagedState, certificate: string, desired: string) {
+    for (const n of Object.values(s.draft.graph.nodes)) { n.fields.title = desired; s.draft.fieldIntents[n.id]!["/title"] = { kind: "set", value: desired }; }
+    s.draft.version++;
+    const scratch = structuredClone(s); addUpdate(scratch, certificate);
+    const a = scratch.artifacts[`${certificate}:artifact`]!;
+    s.artifacts[a.id] = a;
+    s.check = { ...s.check!, scope: "execution", status: "passed", version: s.draft.version, certificate: a.id, artifactId: a.id, execution: a.binding };
+    return a.id;
+}
+for (const sqlite of [false, true]) test(`${sqlite ? "sqlite" : "memory"}: update adoption atomically owns one run and replays the original certificate`, async () => {
+    const f = await fixture(sqlite);
+    try {
+        let cert = "";
+        await f.edit(s => { cert = checkedUpdate(s, "claim", "B"); });
+        const before = (await f.backend.storage.read(f.draft.id))!;
+        await assert.rejects(f.edit(s => { s.resourceRevision++; adoptUpdate(s, cert, "2026-09-17T00:00:03Z", "update-claim"); }), /PREFLIGHT_REQUIRED/);
+        await assert.rejects(f.edit(s => { adoptUpdate(s, cert, "2026-09-17T00:00:03Z", "update-claim"); throw Error("commit fault"); }), /commit fault/);
+        assert.deepEqual(await f.backend.storage.read(f.draft.id), before);
+        await f.edit(s => { adoptUpdate(s, cert, "2026-09-17T00:00:03Z", "update-claim"); });
+        const claimed = (await f.backend.storage.read(f.draft.id))!;
+        assert.equal(claimed.draft.currentRunId, "update-claim");
+        assert.equal(claimed.runs["update-claim"]!.kind, "update");
+        assert.equal(claimed.runs["update-claim"]!.attempts.length, 0);
+        assert.deepEqual(claimed.bindings, before.bindings);
+        assert.notEqual(claimed.runs["update-claim"]!.steps[0]!.key, claimed.runs[f.run.id]!.steps[0]!.key);
+        await f.edit(s => { adoptUpdate(s, cert, "2026-09-17T00:00:04Z"); });
+        assert.deepEqual(await f.backend.storage.read(f.draft.id), claimed);
+        await assert.rejects(f.edit(s => { adoptUpdate(s, cert, "2026-09-17T00:00:05Z", "another"); }), /RUN_ID_CONFLICT/);
+        await assert.rejects(f.edit(s => { adoptUpdate(s, "new-certificate", "2026-09-17T00:00:05Z", "another"); }), /UNRESOLVED_RUN_ALREADY_EXISTS/);
+    } finally { await f.cleanup(); }
+});
+for (const sqlite of [false, true]) test(`${sqlite ? "sqlite" : "memory"}: whole-graph noop adoption stores evidence and baseline without a run`, async () => {
+    const f = await fixture(sqlite);
+    try {
+        let cert = "";
+        await f.edit(s => { cert = checkedUpdate(s, "no-write", "A"); });
+        const before = (await f.backend.storage.read(f.draft.id))!;
+        await assert.rejects(f.edit(s => { adoptUpdate(s, cert, "2026-09-17T00:00:03Z", "unnecessary"); }), /NOOP_RUN_ID_NOT_ALLOWED/);
+        await assert.rejects(f.edit(s => { adoptUpdate(s, cert, "2026-09-17T00:00:03Z"); throw Error("noop commit fault"); }), /noop commit fault/);
+        assert.deepEqual(await f.backend.storage.read(f.draft.id), before);
+        await assert.rejects(f.edit(s => { s.publications[cert] = { kind: "noop", certificate: cert, draftId: s.draft.id, version: s.draft.version, artifactId: cert, committedAt: "2026-09-17T00:00:03Z" }; }), /NOOP_PUBLICATION_EVIDENCE_MISSING/);
+        await f.edit(s => { adoptUpdate(s, cert, "2026-09-17T00:00:03Z"); });
+        const after = (await f.backend.storage.read(f.draft.id))!;
+        assert.equal(after.publications[cert]!.kind, "noop");
+        assert.deepEqual(after.runs, before.runs); assert.deepEqual(after.bindings, before.bindings);
+        assert.equal(after.draft.currentRunId, f.run.id); assert.equal(after.draft.publishedArtifactId, cert);
+        assert.equal(after.resourceRevision, before.resourceRevision + 1);
+        assert.equal(after.latestFactByNode[nodeRef(f.draft, "a")], noopFactId(cert, nodeRef(f.draft, "a")));
+        await f.edit(s => { adoptUpdate(s, cert, "2026-09-17T00:00:04Z"); });
+        assert.deepEqual(await f.backend.storage.read(f.draft.id), after);
+        if (sqlite) { const reopened = createSqliteBackend(f.path); try { assert.deepEqual(await reopened.storage.read(f.draft.id), after); } finally { await reopened.storage.close(); } }
+        await f.edit(s => { const next = checkedUpdate(s, "after-noop", "B"); adoptUpdate(s, next, "2026-09-17T00:00:05Z", "after-noop-run"); });
+        const later = (await f.backend.storage.read(f.draft.id))!;
+        assert.equal(later.draft.publishedArtifactId, cert);
+        assert.equal(later.draft.currentRunId, "after-noop-run");
+        await f.edit(s => { const replay = adoptUpdate(s, cert, "2026-09-17T00:00:06Z"); assert.equal(replay.kind, "noop"); });
+        assert.deepEqual(await f.backend.storage.read(f.draft.id), later);
     } finally { await f.cleanup(); }
 });

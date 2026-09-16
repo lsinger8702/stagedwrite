@@ -95,6 +95,7 @@ try {
     assert.ok(check.certificate);
     const options = { runId: "demo-run-1" };
     const partial = await call("publish", "同事务建立 Run 和 currentRunId。项目创建成功，任务 1 明确拒绝，任务 2 尚未发送。Draft 仍 pending。", [draft.id, check.certificate, options], () => engine.publish(draft.id, check.certificate!, options));
+    assert.ok(partial.id !== null);
     assert.equal(partial.state, "blocked");
     assert.equal(effects.size, 1);
     assert.deepEqual(partial.steps.map(s => s.status), ["applied", "ready", "ready"]);

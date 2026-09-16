@@ -30,7 +30,7 @@
 
 Draft 从创建时就带有实际工作意图，发布后仍保留自身身份。图中节点成功创建资源后，逐个建立对应的远端 Binding。一个 Draft 可以管理多个资源绑定。
 
-下一阶段是在同一个 Draft 上继续编辑，通过已发布意图、当前意图和远端事实之间的 diff/drift 检查更新资源。**发布成功后的远端 update 仍在开发，当前公开引擎尚不可用。**
+声明更新能力的 adapter 可以在同一个 Draft 上继续编辑固定节点的标量字段，通过已发布意图、当前意图和远端事实之间的 diff/drift 检查更新原资源。全量成功推进 reset 基线；部分成功或未知请求仍在同一个 Run 续作。
 
 ## 真实接入与可执行示例
 
@@ -84,8 +84,8 @@ await engine.close();
 参见[注册 Schema 和规则](examples/fixtures/project-tasks-managed.ts)、[执行器与完整调用](examples/publish-and-resume.ts)、[当前契约](docs/design/018-draft-lifecycle-proposal.md)。
 
 - Draft 保存普通 graph、独立 fieldIntents、不可变 initialSnapshot、currentRunId 和成功产物引用，发布后仍保留身份。
-- 当前字段 reset 恢复固定初始意图，不是撤销上一次 edit；显式清空、null 与未声明不同。
-- 首次 publish 原子认领一个 Run，再次 publish 只观察，不重试；明确指定不同 Run ID 会被拒绝。独立创建另一组资源需要新 Draft。
+- 字段 reset 恢复最近全量成功发布的意图，首次成功前恢复初始意图，不是撤销上一次 edit；显式清空、null 与未声明不同。
+- 首次 publish 原子认领一个 Run；未完成期间再次 publish 只观察，明确指定不同 Run ID 会被拒绝。全量成功后，新检查的更新可在同一 Draft 认领新 Run；独立创建另一组资源仍需新 Draft。
 - 未完成工作使用 resume，不以进程崩溃为前提。当前修复只允许改未完成节点的字段，成功节点和拓扑受保护。
 - 当前 edit 只返回 `{draftId, version, preflightRequired: true, changes, createdRefs}`。完整存储快照用 getDraft，当前 preview 和诊断用 preflight；已有 Run 编辑后仍通过 resume 继续。
 - 节点成功立即保存 Binding；pending 可能已经有部分远端资源，全量成功才标 published。
@@ -105,6 +105,14 @@ const updated = await engine.edit(draft.id, draft.version, {
 
 包内提供 `initialIntentSchema` 与 `editBatchSchema`，供宿主校验输入结构。参见 [Agent 输入接入指南](docs/guides/agent-inputs.md)：包级导入、诊断修复批次，以及工具 schema 与引擎校验的边界。这不代表通用 dispatch helper 或模型 Harness 已完成。
 
+## 更新已有资源
+
+首次成功后可 edit 字段，再 preflight、publish 新凭据。返回 kind 为 initial_create/update 时有 Run ID；noop 表示已持久采用但无需写入，id 为 null；not_started 表示写前复核阻断，附具体诊断。未完成 Run 仍走 resume，不能换一个 Run 重来。本 Run 已完成节点保持保护；历史完成 Run 只观察。
+
+reset 以最近全量发布成功的意图为固定基线，首次成功前才使用 initialSnapshot。历史凭据返回原采用结果；用 isCurrentIntent 和 previewVersion 区分它与当前意图。
+
+[实际执行的 update HTML](docs/examples/update.html) · [离线 ZIP](docs/examples/stagedwrite-update.zip) · [Product adapter 与沙盒指南](examples/stripe-update/README.md)。新 update 录制使用 Mock 远端，不冒充已完成的真实 Stripe update 测试。
+
 ## Adapter 回执契约
 
 `ManagedExecutor` 区分创建/只读检查与更新写入能力：
@@ -114,7 +122,7 @@ const updated = await engine.edit(draft.id, draft.version, {
 
 TypeScript 检查这个承诺；注册期会拒绝缺少能力函数的配置，不会调用函数来试探返回值，也无法证明未来回执正确。运行时仍检查原资源身份、投影和全部受管值。确认缺失或矛盾时请求保持 unknown，不能据此重发。回调通过 `context.update` 获得原请求的不可变观察条件，包括可用的 remoteVersion。
 
-**这是正在实现的 update 注册契约，公开远端 update 派发仍未开启。** 进度见 [执行账本](docs/tasks/update-execution.md)。
+**已为显式声明 update 写能力的 executor 开放固定图、固定远端 ID 的标量字段更新。** 更新不支持新增、删除或替换节点；远端条件写由 adapter 负责，没有远端 CAS 时限定单一写方。见 [更新接入指南](docs/guides/update.md) 和 [执行账本](docs/tasks/update-execution.md)。
 
 ## 恢复边界
 
@@ -147,7 +155,7 @@ TypeScript 检查这个承诺；注册期会拒绝缺少能力函数的配置，
 
 仅维护 createStagedWrite。无人使用的旧原型、专属存储和兼容导出已移除，不提供旧数据迁移；不会删除既有数据库。本实验版本应使用新数据库。
 
-公开引擎尚未提供发布成功后的 update、完整 diff/drift 执行闭环、rollback、自动填充、调度、完整编辑历史、人工裁决/停止/导入/保留策略或通用嵌套请求体生成。[Roadmap](docs/roadmap.md)。
+公开引擎尚未提供远端拓扑变更、资源替换、rollback、自动填充、调度、完整编辑历史、人工裁决/停止/导入/保留策略或通用嵌套请求体生成。[Roadmap](docs/roadmap.md)。
 
 build 会先清理 dist，避免旧模块残留在打包产物。CI 包含回归、walkthrough 和隔离的包消费验证。
 

@@ -65,10 +65,9 @@ A Draft starts with meaningful work intent and retains its identity after
 publication. As graph nodes succeed, they acquire bindings to the remote
 resources they created. One Draft can manage several resource bindings.
 
-The next step is to update those resources by editing the same Draft,
-with diff and drift checks against published intent and remote facts.
-**Remote update after publication is still in development, not available
-through the current public engine.**
+Update-capable adapters can change fixed-node scalar fields by editing the same Draft,
+with diff and drift checks against published intent and remote facts. Full success
+advances the reset baseline; partial or unknown work continues in the same Run.
 
 ## A real integration and an executable walkthrough
 
@@ -150,14 +149,20 @@ The package exports `initialIntentSchema` and `editBatchSchema` for host-side st
 See the [complete registered schema and rules](examples/fixtures/project-tasks-managed.ts), [executor and calls](examples/publish-and-resume.ts), and [contract](docs/design/018-draft-lifecycle-proposal.md).
 
 - Draft persists ordinary `graph` values, separate `fieldIntents`, immutable `initialSnapshot`, `currentRunId`, and a successful artifact reference. It retains its identity after publication.
-- `set` declares a value, `remove` explicitly clears it. `reset` restores the fixed initial intent in this version, including undeclared fields; it does not undo the last edit.
-- The first publish claims one Run atomically. Further publish calls only observe that Run; an explicitly different Run ID is rejected. Independent resource creation needs a new Draft.
+- `set` declares a value, `remove` explicitly clears it. `reset` restores the latest fully published intent, or the initial intent before first success, including undeclared fields; it does not undo the last edit.
+- The first publish claims one Run atomically. While a Run is unfinished, publish observes it and repairs continue with resume. After full success, a checked field update can claim a new Run on the same Draft and bindings. Independent resource creation needs a new Draft.
 - `resume` continues the same unfinished Run, even without a process failure. Success is preserved; unknown requests use their original input/key for reconciliation. Repair edits are limited to unfinished nodes' fields.
 - `edit` returns only `{draftId, version, preflightRequired: true, changes, createdRefs}`. Use `getDraft` for the stored snapshot and `preflight` for the complete current preview and diagnostics. Editing an existing Run still requires `resume` to continue it.
 - Bindings are saved as individual nodes succeed. `pending` may already have remote resources; only full success marks the Draft `published`.
 - All managed APIs are asynchronous. Without executors, preflight is diagnostic-only. Without a registered backend, storage and locking are in-process memory only.
 
 Preflight responses use `formatVersion: 3`. Preview fields are keyed by node-relative JSON Pointers (`fields["/profile/name"]`), with reconstructed object values and explicit child states. Arrays remain whole values. Older saved checks require a fresh preflight. Public edit/preview and repair suggestions use `EditBatch`; create accepts `InitialIntent` (`{roots: [...]}`) and returns `{draft, createdRefs}`.
+
+## Updating existing resources
+
+After a successful publication, edit fields, run preflight, then publish its new certificate. Results have `kind: "initial_create" | "update"` with a Run ID, `kind: "noop"` with `id: null` for a durable no-write adoption, or `kind: "not_started"` with diagnostics when readback blocks adoption. Resume unfinished Runs; do not replace them. Completed nodes in the active Run remain protected. Historical completed Runs are read-only.
+
+[Executed update HTML](docs/examples/update.html) · [Offline ZIP](docs/examples/stagedwrite-update.zip) · [Product adapter and sandbox instructions](examples/stripe-update/README.md). The new update recording uses a mock remote; it is not a claim of a completed live Stripe update test.
 
 ## Adapter receipt contract
 
@@ -168,7 +173,7 @@ Preflight responses use `formatVersion: 3`. Preview fields are keyed by node-rel
 
 TypeScript checks this promise. Registration rejects missing capability functions without invoking them; it cannot prove what a callback will return. Runtime update receipt validation still checks the original resource, projection and all managed values. Missing or contradictory confirmation leaves the request `unknown`, not safe to resend. Callbacks receive original immutable update conditions in `context.update`, including the observation's `remoteVersion` when available.
 
-**This is the registration contract for the update work in progress. Public remote update dispatch is not enabled yet.** See the [execution ledger](docs/tasks/update-execution.md).
+**Fixed-graph scalar-field update is enabled for explicit update-capable executors.** Node creation/deletion/replacement during update is not supported. Remote conditional writes belong to the adapter; without remote CAS, use a single writer. See the [update guide](docs/guides/update.md) and [execution ledger](docs/tasks/update-execution.md).
 
 ## Recovery boundary
 
@@ -201,7 +206,7 @@ Remote idempotency and conclusive reconciliation are adapter responsibilities. L
 
 There is one engine factory: `createStagedWrite`. The unused scalar and graph prototypes, their adapters, storage, migrations and compatibility exports have been removed before publication. We do not maintain a deprecated entry point or an old-data migration path. This does not delete any existing database file; use a fresh database for this experimental release.
 
-Not available through the public engine: remote update after full success, the complete diff/drift update lifecycle, rollback, autofill, scheduling, full edit history, manual adjudication/stop/import/retention APIs, or generic nested request-body generation. [Roadmap](docs/roadmap.md).
+Not available through the public engine: remote topology changes/resource replacement, rollback, autofill, scheduling, full edit history, manual adjudication/stop/import/retention APIs, or generic nested request-body generation. [Roadmap](docs/roadmap.md).
 
 `npm run build` cleans `dist` first, so removed implementations cannot survive in a tarball. CI runs the current regression suite, the actual walkthrough and an isolated package-consumer check.
 
@@ -217,4 +222,4 @@ The committed trace remains an actual execution record, not a fixed-clock simula
 
 The current SQLite backend uses storage schema 3 (durable request envelopes). Schema 1/2 experiment databases are rejected with `STORAGE_VERSION_UNSUPPORTED` before schema or journal-mode changes; they are not migrated or deleted. Keep existing databases intact and use a new database for new experiments. An unresolved Run in an old database must not be replaced by creating the same resources in a new Draft; use the matching earlier library version to inspect or resume that database.
 
-The update data model is being built, but remote update remains unavailable through the engine. Multiple-Run storage support does not yet enable publishing updates.
+Update keeps the original bindings and immutable request evidence. Old certificates observe their original adoption; compare `isCurrentIntent` and `previewVersion` before treating a historical success as current.

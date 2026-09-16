@@ -41,12 +41,12 @@ export interface ManagedDraft extends IntentSnapshot, DefinitionSelector {
 /** Edit acknowledgement, not a storage snapshot or publication certificate. */
 export type ManagedEditResult = import("../edit/results.js").EditReceipt;
 export interface ManagedCheck extends GraphCheck {
-    /** Diagnostic-only until the update execution path is enabled. Never a certificate. */
+    /** Diff preview; update-capable execution checks carry a separate certificate. */
     updatePreview?: { slots: readonly import("./update-plan.js").UpdateSlot[]; plan?: readonly Step[] };
     artifactId?: string;
     executionHint?: {
         runId: string;
-        nextAction: "resume" | "observe";
+        nextAction: "resume" | "observe" | "publish";
     };
 }
 export interface Artifact {

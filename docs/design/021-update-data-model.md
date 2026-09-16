@@ -1,5 +1,8 @@
 # 021：固定图 update 数据模型与原子提交
 
+**当前实现（2026-09-17）：固定图字段 update 已接公开 edit/preflight/publish/resume，含 noop 提交、drift 阻断与原请求恢复。详见 [更新指南](../guides/update.md) 和 [U3 账本](../tasks/update-execution.md)。下文按阶段记录的“未实现/未开放”保留为历史实施记录，不代表当前状态。真实 Stripe update 尚待凭据联调；原有 Stripe create 录制不作 update 证据。**
+
+
 **状态：2026-09-16，基于已批准的 [020 契约](020-update-contract-proposal.md) 的实现设计。原则已批准，U1 第一批模型/存储与第二批纯编译基础已实现，完整 update 执行链路尚未完成；各批范围见下文。**
 
 ## 1. 最小模型
@@ -210,3 +213,11 @@ ExecutionStep.satisfied 表示以观察证据确认无需写入，satisfaction �
 派发事务验证读取后的本地 Run、version、意图和 resourceRevision 未变，再持久化原 update 请求；noop 则原子保存观察来源事实与 satisfied，不发远端请求。apply/reconcile 使用相同调用流程和原条件上下文。存在任何未知 Attempt 时优先查证，不能因前方 ready 槽位抢先派发。
 
 两后端的实际 resume 回归覆盖变化时零写入、条件恢复后一次派发、自动 noop、连续 update 的部分成功处理。此处使用测试预置的认领状态；公开 update 凭据、认领、全图无写入采用和编辑修复接线仍属后续任务。
+
+## 18. U3.4 原子采用组件
+
+内部 adoptUpdate 在 Store 事务内完成 T1 或 T7。先返回已采用凭据的原记录，不让历史重放改变当前归属；新认领检查当前凭据、意图版本、事实修订、成功基线及无未决 Run。有写入时生成独立 Run/key 并保存采用关系；无写入时只保存观察事实、采用记录和成功基线，拒绝外部指定 runId，保留最后执行 Run 指针。
+
+noop 采用的观察事实使用 certificate/node 身份，状态读取必须验证这些事实确实来源于该产物的全图 noop 观察。后续基线前进不改写历史采用；重放旧 noop 也不清空或替换后续 Run。
+
+组件没有网络或执行授权，尚未从公开 publish 调用。公开接线须先完成租约内新鲜读取和注册绑定验证，再进入同一事务；171 项核心测试中的本批四项覆盖 Memory/SQLite 的提交与回滚边界，不能替代该公开链路验收。

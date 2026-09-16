@@ -27,7 +27,10 @@
     "verify:package": "npm run build && node scripts/package-smoke.mjs",
     "verify:walkthrough": "npm run demo:publish-resume -- --check-report && node scripts/render-walkthrough.mjs --check && node --test scripts/walkthrough.test.mjs",
     "test:stripe": "npm run build && node --test examples/stripe/*.test.mjs",
-    "demo:stripe": "npm run build && node examples/stripe/run.mjs"
+    "demo:stripe": "npm run build && node examples/stripe/run.mjs",
+    "test:stripe-update": "npm run build && node --test examples/stripe-update/*.test.mjs",
+    "demo:update": "npm run build && node examples/stripe-update/run.mjs --offline --write-report",
+    "verify:update": "npm run build && node --test examples/stripe-update/*.test.mjs && node examples/stripe-update/run.mjs --offline --check"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -1,3 +1,4 @@
+import { noopFactId } from "./update-adoption.js";
 import { validateUpdateArtifact, validateUpdateAttempt, updateOutcome, validateSatisfiedSlot } from "./update-evidence.js";
 import { validateStoredSnapshot } from "./snapshot.js";
 import type { ManagedState, Artifact } from "./types.js";
@@ -39,6 +40,10 @@ function validateStateContent(id: string, s: ManagedState, artifactsToValidate: 
         for (const step of r.steps) validateSatisfiedSlot(s, r, step);
         requireState(r.revisions.every(v => s.artifacts[v.artifactId]), "RUN_INPUT_MISSING");
         requireState(r.state !== "published" || !r.attempts.some(a => a.status === "pending" || a.status === "unknown"), "UNRESOLVED_PUBLICATION");
+        if (r.kind === "update" && r.state === "published") requireState(r.steps.every(step => step.status === "satisfied" ||
+            step.status === "applied" && r.attempts.some(a => a.stepId === step.id && a.key === step.key && a.status === "applied" &&
+                a.outcome?.kind === "applied" && a.outcome.remoteRef === step.remoteRef && Object.values(s.remoteFacts).some(f =>
+                    f.source.kind === "attempt" && f.source.runId === rid && f.source.stepId === step.id && f.source.attemptNumber === a.number))), "UPDATE_COMPLETION_EVIDENCE_MISSING");
     }
     for (const [aid, a] of Object.entries(s.artifacts))
         requireState(a.id === aid && a.draft.id === id, "ARTIFACT_IDENTITY_MISMATCH");
@@ -72,7 +77,14 @@ function validateStateContent(id: string, s: ManagedState, artifactsToValidate: 
         if (p.kind === "run") {
             const r = s.runs[p.runId];
             requireState(r && [r.initialArtifactId, r.artifactId, ...r.revisions.map(v => v.artifactId)].includes(certificate), "PUBLICATION_RUN_MISMATCH");
-        } else requireState(p.artifactId === certificate, "PUBLICATION_ARTIFACT_MISMATCH");
+        } else {
+            requireState(p.artifactId === certificate, "PUBLICATION_ARTIFACT_MISMATCH");
+            requireState(a.update && a.update.slots.length > 0 && a.update.slots.every(slot => slot.kind === "noop") &&
+                a.update.context.observations.every(o => {
+                    const fact = s.remoteFacts[noopFactId(certificate, o.nodeId)];
+                    return fact?.source.kind === "observation" && fact.source.artifactId === certificate && fact.source.observationId === o.id;
+                }), "NOOP_PUBLICATION_EVIDENCE_MISSING");
+        }
     }
     validateStoredSnapshot({ graph: s.draft.graph, fieldIntents: s.draft.fieldIntents });
     validateStoredSnapshot(s.draft.initialSnapshot);
