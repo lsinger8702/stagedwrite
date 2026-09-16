@@ -90,3 +90,47 @@ test("sqlite: old schema is rejected before journal or DDL changes", () => {
         assert.deepEqual(readFileSync(path), before);
     } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+for (const sqlite of [false, true]) {
+    test(`${sqlite ? "sqlite" : "memory"}: malformed intent snapshots are rejected before commit without damaging durable state`, async () => {
+        const f = await fixture(sqlite);
+        try {
+            const before = await f.backend.storage.read(f.draft.id);
+            const corruptions: ((s: ManagedState) => void)[] = [
+                s => { s.draft.graph.nodes.a!.fields.title = "not declared"; },
+                s => { s.draft.fieldIntents.ghost = { "/title": { kind: "remove" } }; },
+                s => { s.draft.fieldIntents.a!["/title/child"] = { kind: "remove" }; },
+                s => { s.draft.fieldIntents.a!["/title"] = { kind: "remove" }; },
+                s => { s.draft.initialSnapshot.graph.nodes.a!.fields.title = "corrupt baseline"; },
+                s => { s.artifacts[f.run.artifactId]!.draft.graph.nodes.a!.fields.title = "corrupt artifact"; },
+                s => { s.draft.graph.edges.bad = { id: "bad", relationType: "uses", from: "a", to: "missing" }; }
+            ];
+            for (const corrupt of corruptions) {
+                await assert.rejects(f.edit(corrupt), /STATE_INTENT_INVALID/);
+                assert.deepEqual(await f.backend.storage.read(f.draft.id), before);
+            }
+            if (sqlite) {
+                const reopened = createSqliteBackend(f.path);
+                try { assert.deepEqual(await reopened.storage.read(f.draft.id), before); }
+                finally { await reopened.storage.close(); }
+            }
+        } finally { await f.cleanup(); }
+    });
+}
+
+test("sqlite: reopening independently corrupted intent data refuses it without rewriting the evidence", async () => {
+    const f = await fixture(true);
+    const db = new DatabaseSync(f.path);
+    try {
+        const row = db.prepare("SELECT body FROM sw_managed_drafts WHERE id=?").get(f.draft.id)!;
+        const data = JSON.parse(row.body as string);
+        data.draft.graph.nodes.a.fields.title = "corrupt outside the library";
+        const damaged = JSON.stringify(data);
+        db.prepare("UPDATE sw_managed_drafts SET body=? WHERE id=?").run(damaged, f.draft.id);
+        const reopened = createSqliteBackend(f.path);
+        try { await assert.rejects(reopened.storage.read(f.draft.id), /STATE_INTENT_INVALID/); }
+        finally { await reopened.storage.close(); }
+        assert.equal(db.prepare("SELECT body FROM sw_managed_drafts WHERE id=?").get(f.draft.id)!.body, damaged);
+        db.prepare("UPDATE sw_managed_drafts SET body=? WHERE id=?").run(row.body as string, f.draft.id);
+    } finally { db.close(); await f.cleanup(); }
+});

@@ -1,3 +1,4 @@
+import { validateStoredSnapshot } from "./snapshot.js";
 import type { ManagedState } from "./types.js";
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 function requireState(ok: unknown, message: string): asserts ok { if (!ok) throw new Error(message); }
@@ -51,6 +52,12 @@ export function validateState(id: string, s: ManagedState) {
             const r = s.runs[p.runId];
             requireState(r && [r.initialArtifactId, r.artifactId, ...r.revisions.map(v => v.artifactId)].includes(certificate), "PUBLICATION_RUN_MISMATCH");
         } else requireState(p.artifactId === certificate, "PUBLICATION_ARTIFACT_MISMATCH");
+    }
+    validateStoredSnapshot({ graph: s.draft.graph, fieldIntents: s.draft.fieldIntents });
+    validateStoredSnapshot(s.draft.initialSnapshot);
+    for (const artifact of Object.values(s.artifacts)) {
+        validateStoredSnapshot({ graph: artifact.draft.graph, fieldIntents: artifact.draft.fieldIntents });
+        validateStoredSnapshot(artifact.draft.initialSnapshot);
     }
 }
 

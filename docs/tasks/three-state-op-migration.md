@@ -163,3 +163,13 @@
 - 新增 3 项边界测试：preview/提交候选的安全一致性、planner 未使用字段保护、unknown 未完成节点修复、published 拒绝、回执/候选隔离与基线不变。核心 npm test 120/120；git diff --check 通过。
 - **公开切换未完成**：create roots/createdRefs 返回、managed 快照与预检投影、候选 repairOps、现有调用方必须一起迁移；不能仅改公开方法签名宣称完成。M05 保持进行中。
 - 本轮未提交/推送；没有修改真实 Stripe 样例与历史证据。
+
+### M05 增量 — 存储快照约束
+
+- 上一批共用受管编辑保护已按要求推送：948dba2。
+- 新增 managed/snapshot.ts，并接入所有后端共用 validateState：校验当前 Draft、initialSnapshot 和每个 Artifact 的意图快照，拒绝不一致投影、孤儿声明、非法持久声明形态、悬空边和非 JSON 输入。
+- 校验不依赖新编辑入口是否已启用，不能通过直接 Store 事务绕开。SQLite 重开读取同样执行，坏数据拒绝后原记录保留，不静默修复。
+- 新增 5 项测试，覆盖嵌套 null/空对象/数组/清空投影、内存与 SQLite 失败原子性、外部损坏 SQLite 后重开拒绝。
+- 核心 npm test 125/125；walkthrough 5/5；Stripe 离线 13/13；git diff --check 通过。
+- M05 仍进行中。本次完成存储层前置约束，未切换公开 create/edit/preview 及 repairOps；没有将低层校验通过记作公开协议完成。公开切换与调用方迁移仍是下一步。
+- 本段代码本地未提交/推送，私有评审目录仍未纳入。
