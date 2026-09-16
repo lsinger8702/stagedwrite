@@ -1,6 +1,6 @@
 # 021：固定图 update 数据模型与原子提交
 
-**状态：2026-09-16，基于已批准的 [020 契约](020-update-contract-proposal.md) 的实现设计。原则已批准，本文的类型/存储布局尚未写入运行时。U1 实现及测试未完成。**
+**状态：2026-09-16，基于已批准的 [020 契约](020-update-contract-proposal.md) 的实现设计。原则已批准，U1 第一批模型/存储与第二批纯编译基础已实现，完整 update 执行链路尚未完成；各批范围见下文。**
 
 ## 1. 最小模型
 
@@ -133,3 +133,13 @@ SQLite：去掉 runs.draft_id 的 UNIQUE，增加 kind/state 索引字段；可�
 引擎只初始化新容器，仍不产生 update Run/远端观察/确认事实/采用记录。完整 update/noop 槽位、Attempt 信封、基线编译上下文、T1–T7 接线及完整证据收尾约束仍属于下一批；不能把这一批存储结构测试理解为 update 端到端已通过。
 
 验证：核心 61/61（新增 7 项存储测试）；Stripe 离线 9/9；walkthrough 5/5 且产物一致；隔离安装/打包/类型消费者检查通过。存储测试中的 update Run 是人工构造的状态，验证归属和持久化，不发送远端 update。没有重新运行真实 Stripe 写入。
+
+## 10. U2 纯编译基础
+
+`src/managed/update-plan.ts` 提供内部纯函数 compileUpdate，接收完整状态快照、adapter 的受管字段目标投影与远端观察。它不执行 I/O、不保存事实、不签发 certificate，也尚未接入公开 preflight。输出是固定节点的字段差异槽位与编译上下文，不是可直接派发的 Step：依赖/请求映射/Attempt 信封仍待执行层接线。
+
+已实现 B/D/O 的五种相等关系、unknown 优先阻断、Binding/投影/受管字段范围校验、remove 明确清空、未声明禁止隐式写入、不可变字段拒绝、变更意图未映射诊断及输出快照隔离。drift 返回图路径、message 与 baseline/desired/observed 元数据；任意错误都不输出可执行槽位。
+
+编译上下文保留 Draft version、resourceRevision、原成功 Artifact/currentRun、目标、投影与观察；各槽位引用确认 fact ID。普通编译不推进 latestFactByNode，避免把漂移读成新的成功基线。
+
+新增 11 项纯编译测试，核心累计 72/72。测试通过不意味着远端 update 已开放。下批仍需接 adapter 异步读取、受预算约束的预检、写前观察验证、真实 update/noop 派发和原请求查证。

@@ -83,11 +83,11 @@ node --env-file=.env.stripe examples/stripe/run.mjs \
 ## 测试和证据
 
 ```sh
-npm run test:stripe     # 使用假的 HTTP；CI 会跑；不需要 .env
+npm run test:stripe     # 离线 adapter + 录制证据闸门；CI 会跑；不需要 .env
 npm test               # 核心库回归
 ```
 
-真实沙盒不在默认 CI 执行，不要求外部贡献者提供密钥。真实运行可额外添加 `--summary=docs/testing/stripe-sandbox-result.json` 生成公开摘要；只在成功后生成，自动排除完整输入输出、账号/资源 ID、错误原文与 Dashboard 私有链接。完整 `trace.json` 留在被 Git 忽略的本地目录。发布前仍应审查 diff。
+真实沙盒不在默认 CI 执行，不要求外部贡献者提供密钥。真实运行可额外添加 `--summary=docs/testing/stripe-sandbox-result.json` 生成公开摘要；只在成功后生成，自动排除完整输入输出、账号/资源 ID、错误原文与 Dashboard 私有链接。完整 `trace.json` 留在被 Git 忽略的本地目录。发布前仍应审查 diff；审阅新录制后更新相邻的 `.sha256` 字节摘要，再跑离线校验。样例源码变化时必须刷新真实录制，不能手改旧的 sampleSourceDigest。详见下方测试文档的证据闸门说明。
 
 [本次实测与范围](../../docs/testing/stripe-sandbox.md) · [实际结果摘要](../../docs/testing/stripe-sandbox-result.json)
 

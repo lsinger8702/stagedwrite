@@ -40,3 +40,5 @@ edit 只修改 Draft 意图；preflight 读取/归一化所需远端事实、诊
 后续是否提供 MCP、HTTP 服务或其他语言绑定，根据真实使用者决定，当前不为“任意 Agent”额外引入服务框架。
 
 2026-09-16：U0 已获批准；[U1 数据模型设计](design/021-update-data-model.md)第一批模型/存储基础已实现；完整执行模型和 update 链路尚未接通。
+
+2026-09-16：U2 纯编译基础已实现，含三方 diff、具体 drift 诊断及 unknown 阻断；尚未接入公开 preflight/远端执行。
