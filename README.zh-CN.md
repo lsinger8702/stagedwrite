@@ -105,6 +105,17 @@ const updated = await engine.edit(draft.id, draft.version, {
 
 包内提供 `initialIntentSchema` 与 `editBatchSchema`，供宿主校验输入结构。参见 [Agent 输入接入指南](docs/guides/agent-inputs.md)：包级导入、诊断修复批次，以及工具 schema 与引擎校验的边界。这不代表通用 dispatch helper 或模型 Harness 已完成。
 
+## Adapter 回执契约
+
+`ManagedExecutor` 区分创建/只读检查与更新写入能力：
+
+- 不传 `updateWrites` 或设为 `false`：可以独立注册 `update.inspect` 和可选的预览计划函数，不承诺更新写入。创建可返回不含 `confirmed` 的 applied，但这样没有用于后续 update 的规范值基线。
+- `updateWrites: true`：使用 `ManagedUpdateExecutor`，必须提供 `update.inspect` 和 `update.plan`。仍复用同一组 apply/reconcile；每个 applied（包括创建）在类型上必须包含 `confirmed: { projectionDigest, values }`。非成功结果不要求 confirmed；不支持查证仍须显式声明。
+
+TypeScript 检查这个承诺；注册期会拒绝缺少能力函数的配置，不会调用函数来试探返回值，也无法证明未来回执正确。运行时仍检查原资源身份、投影和全部受管值。确认缺失或矛盾时请求保持 unknown，不能据此重发。回调通过 `context.update` 获得原请求的不可变观察条件，包括可用的 remoteVersion。
+
+**这是正在实现的 update 注册契约，公开远端 update 派发仍未开启。** 进度见 [执行账本](docs/tasks/update-execution.md)。
+
 ## 恢复边界
 
 **未完成工作调用 `resume(run.id)`；重复 publish 只观察已有 Run。** `getRun(run.id)` 可查看当前 preview、诊断和请求尝试记录。

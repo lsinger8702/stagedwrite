@@ -159,6 +159,17 @@ See the [complete registered schema and rules](examples/fixtures/project-tasks-m
 
 Preflight responses use `formatVersion: 3`. Preview fields are keyed by node-relative JSON Pointers (`fields["/profile/name"]`), with reconstructed object values and explicit child states. Arrays remain whole values. Older saved checks require a fresh preflight. Public edit/preview and repair suggestions use `EditBatch`; create accepts `InitialIntent` (`{roots: [...]}`) and returns `{draft, createdRefs}`.
 
+## Adapter receipt contract
+
+`ManagedExecutor` distinguishes creation/read-only inspection from update writes:
+
+- `updateWrites` omitted or `false`: `update.inspect` (and an optional preview planner) may be registered without promising writes. Creation may return `applied` without `confirmed`, but then it establishes no normalized baseline for future updates.
+- `updateWrites: true`: use `ManagedUpdateExecutor`. Both `update.inspect` and `update.plan` are required. The same `apply` and `reconcile` callbacks must include `confirmed: { projectionDigest, values }` in every `applied` result, including creation. Non-applied results need no confirmation; unsupported reconciliation remains an explicit declaration.
+
+TypeScript checks this promise. Registration rejects missing capability functions without invoking them; it cannot prove what a callback will return. Runtime update receipt validation still checks the original resource, projection and all managed values. Missing or contradictory confirmation leaves the request `unknown`, not safe to resend. Callbacks receive original immutable update conditions in `context.update`, including the observation's `remoteVersion` when available.
+
+**This is the registration contract for the update work in progress. Public remote update dispatch is not enabled yet.** See the [execution ledger](docs/tasks/update-execution.md).
+
 ## Recovery boundary
 
 **Continue unfinished work with `resume(run.id)`. Repeating `publish` only observes the existing Run; it does not retry it.** Inspect `getRun(run.id)` for the current preview, diagnostics and recorded attempts.

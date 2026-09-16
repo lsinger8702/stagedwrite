@@ -204,17 +204,32 @@ export interface ManagedExecutionContext {
     signal: AbortSignal;
     update?: { artifactId: string; observation: Readonly<RemoteObservation> };
 }
-export interface ManagedExecutor extends DefinitionSelector {
-    update?: ManagedUpdateInspector;
+type ConfirmedOutcome<T> = T extends { kind: "applied" }
+    ? T & { confirmed: NonNullable<Extract<ApplyOutcome, { kind: "applied" }>["confirmed"]> } : T;
+export type ConfirmedApplyOutcome = ConfirmedOutcome<ApplyOutcome>;
+export type ConfirmedReconcileOutcome = ConfirmedOutcome<ReconcileOutcome>;
+interface ManagedExecutorIdentity extends DefinitionSelector {
     id: string;
     version: string;
     target: string;
     plan(draft: ManagedDraft): readonly Step[];
-    apply(step: Step, key: string, context: ManagedExecutionContext): Promise<ApplyOutcome>;
-    reconcile: ((step: Step, key: string, context: ManagedExecutionContext) => Promise<ReconcileOutcome>) | {
-        unsupported: string;
-    };
 }
+/** Creation and optional read-only update inspection; no update write capability. */
+export interface ManagedCreateExecutor extends ManagedExecutorIdentity {
+    updateWrites?: false;
+    update?: ManagedUpdateInspector;
+    apply(step: Step, key: string, context: ManagedExecutionContext): Promise<ApplyOutcome>;
+    reconcile: ((step: Step, key: string, context: ManagedExecutionContext) => Promise<ReconcileOutcome>) | { unsupported: string };
+}
+/** Same dispatcher and callbacks, with a stronger receipt contract for every applied
+ * result (including creation, which establishes the future update baseline). */
+export interface ManagedUpdateExecutor extends ManagedExecutorIdentity {
+    updateWrites: true;
+    update: ManagedUpdateInspector & { plan: NonNullable<ManagedUpdateInspector["plan"]> };
+    apply(step: Step, key: string, context: ManagedExecutionContext): Promise<ConfirmedApplyOutcome>;
+    reconcile: ((step: Step, key: string, context: ManagedExecutionContext) => Promise<ConfirmedReconcileOutcome>) | { unsupported: string };
+}
+export type ManagedExecutor = ManagedCreateExecutor | ManagedUpdateExecutor;
 export interface ManagedOptions {
     definitions: readonly unknown[];
     rules?: readonly ManagedRule[];

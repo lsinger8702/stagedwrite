@@ -6,11 +6,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
-import { createStagedWrite, createMemoryBackend, createSqliteBackend, defineDraftType, type ManagedExecutor, type ManagedOptions, type ManagedInitialIntent, type ApplyOutcome, type Step } from "../src/index.js";
+import { createStagedWrite, createMemoryBackend, createSqliteBackend, defineDraftType, type ManagedCreateExecutor, type ManagedOptions, type ManagedInitialIntent, type ApplyOutcome, type Step } from "../src/index.js";
 const definition = defineDraftType({ id: "example.tasks", version: "1", nodeTypes: { task: { valueSchema: { type: "object", properties: { name: { type: "string" }, note: { type: ["string", "null"] } }, additionalProperties: false }, requiredAtPublish: ["name"] } }, relationTypes: { children: { from: ["task"], to: ["task"], ownership: "owned", cardinality: "many" } } });
 const selector = { type: definition.id, typeVersion: "1" };
 const initial = (): ManagedInitialIntent => ({ roots: [{ nodeType: "task", fields: { name: "First", note: null } }, { nodeType: "task", fields: { name: "Second" } }] });
-function executor(overrides: Partial<ManagedExecutor> = {}): ManagedExecutor { return { ...selector, id: "tasks.create", version: "1", target: "mock:test", plan: d => Object.values(d.graph.nodes).map((n, i) => ({ id: ["a", "b"][i]!, payload: { ...n.fields } as Record<string, import("../src/index.js").Value>, effect: { kind: "create", nodeId: n.id } })), apply: async (s) => ({ kind: "applied", remoteRef: `remote:${s.id}` }), reconcile: async () => ({ kind: "unknown", reason: "No evidence" }), ...overrides }; }
+function executor(overrides: Partial<ManagedCreateExecutor> = {}): ManagedCreateExecutor { return { ...selector, id: "tasks.create", version: "1", target: "mock:test", plan: d => Object.values(d.graph.nodes).map((n, i) => ({ id: ["a", "b"][i]!, payload: { ...n.fields } as Record<string, import("../src/index.js").Value>, effect: { kind: "create", nodeId: n.id } })), apply: async (s) => ({ kind: "applied", remoteRef: `remote:${s.id}` }), reconcile: async () => ({ kind: "unknown", reason: "No evidence" }), ...overrides }; }
 function engine(e = executor(), options: Partial<ManagedOptions> = {}) { return createStagedWrite({ definitions: [definition], executors: [e], ...options }); }
 async function ready(e = engine()) { const d = rememberRefs(await e.create(selector, initial()), ["a","b"]), c = await e.preflight(d.id); assert.equal(c.status, "passed"); return { e, d, c }; }
 test("managed: initial intent is required, plain values and fixed reset baseline survive many edits", async () => {

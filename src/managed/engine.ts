@@ -50,7 +50,15 @@ export function createStagedWrite(options: ManagedOptions) {
             throw new Error("INVALID_EXECUTOR");
         if (e.update !== undefined && (!e.update || typeof e.update.inspect !== "function" || e.update.plan !== undefined && typeof e.update.plan !== "function"))
             throw new Error("INVALID_UPDATE_INSPECTOR");
-        executors.set(key(e), { ...e, ...(e.update ? { update: { inspect: e.update.inspect.bind(e.update), ...(e.update.plan ? { plan: e.update.plan.bind(e.update) } : {}) } } : {}), plan: e.plan.bind(e), apply: e.apply.bind(e), reconcile: typeof e.reconcile === "function" ? e.reconcile.bind(e) : { ...e.reconcile } });
+        if (e.updateWrites !== undefined && typeof e.updateWrites !== "boolean" ||
+            e.updateWrites === true && (!e.update || typeof e.update.plan !== "function"))
+            throw new Error("INVALID_UPDATE_WRITE_CAPABILITY");
+        const registered = { ...e };
+        if (e.update) registered.update = { ...e.update, inspect: e.update.inspect.bind(e.update), ...(e.update.plan ? { plan: e.update.plan.bind(e.update) } : {}) };
+        registered.plan = e.plan.bind(e);
+        registered.apply = e.apply.bind(e);
+        registered.reconcile = typeof e.reconcile === "function" ? e.reconcile.bind(e) : { ...e.reconcile };
+        executors.set(key(e), registered);
     }
     if (executors.size)
         for (const s of registry.selectors())

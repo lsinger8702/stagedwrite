@@ -47,3 +47,13 @@
 - 核心 158/158（含 TSC）。新增两后端的事务失败回滚、伪造完成拒绝、重复完成、SQLite 重开与混合 noop→update 恢复；原条件冻结/隔离测试通过。混合计划只有 update 的一个 Attempt，恢复正确消费原 Binding，创建绑定保持不变。
 - Stripe 离线 13/13、walkthrough 原实录对照通过；未运行真实远端 update。
 - **仍未开启新 update 请求派发。** 新 Attempt 构建和 noop 自动完成必须在持锁新鲜读取/认领接线后启用，不能凭旧 Artifact 自洽就派发。测试构造的 Run/满意槽位验证共用恢复流程，不代表公开 publish 已支持 update。U3.3 继续进行，本批新增改动未推送。
+
+## U3.3 注册契约补强 — 2026-09-17
+
+- 原条件与 noop 槽位已推送 `ae16f36`。
+- review 指出的“支持 update 却可以合法返回无 confirmed 的 applied”成立。ManagedExecutor 改为创建/只读检查与更新写能力的判别联合；updateWrites=true 对应 ManagedUpdateExecutor，检查和计划函数必需，同一 apply/reconcile 的 applied 必须含 confirmed。声明支持更新的创建回执也必须提供确认值，用于建立未来更新基线。
+- 只读 inspector 无须承诺写入。没有引入第二套 update 执行器或回调；运行时继续校验回执，不能用类型取代事实。注册仅验证显式能力配置，不可能提前证明函数未来返回值。
+- 添加编译期负例（缺确认 apply/reconcile、创建回调冒充更新回调、缺 update planner），以及注册期无调用拒绝、独立只读检查、同引擎确认创建的回归。中英文 README 同步公开契约和当前未开放边界。
+- 新写入与持锁复核仍待接线；此项不作为 U3.3/U3.4 完整验收。
+
+- 验证：核心 161/161（含编译期负例和 TSC）；Stripe 离线 13/13；打包、隔离安装与公开类型消费者检查通过。未发真实远端请求。本批注册契约改动尚未提交/推送。
