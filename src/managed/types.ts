@@ -58,6 +58,7 @@ export interface Artifact {
     plan: Step[];
     binding: NonNullable<GraphCheck["execution"]>;
     resourceRevision: number;
+    observations?: readonly RemoteObservation[];
 }
 export interface Attempt {
     stepId: string;
@@ -70,7 +71,7 @@ export interface Attempt {
 export interface ManagedRun {
     id: string;
     draftId: string;
-    kind: "initial_create";
+    kind: "initial_create" | "update";
     version: number;
     state: "running" | "blocked" | "unknown" | "published";
     artifactId: string;
@@ -105,6 +106,34 @@ export interface LateFact {
     attemptNumber: number;
     outcome: ApplyOutcome | ReconcileOutcome;
 }
+/** Normalized remote facts are separate from author intent and creation bindings. */
+export type NormalizedValue = { kind: "absent" } | { kind: "value"; value: Value };
+export interface RemoteObservation {
+    id: string;
+    nodeId: string;
+    targetId: string;
+    remoteId: string;
+    projectionDigest: string;
+    values: Record<string, NormalizedValue>;
+    observedAt: string;
+    remoteVersion?: string;
+}
+export interface RemoteFact {
+    id: string;
+    nodeId: string;
+    targetId: string;
+    remoteId: string;
+    projectionDigest: string;
+    values: Record<string, NormalizedValue>;
+    source: { kind: "attempt"; runId: string; stepId: string; attemptNumber: number }
+        | { kind: "observation"; artifactId: string; observationId: string };
+    confirmedAt: string;
+}
+export type PublicationAdoption = {
+    kind: "run"; certificate: string; draftId: string; version: number; runId: string; adoptedAt: string;
+} | {
+    kind: "noop"; certificate: string; draftId: string; version: number; artifactId: string; committedAt: string;
+};
 export interface ManagedState {
     draft: ManagedDraft;
     checkEpoch: number;
@@ -114,6 +143,9 @@ export interface ManagedState {
     bindings: Record<string, ResourceBinding>;
     resourceRevision: number;
     lateFacts: LateFact[];
+    remoteFacts: Record<string, RemoteFact>;
+    latestFactByNode: Record<string, string>;
+    publications: Record<string, PublicationAdoption>;
 }
 /** All mutations must atomically verify this lease against the authoritative lock service. */
 export interface DraftLease {

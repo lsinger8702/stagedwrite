@@ -393,7 +393,7 @@ export function createStagedWrite(options: ManagedOptions) {
             const id = randomUUID(), time = new Date().toISOString(), empty = { graph: { nodes: {}, edges: {} }, fieldIntents: {} };
             const draft = initialize(registry, { ...copy(empty), formatVersion: 3, id, version: 0, ...selector, definitionDigest: registry.getDefinition(selector).digest, status: "pending", currentRunId: null, targetId: null, initialSnapshot: copy(empty), publishedArtifactId: null, lastPublishedAt: null, tombstones: { nodes: [], edges: [] }, createdAt: time, updatedAt: time }, initial);
             await withLease(id, l => storage.transact(id, l, prior => { if (prior)
-                throw new Error("DRAFT_EXISTS"); return { draft, checkEpoch: 0, check: null, artifacts: {}, runs: {}, bindings: {}, resourceRevision: 0, lateFacts: [] }; }));
+                throw new Error("DRAFT_EXISTS"); return { draft, checkEpoch: 0, check: null, artifacts: {}, runs: {}, bindings: {}, resourceRevision: 0, lateFacts: [], remoteFacts: {}, latestFactByNode: {}, publications: {} }; }));
             return copy(draft);
         },
         async getDraft(id: string) { return copy((await need(id)).draft); },

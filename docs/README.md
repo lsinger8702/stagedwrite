@@ -10,4 +10,10 @@
 
 6. [Stripe 沙盒接入指南](../examples/stripe/README.md) · [真实测试记录与边界](testing/stripe-sandbox.md)。
 
+7. [下一阶段方案与任务拆分](design/019-update-agent-roadmap.md)：远端 update、SDK helpers、Messages API Harness 与 DeepSeek 接入（提案）。
+
+8. [固定图 update 契约与状态矩阵](design/020-update-contract-proposal.md)：U0 已批准，运行时尚未实现。
+
 旧原型的源码与设计可从 Git 历史查阅；当前目录只保留当前实现相关文档。跨主机生产后端、update/diff/drift、rollback 尚未交付。
+
+9. [update 数据模型与原子提交](design/021-update-data-model.md)：U1 设计及实现拆分。

@@ -2,33 +2,12 @@ import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import type { DatabaseSync as Database } from "node:sqlite";
 import type { DraftLockProvider, ManagedStore, ManagedState, LateFact } from "./types.js";
+import { validateState, validateTransition } from "./state.js";
+import { existsSync } from "node:fs";
 export const lockResource = (namespace: string, id: string) => JSON.stringify([namespace, "draft", id]);
 function copy<T>(v: T): T { return structuredClone(v); }
-function stateValid(id: string, s: ManagedState) {
-    if (s.draft.id !== id || s.draft.formatVersion !== 3)
-        throw new Error("STATE_IDENTITY_MISMATCH");
-    if (Object.keys(s.runs).length > 1)
-        throw new Error("INITIAL_RUN_ALREADY_EXISTS");
-    if (s.draft.currentRunId && !s.runs[s.draft.currentRunId])
-        throw new Error("RUN_POINTER_MISMATCH");
-    for (const r of Object.values(s.runs))
-        if (r.draftId !== id || !s.artifacts[r.artifactId] || !s.artifacts[r.initialArtifactId])
-            throw new Error("RUN_INPUT_MISSING");
-    if (s.draft.publishedArtifactId && !s.artifacts[s.draft.publishedArtifactId])
-        throw new Error("PUBLISHED_INPUT_MISSING");
-}
-function immutable(previous: ManagedState | undefined, next: ManagedState) {
-    if (!previous)
-        return;
-    if (JSON.stringify(previous.draft.initialSnapshot) !== JSON.stringify(next.draft.initialSnapshot))
-        throw new Error("INITIAL_SNAPSHOT_IMMUTABLE");
-    for (const [id, a] of Object.entries(previous.artifacts))
-        if (JSON.stringify(a) !== JSON.stringify(next.artifacts[id]))
-            throw new Error("ARTIFACT_IMMUTABLE");
-    for (const [id, b] of Object.entries(previous.bindings))
-        if (JSON.stringify(b) !== JSON.stringify(next.bindings[id]))
-            throw new Error("BINDING_IMMUTABLE");
-}
+const stateValid = validateState;
+const immutable = validateTransition;
 /** Shared in-process backend. Explicitly not a cross-host lock implementation. */
 export function createMemoryBackend(): {
     storage: ManagedStore;
@@ -102,17 +81,27 @@ export function createSqliteBackend(path: string): {
     if (typeof path !== "string" || !path.trim())
         throw new Error("INVALID_STORAGE_PATH");
     const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite") as typeof import("node:sqlite");
+    // Reject old databases before PRAGMA/DDL can mutate them.
+    if (path !== ":memory:" && existsSync(path)) {
+        const probe = new DatabaseSync(path, { readOnly: true });
+        try {
+            const tables = probe.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+            if (tables.length && (!tables.some(t => t.name === "sw_managed_meta") ||
+                probe.prepare("SELECT value FROM sw_managed_meta WHERE key='schema'").get()?.value !== "2"))
+                throw new Error("STORAGE_VERSION_UNSUPPORTED");
+        } finally { probe.close(); }
+    }
     const db: Database = new DatabaseSync(path);
     let closed = false;
     db.exec("PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL;");
     db.exec(`CREATE TABLE IF NOT EXISTS sw_managed_meta(key TEXT PRIMARY KEY,value TEXT NOT NULL) STRICT;
     CREATE TABLE IF NOT EXISTS sw_managed_drafts(id TEXT PRIMARY KEY,version INTEGER NOT NULL,status TEXT NOT NULL,current_run_id TEXT,published_artifact_id TEXT,body TEXT NOT NULL) STRICT;
-    CREATE TABLE IF NOT EXISTS sw_managed_runs(id TEXT PRIMARY KEY,draft_id TEXT NOT NULL UNIQUE,body TEXT NOT NULL) STRICT;
+    CREATE TABLE IF NOT EXISTS sw_managed_runs(id TEXT PRIMARY KEY,draft_id TEXT NOT NULL,body TEXT NOT NULL) STRICT;
     CREATE TABLE IF NOT EXISTS sw_managed_artifacts(id TEXT PRIMARY KEY,draft_id TEXT NOT NULL,body TEXT NOT NULL) STRICT;
     CREATE TABLE IF NOT EXISTS sw_managed_bindings(draft_id TEXT NOT NULL,node_id TEXT NOT NULL,body TEXT NOT NULL,PRIMARY KEY(draft_id,node_id)) STRICT;
     CREATE TABLE IF NOT EXISTS sw_managed_leases(resource TEXT PRIMARY KEY,token TEXT,fence INTEGER NOT NULL,expires_at REAL NOT NULL) STRICT;`);
-    db.prepare("INSERT OR IGNORE INTO sw_managed_meta VALUES ('schema','1')").run();
-    if (db.prepare("SELECT value FROM sw_managed_meta WHERE key='schema'").get()?.value !== "1") {
+    db.prepare("INSERT OR IGNORE INTO sw_managed_meta VALUES ('schema','2')").run();
+    if (db.prepare("SELECT value FROM sw_managed_meta WHERE key='schema'").get()?.value !== "2") {
         db.close();
         throw new Error("STORAGE_VERSION_UNSUPPORTED");
     }
@@ -195,6 +184,7 @@ export function createSqliteBackend(path: string): {
                 if (lease.resource !== resource || !row || row.token !== lease.token || row.fence !== lease.fence || Number(row.expires_at) <= now())
                     throw new Error("LEASE_LOST");
                 const previous = read(id), s = fn(copy(previous));
+                stateValid(id, s);
                 immutable(previous, s);
                 write(id, s);
                 return copy(s);

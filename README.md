@@ -92,3 +92,9 @@ Not implemented: remote update after full success, diff/drift, rollback, autofil
 `npm run verify:walkthrough` runs the example again without overwriting the checked-in evidence. It compares the new trace with the committed trace after consistently renaming runtime UUIDs and ignoring only engine/report timestamps and the Node version label. Business values, diagnostics, OP order, versions, bindings and effects must match. It also rebuilds HTML/Markdown/ZIP from the committed trace and current source/template and requires byte equality. The fresh unmodified trace is saved as `dist/walkthrough-raw.json` and uploaded by CI for inspection.
 
 The committed trace remains an actual execution record, not a fixed-clock simulation. The check establishes freshness and internal consistency for this scenario; it does not claim real Stripe access or validate all concurrency scenarios.
+
+### Experimental storage format
+
+The current SQLite backend uses storage schema 2. Schema 1 experiment databases are rejected with `STORAGE_VERSION_UNSUPPORTED` before schema or journal-mode changes; they are not migrated or deleted. Keep existing databases intact and use a new database for new experiments. An unresolved Run in an old database must not be replaced by creating the same resources in a new Draft; use the matching earlier library version to inspect or resume that database.
+
+The update data model is being built, but remote update remains unavailable through the engine. Multiple-Run storage support does not yet enable publishing updates.
