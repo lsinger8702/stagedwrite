@@ -1,4 +1,4 @@
-import { validateUpdateArtifact, validateUpdateAttempt } from "./update-evidence.js";
+import { validateUpdateArtifact, validateUpdateAttempt, updateOutcome } from "./update-evidence.js";
 import { validateStoredSnapshot } from "./snapshot.js";
 import type { ManagedState, Artifact } from "./types.js";
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -31,7 +31,11 @@ function validateStateContent(id: string, s: ManagedState, artifactsToValidate: 
         requireState(s.artifacts[r.artifactId] && s.artifacts[r.initialArtifactId], "RUN_INPUT_MISSING");
         requireState([r.initialArtifactId, r.artifactId, ...r.revisions.map(v => v.artifactId)].every(aid => !!s.artifacts[aid]?.update === (r.kind === "update")), "RUN_ARTIFACT_KIND_MISMATCH");
         for (const a of r.attempts) requireState(a.request && a.request.step.id === a.stepId && same(a.request.step.payload, a.input) && a.request.target === s.artifacts[r.initialArtifactId]!.binding.target, "ATTEMPT_REQUEST_MISMATCH");
-        for (const a of r.attempts) validateUpdateAttempt(s, r, a);
+        for (const a of r.attempts) {
+            validateUpdateAttempt(s, r, a);
+            if (a.request.step.effect.kind === "update" && a.status === "applied")
+                requireState(a.outcome?.kind === "applied" && updateOutcome(s, a, a.outcome).kind === "applied", "UPDATE_RECEIPT_MISMATCH");
+        }
         requireState(r.revisions.every(v => s.artifacts[v.artifactId]), "RUN_INPUT_MISSING");
         requireState(r.state !== "published" || !r.attempts.some(a => a.status === "pending" || a.status === "unknown"), "UNRESOLVED_PUBLICATION");
     }

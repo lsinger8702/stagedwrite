@@ -6,7 +6,7 @@
 |---|---|---|
 | U3.1 写前复核组件 | 完成（内部） | 当前本地基线/Run/事实修订一致；新观察值/令牌与已检查条件一致；不静默更换计划。未接入 publish，不是执行授权 |
 | U3.2 产物与原请求证据 | 完成（模型与存储边界） | Artifact 保存编译基线、投影/观察；Attempt 固定 update 目标/前置条件；读写边界验证完整证据 |
-| U3.3 共用执行槽位 | 待做 | 现有 dispatch 支持 update/noop；update 保留原 Binding，严格匹配确认值；noop 用独立满意证据，不伪造 applied Attempt |
+| U3.3 共用执行槽位 | 进行中（回执路径已接入） | 现有 dispatch 支持 update/noop；update 保留原 Binding，严格匹配确认值；noop 用独立满意证据，不伪造 applied Attempt |
 | U3.4 认领与提交 | 待做 | certificate 采用优先、单未决 Run、update Run 原子认领；全图 noop 持久采用；历史响应区分当前意图；事务失败无半提交 |
 | U3.5 edit/resume 接线 | 待做 | 成功后仅字段编辑；固定成功基线 reset；每次 update 续作重新读取；旧 unknown 原信封先查证，本 Run 成功节点保护 |
 | U3.6 故障验收与开启 | 待做 | Memory/SQLite、并发/失锁/迟到回执/收尾失败、A→B→A/无差异/历史观察；能力完整后开启公开 update |
@@ -29,3 +29,11 @@
 - 新增五项核心测试：两后端的原请求固定和非法证据原子拒绝，以及 SQLite 外部损坏后的只读拒绝。Draft 从 B 改成 C，旧请求仍为 B；unknown 不因此获得重试许可。损坏 body 不被静默修复。
 - 验证：核心 149/149（含 TSC）；Stripe 离线 13/13；walkthrough 6/6，真实运行对照及产物字节检查通过；隔离安装/打包/类型检查通过。没有修改真实 Stripe 录制，没有发送远端 update。
 - **范围：update Artifact/Attempt 目前由存储测试构造，公开引擎尚不产生它们。** U3.3–U3.5 负责实际执行、认领与恢复接线；公开 update 继续关闭。本批代码尚未提交或推送。
+
+## U3.3 第一批 — 2026-09-17
+
+- U3.1/U3.2 已提交并推送 `23ad8ef`。
+- 共用 dispatch 的 apply/reconcile/迟到证据结果在提交前校验 update 回执：必须确认原 remoteId、projectionDigest 及完整受管字段值（包含未改变字段）。缺失或矛盾回执转 unknown，返回 message/hint；不能冒充未生效重发。存储也拒绝直接写入不符合条件的 applied update Attempt。
+- update 成功保留原创建 Binding，只追加新的确认 RemoteFact 并推进事实指针；创建路径保持原行为。
+- 核心 153/153（含 TSC）。新增两后端的非法回执拒绝测试及实际 resume 回归：对测试构造的 update unknown Attempt，第一次不完整回执保持 unknown，第二次确认后复用同一请求/key完成，原 Binding 不变。
+- **尚未完成：新 update Attempt 派发、条件令牌传给 adapter、noop 满意证据/槽位、完整认领及写前复核接线。测试预置 update Run 不表示公开 publish 已支持 update。** U3.3 仍进行中，不开启成功后 edit/update 入口。本批后续改动尚未推送。

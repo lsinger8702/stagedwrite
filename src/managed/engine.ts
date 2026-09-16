@@ -1,3 +1,4 @@
+import { updateOutcome } from "./update-evidence.js";
 import { registeredTopology } from "../edit/registered-topology.js";
 import { validateIntentSnapshot } from "../edit/fields.js";
 import { protectIntentRepair } from "./edit-guards.js";
@@ -377,6 +378,7 @@ export function createStagedWrite(options: ManagedOptions) {
                     observed = { kind: "unknown", reason: "Adapter call did not establish an outcome" };
                 }
             }
+            observed = updateOutcome(s, attempt, observed);
             try {
                 s = await tx(id, l, current => {
                     const run = current.runs[runId]!, st = run.steps.find(x => x.id === step.id)!, a = run.attempts.find(x => x.number === attempt.number)!;
@@ -393,7 +395,8 @@ export function createStagedWrite(options: ManagedOptions) {
                         const prior = current.bindings[node];
                         if (prior && prior.remoteId !== observed.remoteRef)
                             throw new Error("REMOTE_BINDING_CONFLICT");
-                        current.bindings[node] = { nodeId: node, targetId: e.target, remoteId: observed.remoteRef, runId, stepId: st.id, key: a.key, attemptNumber: a.number, input: copy(a.input) };
+                        if (st.effect.kind === "update" && !prior) throw new Error("UPDATE_BINDING_MISSING");
+                        if (st.effect.kind === "create") current.bindings[node] = { nodeId: node, targetId: e.target, remoteId: observed.remoteRef, runId, stepId: st.id, key: a.key, attemptNumber: a.number, input: copy(a.input) };
                         st.remoteRef = observed.remoteRef;
                         st.status = "applied";
                         a.status = "applied";

@@ -1,5 +1,5 @@
 import { compileUpdate } from "../src/managed/update-plan.js";
-import { updateRequest } from "../src/managed/update-evidence.js";
+import { updateRequest, updateOutcome } from "../src/managed/update-evidence.js";
 import { definitionDigest, type Json } from "../src/registry/json.js";
 import { rememberRefs, nodeRef } from "./fixtures/refs.js";
 import assert from "node:assert/strict";
@@ -15,10 +15,10 @@ import { lockResource } from "../src/managed/storage.js";
 const definition = defineDraftType({ id: "storage.tasks", version: "1", nodeTypes: { task: { valueSchema: { type: "object", properties: { title: { type: "string" } }, additionalProperties: false } } }, relationTypes: {} });
 const selector = { type: definition.id, typeVersion: "1" };
 const executor: ManagedExecutor = { ...selector, id: "storage.executor", version: "1", target: "test", plan: d => Object.values(d.graph.nodes).map(n => ({ id: "a", payload: n.fields as Record<string, import("../src/index.js").Value>, effect: { kind: "create", nodeId: n.id } })), apply: async s => ({ kind: "applied", remoteRef: `remote:${s.id}`, confirmed: { projectionDigest: "title-v1", values: { title: { kind: "value", value: "A" } } } }), reconcile: { unsupported: "test" } };
-async function fixture(sqlite: boolean) {
+async function fixture(sqlite: boolean, implementation = executor) {
     const dir = mkdtempSync(join(tmpdir(), "sw-model-")), path = join(dir, "state.sqlite");
     const backend = sqlite ? createSqliteBackend(path) : createMemoryBackend();
-    const engine = createStagedWrite({ definitions: [definition], executors: [executor], ...backend });
+    const engine = createStagedWrite({ definitions: [definition], executors: [implementation], ...backend });
     const draft = rememberRefs(await engine.create(selector, { roots: [{ nodeType: "task", fields: { title: "A" } }] }), ["a"]);
     const check = await engine.preflight(draft.id);
     const run = await engine.publish(draft.id, check.certificate!);
@@ -26,7 +26,7 @@ async function fixture(sqlite: boolean) {
     assert.ok(lease);
     const edit = (fn: (s: ManagedState) => void) => backend.storage.transact(draft.id, lease, s => { assert.ok(s); fn(s); return s; });
     const cleanup = async () => { await lease.release(); await engine.close(); rmSync(dir, { recursive: true, force: true }); };
-    return { backend, engine, draft, run, edit, cleanup, path };
+    return { backend, engine, draft, run, edit, cleanup, path, lease };
 }
 function addUpdate(s: ManagedState, id: string) {
     const original = s.runs[s.draft.currentRunId!]!;
@@ -259,4 +259,76 @@ test("sqlite: corrupted historical update conditions reject reads without rewrit
         } finally { await reopened.storage.close(); }
         db.prepare("UPDATE sw_managed_artifacts SET body=? WHERE id=?").run(row.body as string, "update-1:artifact");
     } finally { db.close(); await f.cleanup(); }
+});
+
+for (const sqlite of [false, true]) test(`${sqlite ? "sqlite" : "memory"}: update receipts require original identity and complete confirmed values`, async () => {
+    const f = await fixture(sqlite);
+    try {
+        await f.edit(s => {
+            const node = Object.values(s.draft.graph.nodes)[0]!;
+            node.fields.title = "B";
+            s.draft.fieldIntents[node.id]!["/title"] = { kind: "set", value: "B" };
+            s.draft.version++;
+            addUpdate(s, "receipt-update");
+        });
+        const s = (await f.backend.storage.read(f.draft.id))!, r = s.runs["receipt-update"]!;
+        const request = updateRequest(s.artifacts[r.artifactId]!, "a", s.bindings);
+        const attempt: import("../src/managed/types.js").Attempt = { stepId: "a", key: r.steps[0]!.key, number: 1, input: request.step.payload, request, status: "pending" };
+        const good = { kind: "applied" as const, remoteRef: "remote:a", confirmed: { projectionDigest: "title-v1", values: { title: { kind: "value" as const, value: "B" } } } };
+        assert.deepEqual(updateOutcome(s, attempt, good), good);
+        const invalidReceipts: import("../src/types.js").ApplyOutcome[] = [
+            { kind: "applied" as const, remoteRef: "remote:a" },
+            { ...good, remoteRef: "other" },
+            { ...good, confirmed: { ...good.confirmed, projectionDigest: "other" } },
+            { ...good, confirmed: { ...good.confirmed, values: {} } },
+            { ...good, confirmed: { ...good.confirmed, values: { title: { kind: "value" as const, value: "A" } } } },
+            { ...good, confirmed: { ...good.confirmed, values: { title: { kind: "absent" as const } } } },
+        ];
+        for (const bad of invalidReceipts) {
+            const result = updateOutcome(s, attempt, bad);
+            assert.equal(result.kind, "unknown");
+            assert.ok(result.message && result.diagnostics?.[0]?.hint);
+            await assert.rejects(f.edit(next => { next.runs[r.id]!.attempts.push({ ...structuredClone(attempt), status: "applied", outcome: bad }); }), /UPDATE_RECEIPT_MISMATCH/);
+        }
+        const unknown = { kind: "unknown" as const, reason: "timeout" };
+        assert.deepEqual(updateOutcome(s, attempt, unknown), unknown);
+        await f.edit(next => { next.runs[r.id]!.attempts.push({ ...structuredClone(attempt), status: "applied", outcome: good }); });
+        assert.deepEqual((await f.backend.storage.read(f.draft.id))!.bindings, s.bindings);
+    } finally { await f.cleanup(); }
+});
+
+for (const sqlite of [false, true]) test(`${sqlite ? "sqlite" : "memory"}: shared resume reconciles update without overwriting creation binding`, async () => {
+    let correct = false;
+    const seen: { step: import("../src/types.js").Step; key: string }[] = [];
+    const f = await fixture(sqlite, { ...executor, reconcile: async (step, key) => {
+        seen.push({ step: structuredClone(step), key });
+        return { kind: "applied", remoteRef: "remote:a", ...(correct ? { confirmed: { projectionDigest: "title-v1", values: { title: { kind: "value" as const, value: "B" } } } } : {}) };
+    } });
+    try {
+        const bindings = await f.engine.getBindings(f.draft.id);
+        await f.edit(s => {
+            const node = Object.values(s.draft.graph.nodes)[0]!;
+            node.fields.title = "B"; s.draft.fieldIntents[node.id]!["/title"] = { kind: "set", value: "B" }; s.draft.version++;
+            addUpdate(s, "resume-update");
+            const r = s.runs["resume-update"]!, request = updateRequest(s.artifacts[r.artifactId]!, "a", s.bindings);
+            r.attempts.push({ stepId: "a", key: r.steps[0]!.key, number: 1, input: request.step.payload, request, status: "unknown" });
+            r.steps[0]!.status = "unknown"; r.state = "unknown";
+        });
+        await f.lease.release();
+        const first = await f.engine.resume("resume-update");
+        assert.equal(first.state, "unknown");
+        assert.equal(first.attempts[0]!.outcome?.code, "UPDATE_RECEIPT_MISMATCH");
+        assert.deepEqual(await f.engine.getBindings(f.draft.id), bindings);
+        correct = true;
+        const second = await f.engine.resume("resume-update");
+        assert.equal(second.state, "published");
+        assert.equal(second.attempts.length, 1);
+        assert.deepEqual(seen[0], seen[1]);
+        assert.equal(seen[0]!.step.payload.title, "B");
+        assert.deepEqual(await f.engine.getBindings(f.draft.id), bindings);
+        const state = (await f.backend.storage.read(f.draft.id))!;
+        const fact = state.remoteFacts[state.latestFactByNode[nodeRef(f.draft, "a")]!]!;
+        assert.deepEqual(fact.values.title, { kind: "value", value: "B" });
+        assert.equal(fact.source.kind, "attempt");
+    } finally { await f.cleanup(); }
 });

@@ -59,3 +59,24 @@ export function validateUpdateAttempt(state: ManagedState, run: ManagedRun, atte
     requireEvidence(ref && artifact && [run.initialArtifactId, run.artifactId, ...run.revisions.map(r => r.artifactId)].includes(ref.artifactId), "UPDATE_REQUEST_ARTIFACT_MISSING");
     requireEvidence(same(updateRequest(artifact!, attempt.stepId, state.bindings), attempt.request), "UPDATE_REQUEST_EVIDENCE_MISMATCH");
 }
+
+/** An update receipt must establish the original target, including unchanged managed
+ * fields. Remote equality alone is never used here: the adapter must report applied. */
+export function updateOutcome(state: ManagedState, attempt: Attempt,
+    outcome: import("../types.js").ApplyOutcome | import("../types.js").ReconcileOutcome
+): import("../types.js").ApplyOutcome | import("../types.js").ReconcileOutcome {
+    if (attempt.request.step.effect.kind !== "update" || outcome.kind !== "applied") return outcome;
+    const ref = attempt.request.update, artifact = ref && state.artifacts[ref.artifactId];
+    const nodeId = attempt.request.step.effect.nodeId;
+    const observation = artifact?.update?.context.observations.find(o => o.id === ref?.observationId && o.nodeId === nodeId);
+    const slot = artifact?.update?.slots.find(s => s.nodeId === nodeId);
+    const expected = observation && structuredClone(observation.values);
+    if (expected && slot) for (const change of slot.changes) expected[change.field] = change.after;
+    if (slot?.kind === "update" && observation && outcome.remoteRef === slot.remoteId &&
+        outcome.confirmed?.projectionDigest === observation.projectionDigest && same(outcome.confirmed.values, expected)) return outcome;
+    return { kind: "unknown", code: "UPDATE_RECEIPT_MISMATCH",
+        reason: "The receipt does not establish the original update target and all checked values.",
+        message: "The remote write may have taken effect, but its receipt cannot confirm this update.",
+        diagnostics: [{ code: "UPDATE_RECEIPT_MISMATCH", path: "", message: "The update receipt is missing or contradicts its checked resource or normalized values.",
+            hint: "Reconcile the original request and key with authoritative evidence. Do not resend or replace the resource based on this receipt." }] };
+}
