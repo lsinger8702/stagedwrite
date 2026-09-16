@@ -1,14 +1,14 @@
 import { performance } from "node:perf_hooks";
 import { deepFreeze, definitionDigest, isObject, jsonSnapshot } from "../registry/json.js";
 import type { DefinitionRegistry } from "../registry/registry.js";
-import type { GraphDraft } from "../graph/types.js";
-import type { AsyncGraphRule, GraphCheck, GraphDiagnostic } from "./types.js";
+import type { ManagedDraft, ManagedRule, ManagedAsyncRule, IntentSnapshot } from "../managed/types.js";
+import type { GraphCheck, GraphDiagnostic } from "./types.js";
 import { GraphPreflight } from "./check.js";
 import { validDiagnostic } from "./diagnostic.js";
 
 export class AsyncPreflight {
-  private readonly rules: readonly AsyncGraphRule[];
-  constructor(private readonly registry: DefinitionRegistry, sync: readonly import("./types.js").GraphRule[], rules: readonly AsyncGraphRule[], readonly timeoutMs: number) {
+  private readonly rules: readonly ManagedAsyncRule[];
+  constructor(private readonly registry: DefinitionRegistry, sync: readonly ManagedRule[], rules: readonly ManagedAsyncRule[], readonly timeoutMs: number) {
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 2_147_483_647) throw new Error("INVALID_PREFLIGHT_TIMEOUT");
     if (!Array.isArray(rules)) throw new Error("INVALID_RULE");
     // Reuse identity/shape validation; the dummy callback is never executed.
@@ -16,11 +16,11 @@ export class AsyncPreflight {
     if (rules.some(rule => typeof rule?.check !== "function")) throw new Error("INVALID_RULE");
     this.rules = Object.freeze(rules.map(rule => Object.freeze({ ...rule })));
   }
-  digest(draft: GraphDraft, syncDigest: string): string {
+  digest(draft: ManagedDraft, syncDigest: string): string {
     const rules = this.rules.filter(r => r.type === draft.type && r.typeVersion === draft.typeVersion);
     return rules.length ? definitionDigest({ syncDigest, asyncRules: rules.map(({ id, version, type, typeVersion }) => ({ id, version, type, typeVersion })) }) : syncDigest;
   }
-  async run(draft: GraphDraft, result: GraphCheck, deadline: number): Promise<GraphCheck> {
+  async run(draft: ManagedDraft, result: GraphCheck, deadline: number, baseline: IntentSnapshot): Promise<GraphCheck> {
     result.pendingRules = [];
     let incomplete = result.status === "incomplete";
     for (const rule of this.rules.filter(r => r.type === draft.type && r.typeVersion === draft.typeVersion)) {
@@ -42,7 +42,7 @@ export class AsyncPreflight {
         if (failures.length || !isObject(copied) || !["complete", "pending"].includes(String(copied.status)) ||
           Object.keys(copied).some(k => !(copied.status === "pending" ? ["status", "message", "retryAfterSeconds", "diagnostics"] : ["status", "diagnostics"]).includes(k))) throw new Error("Invalid async result");
         const diagnostics = copied.diagnostics ?? (copied.status === "pending" && !Object.hasOwn(copied, "diagnostics") ? [] : null);
-        if (!Array.isArray(diagnostics) || !diagnostics.every(d => validDiagnostic(d, this.registry, draft))) throw new Error("Invalid diagnostics");
+        if (!Array.isArray(diagnostics) || !diagnostics.every(d => validDiagnostic(d, this.registry, draft, baseline))) throw new Error("Invalid diagnostics");
         if (copied.status === "pending") {
           if (typeof copied.message !== "string" || !copied.message.trim() ||
             ("retryAfterSeconds" in copied && (!Number.isSafeInteger(copied.retryAfterSeconds) || Number(copied.retryAfterSeconds) < 0))) throw new Error("Invalid pending result");

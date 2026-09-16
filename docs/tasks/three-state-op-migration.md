@@ -173,3 +173,14 @@
 - 核心 npm test 125/125；walkthrough 5/5；Stripe 离线 13/13；git diff --check 通过。
 - M05 仍进行中。本次完成存储层前置约束，未切换公开 create/edit/preview 及 repairOps；没有将低层校验通过记作公开协议完成。公开切换与调用方迁移仍是下一步。
 - 本段代码本地未提交/推送，私有评审目录仍未纳入。
+
+### M05 增量 — 预检直接读取受管意图
+
+- 存储快照约束已按要求推送：40c4b88。
+- 预检主路径、异步规则和执行响应预览改为直接接收 ManagedDraft；移除独立 GraphRule/AsyncGraphRule 定义及每轮转换回调。规则注册只装配一次，检查结果仍每次重算，不引入结果缓存。
+- preview 直接从 graph 与 fieldIntents 生成，保持现有响应字节和三态含义；不泄露 initialSnapshot/currentRunId 等存储元数据。此处尚未开放嵌套公开响应。
+- 候选修复校验改用与真实 edit 相同的固定基线语义；同步/异步预检、执行反馈、preview/edit 共用初始或已发布基线选择，不再把候选 reset 当作简单删除声明。
+- 新增两项回归：同步/异步规则拿到隔离冻结的真实作者快照；候选 reset 实际送进 Schema 的值与公开 preview 相同（恢复原值及 null，而非未声明）。
+- 验证：核心 127/127；walkthrough 5/5（原产物字节一致）；Stripe 离线 13/13；git diff --check 通过。真实 Stripe 源码和历史录制均未修改。
+- **M05 未完成，公开 create/edit 仍是旧输入协议。** 本轮完成实际预检链路的模型依赖拆除，不是新 API 交付。后续必须一起完成：ManagedDraft 的 JSON 类型与嵌套 preview → create roots/createdRefs 与 prepareEdit 接入现有事务 → repairOps 双通道与全部调用方迁移 → 删除旧 GraphOp 求值器并完成证据重录。不能留下两套公开协议或兼容别名。
+- 本段新增改动尚未提交/推送；私有评审目录未纳入。

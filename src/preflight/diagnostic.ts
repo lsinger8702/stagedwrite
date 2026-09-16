@@ -1,6 +1,7 @@
 import { isObject, type Json } from "../registry/json.js";
-import { evaluateGraphEdit } from "../graph/edit.js";
-import type { GraphDraft, GraphOp } from "../graph/types.js";
+import { editIntent } from "../managed/intent.js";
+import type { ManagedDraft, IntentSnapshot } from "../managed/types.js";
+import type { GraphOp } from "../graph/types.js";
 import type { DefinitionRegistry } from "../registry/registry.js";
 
 const text = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
@@ -9,10 +10,10 @@ const pointer = (v: unknown) => typeof v === "string" && (v === "" || v.startsWi
 const optionalText = (v: Record<string, Json>, name: string) => !(name in v) || text(v[name]);
 
 /** Input has already passed the JSON snapshot boundary. Suggestions never mutate the draft. */
-export function validDiagnostic(entry: Json, registry: DefinitionRegistry, draft: GraphDraft): boolean {
+export function validDiagnostic(entry: Json, registry: DefinitionRegistry, draft: ManagedDraft, baseline: IntentSnapshot): boolean {
   const batch = (ops: unknown): boolean => {
     if (!Array.isArray(ops) || !ops.length) return false;
-    try { evaluateGraphEdit(registry, draft, draft.version, ops as GraphOp[]); return true; }
+    try { editIntent(registry, draft, baseline, draft.version, ops as GraphOp[]); return true; }
     catch { return false; }
   };
   const candidate = (v: Json, excluded = false): boolean => isObject(v) &&

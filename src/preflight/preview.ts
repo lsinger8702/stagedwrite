@@ -1,16 +1,23 @@
-import type { GraphDraft } from "../graph/types.js";
+import type { ManagedDraft } from "../managed/types.js";
 import type { DraftTypeDefinition } from "../registry/types.js";
-import type { GraphDraftPreview } from "./types.js";
+import type { GraphDraftPreview, PreviewField } from "./types.js";
+import { pointer } from "../registry/json.js";
 
-/** Preserve graph identity, edges and metadata; expose every declared field's intent state. */
-export function previewDraft(draft: GraphDraft, definition: DraftTypeDefinition): GraphDraftPreview {
-  const snapshot = structuredClone(draft);
-  return {
-    ...snapshot,
-    nodes: Object.fromEntries(Object.entries(snapshot.nodes).map(([id, node]) => [id, {
-      ...node,
+/** Public preview of the checked intent. Never include execution pointers or storage baselines. */
+export function previewDraft(draft: ManagedDraft, definition: DraftTypeDefinition): GraphDraftPreview {
+  return structuredClone({
+    id: draft.id, version: draft.version, type: draft.type, typeVersion: draft.typeVersion,
+    definitionDigest: draft.definitionDigest,
+    nodes: Object.fromEntries(Object.entries(draft.graph.nodes).map(([id, node]) => [id, {
+      id, nodeType: node.nodeType,
       fields: Object.fromEntries(Object.keys(definition.nodeTypes[node.nodeType]!.valueSchema.properties)
-        .map(field => [field, node.fields[field] ?? { kind: "undeclared" }]))
-    }]))
-  };
+        .map(field => {
+          const intent = draft.fieldIntents[id]?.[`/${pointer(field)}`];
+          const state: PreviewField = intent?.kind === "set" ? { kind: "value", value: intent.value }
+            : intent?.kind === "remove" ? { kind: "clear" } : { kind: "undeclared" };
+          return [field, state];
+        }))
+    }])),
+    edges: draft.graph.edges, tombstones: draft.tombstones
+  });
 }

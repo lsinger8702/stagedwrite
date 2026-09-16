@@ -136,3 +136,9 @@ const check = await engine.preflight(draft.id);
 publish/resume 的接入方可在明确的执行结果中附带可选 code、message、diagnostics。管理协议执行响应返回 ManagedRun 执行事实、对应 preview 与 GraphDiagnostic[]。诊断结构与本节相同，但不会将诊断当成远端未生效证据。
 
 resume 接受修复后的 Draft 时会重新执行本节预检；未通过则响应额外携带 check，preview/diagnostics 属于该修复版本，Run.version 仍为上次获准执行版本。下一次 edit 使用 preview.version。详见 018 的修复续作方案。
+
+## 迁移接线记录（2026-09-16）
+
+预检内部直接读取 ManagedDraft，与规则公开输入保持一致，不再先转成标量包装图再用回调闭包转换回来。候选修复校验使用当前 Draft 的固定基线，与真实 edit 的 reset 一致；基线由引擎从 initialSnapshot 或 publishedArtifactId 对应 Artifact 选取，规则不能另行指定。
+
+本项不改变公开编辑输入：双通道 EditBatch 和嵌套预览尚待迁移，准确状态见 [任务账本](../tasks/three-state-op-migration.md)。规则注册复用不代表检查结果缓存；每次 preflight 仍执行适用规则。

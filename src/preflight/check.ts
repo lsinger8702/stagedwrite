@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import type { DefinitionRegistry } from "../registry/registry.js";
 import { deepFreeze, definitionDigest, jsonSnapshot, pointer } from "../registry/json.js";
 import { previewDraft } from "./preview.js";
-import type { GraphDraft } from "../graph/types.js";
-import type { GraphRule, GraphDiagnostic, GraphCheck, SourcedGraphDiagnostic } from "./types.js";
+import type { ManagedDraft, ManagedRule, IntentSnapshot } from "../managed/types.js";
+import type { GraphDiagnostic, GraphCheck, SourcedGraphDiagnostic } from "./types.js";
 
 const builtinVersion = "graph-completeness-v1";
 const bindingKey = (type: string, version: string) => JSON.stringify([type, version]);
@@ -13,8 +13,8 @@ const exactKeys = (v: Record<string, unknown>, allowed: string[]) => Object.keys
 
 
 export class GraphPreflight {
-  #rules = new Map<string, readonly GraphRule[]>();
-  constructor(private readonly registry: DefinitionRegistry, rules: readonly GraphRule[]) {
+  #rules = new Map<string, readonly ManagedRule[]>();
+  constructor(private readonly registry: DefinitionRegistry, rules: readonly ManagedRule[]) {
     if (!Array.isArray(rules)) throw new Error("INVALID_RULE");
     const seen = new Set<string>();
     for (const rule of rules) {
@@ -30,23 +30,23 @@ export class GraphPreflight {
       this.#rules.set(key, Object.freeze([...(this.#rules.get(key) ?? []), snapshot]));
     }
   }
-  rulesDigest(draft: GraphDraft): string {
+  rulesDigest(draft: ManagedDraft): string {
     const rules = this.#rules.get(bindingKey(draft.type, draft.typeVersion)) ?? [];
     return definitionDigest({ builtinVersion, rules: rules.map(({ id, version, type, typeVersion }) => ({ id, version, type, typeVersion })) });
   }
-  run(draft: GraphDraft): GraphCheck {
+  run(draft: ManagedDraft, baseline: IntentSnapshot): GraphCheck {
     const { definition, digest } = this.registry.getDefinition(draft);
     if (digest !== draft.definitionDigest) throw new Error("DEFINITION_MISMATCH");
     const diagnostics: SourcedGraphDiagnostic[] = [];
     const builtin = (code: string, path: string, message: string) => diagnostics.push({
       code, path, message, severity: "error", source: { kind: "builtin", version: builtinVersion }
     });
-    if (!Object.keys(draft.nodes).length) builtin("graph.empty", "/nodes", "Add at least one node to express the intended change.");
-    for (const id of Object.keys(draft.nodes).sort()) {
-      const node = draft.nodes[id]!;
+    if (!Object.keys(draft.graph.nodes).length) builtin("graph.empty", "/nodes", "Add at least one node to express the intended change.");
+    for (const id of Object.keys(draft.graph.nodes).sort()) {
+      const node = draft.graph.nodes[id]!;
       for (const field of definition.nodeTypes[node.nodeType]!.requiredAtPublish ?? []) {
-        if (node.fields[field]?.kind !== "value") builtin("field.required", `/nodes/${pointer(id)}/fields/${pointer(field)}`,
-          `Node ${id} requires an explicit value for ${field}; its current intent is ${node.fields[field]?.kind === "clear" ? "clear" : "undeclared"}.`);
+        if (draft.fieldIntents[id]?.[`/${pointer(field)}`]?.kind !== "set") builtin("field.required", `/nodes/${pointer(id)}/fields/${pointer(field)}`,
+          `Node ${id} requires an explicit value for ${field}; its current intent is ${draft.fieldIntents[id]?.[`/${pointer(field)}`]?.kind === "remove" ? "clear" : "undeclared"}.`);
       }
     }
     let incomplete = false;
@@ -61,7 +61,7 @@ export class GraphPreflight {
         if (failures.length || !Array.isArray(copied)) throw new Error("Expected JSON diagnostics");
         const accepted: SourcedGraphDiagnostic[] = [];
         for (const entry of copied) {
-          if (!validDiagnostic(entry, this.registry, draft)) throw new Error("Invalid diagnostic");
+          if (!validDiagnostic(entry, this.registry, draft, baseline)) throw new Error("Invalid diagnostic");
           const diagnostic = entry as unknown as GraphDiagnostic;
           accepted.push({ ...diagnostic, severity: (diagnostic.severity ?? "error") as "error" | "warning", source });
         }

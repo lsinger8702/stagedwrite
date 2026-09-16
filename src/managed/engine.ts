@@ -37,8 +37,8 @@ export function createStagedWrite(options: ManagedOptions) {
     const timeout = options.preflightTimeoutMs ?? 5000;
     const rules = (options.rules ?? []).map(r => ({ ...r })), asyncRules = (options.asyncRules ?? []).map(r => ({ ...r }));
     // Reuse the existing rule registration validation, not a second diagnostic protocol.
-    new GraphPreflight(registry, rules.map(r => ({ ...r, check: () => [] })));
-    new AsyncPreflight(registry, rules.map(r => ({ ...r, check: () => [] })), asyncRules.map(r => ({ ...r, check: async () => ({ status: "complete", diagnostics: [] }) })), timeout);
+    const preflight = new GraphPreflight(registry, rules);
+    const asyncCheck = new AsyncPreflight(registry, rules, asyncRules, timeout);
     const executors = new Map<string, ManagedExecutor>();
     for (const e of options.executors ?? []) {
         registry.getDefinition(e);
@@ -130,12 +130,13 @@ export function createStagedWrite(options: ManagedOptions) {
             }
         }
     }
+    const baselineOf = (s: ManagedState) => s.draft.publishedArtifactId ? s.artifacts[s.draft.publishedArtifactId]!.draft : s.draft.initialSnapshot;
     function response(s: ManagedState, r: ManagedRun, check?: ManagedCheck) {
         const diagnostics: GraphDiagnostic[] = r.interruption ? [copy(r.interruption)] : [];
-        const d = toInternal(s.draft);
+        const d = s.draft;
         for (const step of r.steps)
             if ((step.status !== "applied" || step.feedback?.code === "CONFIRMED_FACT_INVALID") && step.feedback) {
-                const f = step.feedback, accepted = (f.diagnostics ?? []).filter(x => validDiagnostic(x as unknown as Json, registry, d));
+                const f = step.feedback, accepted = (f.diagnostics ?? []).filter(x => validDiagnostic(x as unknown as Json, registry, d, baselineOf(s)));
                 diagnostics.push(...copy(accepted));
                 if (!accepted.length)
                     diagnostics.push({ code: f.code ?? `execution.${step.status}`, path: `/nodes/${step.effect!.nodeId.replaceAll("~", "~0").replaceAll("/", "~1")}`, message: f.message ?? f.reason ?? "Execution needs attention", ...(step.status === "applied" ? { severity: "warning" as const } : {}) });
@@ -143,11 +144,7 @@ export function createStagedWrite(options: ManagedOptions) {
         return { ...copy(r), previewVersion: s.draft.version, preview: check?.preview ?? previewDraft(d, registry.getDefinition(s.draft).definition), diagnostics: check?.diagnostics ?? diagnostics, ...(check ? { check } : {}) };
     }
     function rulesDigest(d: ManagedDraft) {
-        const mapped = rules.map(r => ({ ...r, check: () => [] }));
-        const sync = new GraphPreflight(registry, mapped);
-        const asyncCheck = new AsyncPreflight(registry, mapped, asyncRules.map(r => ({ ...r, check: async () => ({ status: "complete" as const, diagnostics: [] }) })), timeout);
-        const internal = toInternal(d);
-        return asyncCheck.digest(internal, sync.rulesDigest(internal));
+        return asyncCheck.digest(d, preflight.rulesDigest(d));
     }
     function validateBinding(s: ManagedState, r: ManagedRun, e: ManagedExecutor) {
         const b = s.artifacts[r.artifactId]!.binding;
@@ -161,16 +158,12 @@ export function createStagedWrite(options: ManagedOptions) {
         artifact?: Artifact;
     }> {
         const deadline = performance.now() + timeout;
-        const draft = copy(s.draft), internal = toInternal(draft), frozen = deepFreeze(copy(draft));
-        const mapped = rules.map(r => ({ ...r, check: () => r.check(frozen) }));
-        const preflight = new GraphPreflight(registry, mapped);
-        const asyncCheck = new AsyncPreflight(registry, mapped, asyncRules.map(r => ({ ...r, check: (_d: unknown, c: {
-                signal: AbortSignal;
-            }) => r.check(frozen, c) })), timeout);
-        let check: ManagedCheck = preflight.run(internal);
-        check.rulesDigest = asyncCheck.digest(internal, preflight.rulesDigest(internal));
+        const draft = copy(s.draft), frozen = deepFreeze(copy(draft));
+        const baseline = baselineOf(s);
+        let check: ManagedCheck = preflight.run(draft, baseline);
+        check.rulesDigest = asyncCheck.digest(draft, preflight.rulesDigest(draft));
         if (asyncRules.length)
-            check = await asyncCheck.run(internal, check, deadline);
+            check = await asyncCheck.run(draft, check, deadline, baseline);
         if (draft.currentRunId)
             check.executionHint = { runId: draft.currentRunId, nextAction: s.runs[draft.currentRunId]?.state === "published" ? "observe" : "resume" };
         const e = executors.get(key(draft));
@@ -201,7 +194,7 @@ export function createStagedWrite(options: ManagedOptions) {
                     return { status: "complete" as const, diagnostics: [...(data.diagnostics ?? []) as unknown as GraphDiagnostic[], ...compiled.diagnostics] };
                 },
             }], timeout);
-            check = await reader.run(internal, check, deadline);
+            check = await reader.run(draft, check, deadline, baseline);
             if (check.status === "passed" && slots) check.updatePreview = copy(slots);
             return { check };
         }
@@ -454,7 +447,7 @@ export function createStagedWrite(options: ManagedOptions) {
         async preview(id: string, version: number, ops: readonly GraphOp[]) {
             const s = await need(id);
             if (s.draft.status === "published") throw new Error("UPDATE_NOT_SUPPORTED");
-            const baseline = s.draft.publishedArtifactId ? s.artifacts[s.draft.publishedArtifactId]!.draft : s.draft.initialSnapshot;
+            const baseline = baselineOf(s);
             const out = editIntent(registry, s.draft, baseline, version, ops);
             protect(s, out.candidate);
             return out;
@@ -465,7 +458,7 @@ export function createStagedWrite(options: ManagedOptions) {
                 const s = await tx(id, l, current => {
                     if (current.draft.status === "published")
                         throw new Error("UPDATE_NOT_SUPPORTED");
-                    const baseline = current.draft.publishedArtifactId ? current.artifacts[current.draft.publishedArtifactId]!.draft : current.draft.initialSnapshot;
+                    const baseline = baselineOf(current);
                     const out = editIntent(registry, current.draft, baseline, version, ops);
                     protect(current, out.candidate);
                     changes = out.changes;

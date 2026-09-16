@@ -1,7 +1,6 @@
 import type { Json } from "../registry/json.js";
 import type { GraphDraft, GraphNode, GraphOp } from "../graph/types.js";
 import type { Diagnostic, Field } from "../types.js";
-import type { DefinitionSelector } from "../registry/types.js";
 
 /** Paths are JSON Pointers from the graph root, including related locations. */
 export interface GraphCandidate {
@@ -29,21 +28,6 @@ export interface GraphDiagnostic extends Diagnostic {
   retryAfterSeconds?: number;
   metadata?: Record<string, Json>;
 }
-export interface GraphRule extends DefinitionSelector {
-  id: string;
-  version: string;
-  /** Trusted, pure, synchronous callback; diagnoses a frozen current draft, optionally suggesting edits without choosing or applying them. */
-  check: (draft: GraphDraft) => readonly GraphDiagnostic[];
-}
-/** The application owns long-running work and deduplication; each callback checks it once. */
-export interface AsyncGraphRule extends DefinitionSelector {
-  id: string;
-  version: string;
-  check: (draft: GraphDraft, context: { signal: AbortSignal }) => Promise<AsyncRuleResult>;
-}
-export type AsyncRuleResult =
-  | { status: "complete"; diagnostics: readonly GraphDiagnostic[] }
-  | { status: "pending"; message: string; retryAfterSeconds?: number; diagnostics?: readonly GraphDiagnostic[] };
 export interface PendingRule {
   ruleId: string;
   ruleVersion: string;

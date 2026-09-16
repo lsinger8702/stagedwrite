@@ -98,3 +98,29 @@ test("preflight: an I/O timeout is incomplete and aborts the callback, never a p
     assert.ok(check.preview.nodes["c/1"]);
     await engine.close();
 });
+
+test("preflight: synchronous and asynchronous callbacks receive detached managed intent snapshots", async () => {
+    let calls = 0;
+    const inspect = (d: import("../src/index.js").ManagedDraft) => {
+        calls++;
+        assert.equal(d.graph.nodes["c/1"]!.fields.note, null);
+        assert.deepEqual(d.fieldIntents["c/1"]!["/note"], { kind: "set", value: null });
+        assert.deepEqual(d.initialSnapshot.graph.nodes["c/1"]!.fields, { capacity: 20, note: null });
+        assert.throws(() => { d.graph.nodes["c/1"]!.fields.capacity = 999; }, TypeError);
+        assert.throws(() => { d.initialSnapshot.graph.nodes["c/1"]!.fields.capacity = 999; }, TypeError);
+        return [];
+    };
+    const { engine, draft } = await setup([rule(inspect)], {
+        asyncRules: [{ ...selector, id: "async-snapshot", version: "1", check: async d => ({ status: "complete", diagnostics: inspect(d) }) }]
+    });
+    try {
+        for (let i = 0; i < 2; i++) {
+            const check = await engine.preflight(draft.id);
+            assert.equal(check.status, "passed");
+            assert.equal("initialSnapshot" in check.preview, false);
+            assert.equal("currentRunId" in check.preview, false);
+        }
+        assert.equal(calls, 4);
+        assert.deepEqual(await engine.getDraft(draft.id), draft);
+    } finally { await engine.close(); }
+});
