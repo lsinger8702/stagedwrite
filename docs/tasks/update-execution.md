@@ -6,7 +6,7 @@
 |---|---|---|
 | U3.1 写前复核组件 | 完成（内部） | 当前本地基线/Run/事实修订一致；新观察值/令牌与已检查条件一致；不静默更换计划。未接入 publish，不是执行授权 |
 | U3.2 产物与原请求证据 | 完成（模型与存储边界） | Artifact 保存编译基线、投影/观察；Attempt 固定 update 目标/前置条件；读写边界验证完整证据 |
-| U3.3 共用执行槽位 | 进行中（回执路径已接入） | 现有 dispatch 支持 update/noop；update 保留原 Binding，严格匹配确认值；noop 用独立满意证据，不伪造 applied Attempt |
+| U3.3 共用执行槽位 | 进行中（回执/条件/槽位已接入） | 现有 dispatch 支持 update/noop；update 保留原 Binding，严格匹配确认值；noop 用独立满意证据，不伪造 applied Attempt |
 | U3.4 认领与提交 | 待做 | certificate 采用优先、单未决 Run、update Run 原子认领；全图 noop 持久采用；历史响应区分当前意图；事务失败无半提交 |
 | U3.5 edit/resume 接线 | 待做 | 成功后仅字段编辑；固定成功基线 reset；每次 update 续作重新读取；旧 unknown 原信封先查证，本 Run 成功节点保护 |
 | U3.6 故障验收与开启 | 待做 | Memory/SQLite、并发/失锁/迟到回执/收尾失败、A→B→A/无差异/历史观察；能力完整后开启公开 update |
@@ -37,3 +37,13 @@
 - update 成功保留原创建 Binding，只追加新的确认 RemoteFact 并推进事实指针；创建路径保持原行为。
 - 核心 153/153（含 TSC）。新增两后端的非法回执拒绝测试及实际 resume 回归：对测试构造的 update unknown Attempt，第一次不完整回执保持 unknown，第二次确认后复用同一请求/key完成，原 Binding 不变。
 - **尚未完成：新 update Attempt 派发、条件令牌传给 adapter、noop 满意证据/槽位、完整认领及写前复核接线。测试预置 update Run 不表示公开 publish 已支持 update。** U3.3 仍进行中，不开启成功后 edit/update 入口。本批后续改动尚未推送。
+
+## U3.3 第二批 — 2026-09-17
+
+- 第一批回执处理已推送 `29e55af`。
+- `ManagedExecutionContext.update` 向共用 apply/reconcile 回调提供原 Artifact ID 与完整原观察（含 remoteVersion）。从 Attempt 引用取值并再次核对请求映射；深冻结且复制，adapter 不能修改存储证据，也不会拿当前 Draft 重建旧条件。当前实际覆盖的是已有 update Attempt 的 reconcile。
+- ExecutionStep 增加 `satisfied` 和 satisfaction 引用。共用依赖、完成判断、修复保护识别 applied/satisfied；satisfied 需要同 Run 所采用 Artifact 的 noop 槽位及 observation 来源 RemoteFact，不能伪装成 applied。已完成满意槽位不可退回 ready 或改写。
+- 内部 satisfyNoop 是事务内变更组件：记录观察来源事实、推进 revision、完成槽位，不创建 Attempt。检查归属/版本/依赖/未决请求；重复完成不新增事实。调用方仍须在事务前建立新鲜读取条件；尚未从公开 dispatch 自动调用。
+- 核心 158/158（含 TSC）。新增两后端的事务失败回滚、伪造完成拒绝、重复完成、SQLite 重开与混合 noop→update 恢复；原条件冻结/隔离测试通过。混合计划只有 update 的一个 Attempt，恢复正确消费原 Binding，创建绑定保持不变。
+- Stripe 离线 13/13、walkthrough 原实录对照通过；未运行真实远端 update。
+- **仍未开启新 update 请求派发。** 新 Attempt 构建和 noop 自动完成必须在持锁新鲜读取/认领接线后启用，不能凭旧 Artifact 自洽就派发。测试构造的 Run/满意槽位验证共用恢复流程，不代表公开 publish 已支持 update。U3.3 继续进行，本批新增改动未推送。

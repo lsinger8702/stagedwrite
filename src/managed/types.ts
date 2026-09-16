@@ -199,18 +199,19 @@ export interface ManagedUpdateInspector {
         | { status: "pending"; message: string; retryAfterSeconds?: number; diagnostics?: readonly GraphDiagnostic[] }
     >;
 }
+/** Update conditions come from the original immutable Attempt artifact, including on reconcile. */
+export interface ManagedExecutionContext {
+    signal: AbortSignal;
+    update?: { artifactId: string; observation: Readonly<RemoteObservation> };
+}
 export interface ManagedExecutor extends DefinitionSelector {
     update?: ManagedUpdateInspector;
     id: string;
     version: string;
     target: string;
     plan(draft: ManagedDraft): readonly Step[];
-    apply(step: Step, key: string, context: {
-        signal: AbortSignal;
-    }): Promise<ApplyOutcome>;
-    reconcile: ((step: Step, key: string, context: {
-        signal: AbortSignal;
-    }) => Promise<ReconcileOutcome>) | {
+    apply(step: Step, key: string, context: ManagedExecutionContext): Promise<ApplyOutcome>;
+    reconcile: ((step: Step, key: string, context: ManagedExecutionContext) => Promise<ReconcileOutcome>) | {
         unsupported: string;
     };
 }

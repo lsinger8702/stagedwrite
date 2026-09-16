@@ -1,4 +1,4 @@
-import { validateUpdateArtifact, validateUpdateAttempt, updateOutcome } from "./update-evidence.js";
+import { validateUpdateArtifact, validateUpdateAttempt, updateOutcome, validateSatisfiedSlot } from "./update-evidence.js";
 import { validateStoredSnapshot } from "./snapshot.js";
 import type { ManagedState, Artifact } from "./types.js";
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -36,6 +36,7 @@ function validateStateContent(id: string, s: ManagedState, artifactsToValidate: 
             if (a.request.step.effect.kind === "update" && a.status === "applied")
                 requireState(a.outcome?.kind === "applied" && updateOutcome(s, a, a.outcome).kind === "applied", "UPDATE_RECEIPT_MISMATCH");
         }
+        for (const step of r.steps) validateSatisfiedSlot(s, r, step);
         requireState(r.revisions.every(v => s.artifacts[v.artifactId]), "RUN_INPUT_MISSING");
         requireState(r.state !== "published" || !r.attempts.some(a => a.status === "pending" || a.status === "unknown"), "UNRESOLVED_PUBLICATION");
     }
@@ -95,6 +96,8 @@ function validateHistory(previous: ManagedState | undefined, next: ManagedState)
         const r = next.runs[id];
         requireState(r && r.kind === old.kind && r.draftId === old.draftId && r.initialArtifactId === old.initialArtifactId, "RUN_HISTORY_IMMUTABLE");
         requireState(old.state !== "published" || same(old, r), "COMPLETED_RUN_IMMUTABLE");
+        for (const step of old.steps.filter(s => s.status === "satisfied"))
+            requireState(same(step, r.steps.find(s => s.id === step.id)), "SATISFIED_STEP_IMMUTABLE");
         requireState(r.attempts.length >= old.attempts.length, "ATTEMPT_IMMUTABLE");
         old.attempts.forEach((a, i) => {
             const b = r.attempts[i]!;

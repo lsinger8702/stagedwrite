@@ -1,5 +1,5 @@
 import { compileUpdate } from "../src/managed/update-plan.js";
-import { updateRequest, updateOutcome } from "../src/managed/update-evidence.js";
+import { updateRequest, updateOutcome, updateContext, satisfyNoop } from "../src/managed/update-evidence.js";
 import { definitionDigest, type Json } from "../src/registry/json.js";
 import { rememberRefs, nodeRef } from "./fixtures/refs.js";
 import assert from "node:assert/strict";
@@ -15,11 +15,11 @@ import { lockResource } from "../src/managed/storage.js";
 const definition = defineDraftType({ id: "storage.tasks", version: "1", nodeTypes: { task: { valueSchema: { type: "object", properties: { title: { type: "string" } }, additionalProperties: false } } }, relationTypes: {} });
 const selector = { type: definition.id, typeVersion: "1" };
 const executor: ManagedExecutor = { ...selector, id: "storage.executor", version: "1", target: "test", plan: d => Object.values(d.graph.nodes).map(n => ({ id: "a", payload: n.fields as Record<string, import("../src/index.js").Value>, effect: { kind: "create", nodeId: n.id } })), apply: async s => ({ kind: "applied", remoteRef: `remote:${s.id}`, confirmed: { projectionDigest: "title-v1", values: { title: { kind: "value", value: "A" } } } }), reconcile: { unsupported: "test" } };
-async function fixture(sqlite: boolean, implementation = executor) {
+async function fixture(sqlite: boolean, implementation = executor, count = 1) {
     const dir = mkdtempSync(join(tmpdir(), "sw-model-")), path = join(dir, "state.sqlite");
     const backend = sqlite ? createSqliteBackend(path) : createMemoryBackend();
     const engine = createStagedWrite({ definitions: [definition], executors: [implementation], ...backend });
-    const draft = rememberRefs(await engine.create(selector, { roots: [{ nodeType: "task", fields: { title: "A" } }] }), ["a"]);
+    const draft = rememberRefs(await engine.create(selector, { roots: Array.from({ length: count }, () => ({ nodeType: "task", fields: { title: "A" } })) }), count === 1 ? ["a"] : ["a", "b"]);
     const check = await engine.preflight(draft.id);
     const run = await engine.publish(draft.id, check.certificate!);
     const lease = await backend.locks.acquire(lockResource(backend.storage.namespace, draft.id), { ttlMs: 60_000 });
@@ -35,7 +35,7 @@ function addUpdate(s: ManagedState, id: string) {
         nodes.map(n => ({ id: `read:${id}:${n.id}`, nodeId: n.id, targetId: "test", remoteId: s.bindings[n.id]!.remoteId, projectionDigest: "title-v1", values: structuredClone(s.remoteFacts[s.latestFactByNode[n.id]!]!.values), observedAt: "2026-09-17T00:00:00Z", remoteVersion: "v1" })));
     assert.equal(compilation.status, "passed"); if (compilation.status !== "passed") throw Error("fixture compilation failed");
     const plan = original.steps.map((step): import("../src/types.js").Step => { const slot = compilation.slots.find(slot => slot.nodeId === step.effect.nodeId)!;
-        return { id: step.id, payload: slot.kind === "update" ? { title: s.draft.graph.nodes[slot.nodeId]!.fields.title as string } : {}, effect: { kind: slot.kind, nodeId: slot.nodeId, remoteId: slot.remoteId } }; });
+        return { id: step.id, ...(step.dependsOn ? { dependsOn: step.dependsOn } : {}), ...(slot.kind === "update" && step.inputRefs ? { inputRefs: step.inputRefs } : {}), payload: slot.kind === "update" ? { title: s.draft.graph.nodes[slot.nodeId]!.fields.title as string } : {}, effect: { kind: slot.kind, nodeId: slot.nodeId, remoteId: slot.remoteId } }; });
     const artifactId = `${id}:artifact`, source = s.artifacts[original.artifactId]!;
     s.artifacts[artifactId] = { ...structuredClone(source), id: artifactId, draft: structuredClone(s.draft), plan, update: compilation,
         intentDigest: definitionDigest({ graph: s.draft.graph, fieldIntents: s.draft.fieldIntents } as unknown as Json), resourceRevision: s.resourceRevision,
@@ -300,7 +300,11 @@ for (const sqlite of [false, true]) test(`${sqlite ? "sqlite" : "memory"}: updat
 for (const sqlite of [false, true]) test(`${sqlite ? "sqlite" : "memory"}: shared resume reconciles update without overwriting creation binding`, async () => {
     let correct = false;
     const seen: { step: import("../src/types.js").Step; key: string }[] = [];
-    const f = await fixture(sqlite, { ...executor, reconcile: async (step, key) => {
+    const f = await fixture(sqlite, { ...executor, reconcile: async (step, key, context) => {
+        assert.equal(context.update?.observation.remoteVersion, "v1");
+        assert.equal(context.update?.observation.values.title?.kind, "value");
+        assert.ok(Object.isFrozen(context.update?.observation.values));
+        assert.throws(() => { context.update!.observation.values.title = { kind: "absent" }; }, TypeError);
         seen.push({ step: structuredClone(step), key });
         return { kind: "applied", remoteRef: "remote:a", ...(correct ? { confirmed: { projectionDigest: "title-v1", values: { title: { kind: "value" as const, value: "B" } } } } : {}) };
     } });
@@ -330,5 +334,100 @@ for (const sqlite of [false, true]) test(`${sqlite ? "sqlite" : "memory"}: share
         const fact = state.remoteFacts[state.latestFactByNode[nodeRef(f.draft, "a")]!]!;
         assert.deepEqual(fact.values.title, { kind: "value", value: "B" });
         assert.equal(fact.source.kind, "attempt");
+    } finally { await f.cleanup(); }
+});
+
+for (const sqlite of [false, true]) test(`${sqlite ? "sqlite" : "memory"}: noop completion is durable observation evidence with no attempt`, async () => {
+    let creates = 0;
+    const f = await fixture(sqlite, { ...executor, apply: async (...args) => { creates++; return executor.apply(...args); } });
+    try {
+        await f.edit(s => addUpdate(s, "noop-slots"));
+        const initial = (await f.backend.storage.read(f.draft.id))!;
+        await assert.rejects(f.edit(s => { s.runs["noop-slots"]!.steps[0]!.status = "satisfied"; }), /NOOP_COMPLETION_INVALID/);
+        await assert.rejects(f.edit(s => { s.runs["noop-slots"]!.steps[0]!.status = "applied"; }), /NOOP_COMPLETION_INVALID/);
+        await assert.rejects(f.edit(s => {
+            s.runs["noop-slots"]!.steps[0]!.dependsOn = ["missing"];
+            satisfyNoop(s, "noop-slots", "a", "2026-09-17T00:00:01Z");
+        }), /DEPENDENCY_NOT_APPLIED/);
+        await assert.rejects(f.edit(s => {
+            satisfyNoop(s, "noop-slots", "a", "2026-09-17T00:00:01Z");
+            throw Error("injected commit failure");
+        }), /injected commit failure/);
+        assert.deepEqual(await f.backend.storage.read(f.draft.id), initial);
+        await f.edit(s => satisfyNoop(s, "noop-slots", "a", "2026-09-17T00:00:01Z"));
+        const completed = (await f.backend.storage.read(f.draft.id))!;
+        const step = completed.runs["noop-slots"]!.steps[0]!;
+        assert.equal(step.status, "satisfied");
+        assert.equal(step.remoteRef, "remote:a");
+        assert.equal(completed.runs["noop-slots"]!.attempts.length, 0);
+        assert.equal(completed.remoteFacts[step.satisfaction!.factId]!.source.kind, "observation");
+        assert.equal(completed.resourceRevision, initial.resourceRevision + 1);
+        assert.deepEqual(completed.bindings, initial.bindings);
+        await f.edit(s => satisfyNoop(s, "noop-slots", "a", "2026-09-17T00:00:02Z"));
+        assert.deepEqual(await f.backend.storage.read(f.draft.id), completed);
+        await assert.rejects(f.edit(s => { s.runs["noop-slots"]!.steps[0]!.status = "ready"; }), /SATISFIED_STEP_IMMUTABLE/);
+        await assert.rejects(f.edit(s => { s.runs["noop-slots"]!.steps[0]!.satisfaction!.observationId = "wrong"; }), /SATISFIED_STEP_IMMUTABLE/);
+        if (sqlite) {
+            const reopened = createSqliteBackend(f.path);
+            try { assert.deepEqual(await reopened.storage.read(f.draft.id), completed); } finally { await reopened.storage.close(); }
+        }
+        await f.lease.release();
+        const result = await f.engine.resume("noop-slots");
+        assert.equal(result.state, "published");
+        assert.equal(creates, 1); // Only the real fixture's initial create used the adapter.
+        assert.equal(result.attempts.length, 0);
+    } finally { await f.cleanup(); }
+});
+
+test("original update adapter conditions are independent of later draft edits", async () => {
+    const f = await fixture(false);
+    try {
+        await f.edit(s => {
+            const node = Object.values(s.draft.graph.nodes)[0]!;
+            node.fields.title = "B"; s.draft.fieldIntents[node.id]!["/title"] = { kind: "set", value: "B" }; s.draft.version++;
+            addUpdate(s, "context-update");
+        });
+        const s = (await f.backend.storage.read(f.draft.id))!, r = s.runs["context-update"]!;
+        const request = updateRequest(s.artifacts[r.artifactId]!, "a", s.bindings);
+        const attempt: import("../src/managed/types.js").Attempt = { stepId: "a", key: "key", number: 1, request, input: request.step.payload, status: "unknown" };
+        const context = updateContext(s, attempt)!;
+        s.draft.graph.nodes[nodeRef(f.draft, "a")]!.fields.title = "C";
+        assert.deepEqual(updateContext(s, attempt), context);
+        assert.equal(context.observation.remoteVersion, "v1");
+        assert.notEqual(context.observation, s.artifacts[r.artifactId]!.update!.context.observations[0]);
+        attempt.request.update!.observationId = "missing";
+        assert.throws(() => updateContext(s, attempt), /UPDATE_REQUEST_EVIDENCE_MISMATCH/);
+    } finally { await f.cleanup(); }
+});
+
+for (const sqlite of [false, true]) test(`${sqlite ? "sqlite" : "memory"}: update resumes after a satisfied dependency using its existing binding`, async () => {
+    let calls = 0;
+    const f = await fixture(sqlite, { ...executor,
+        plan: d => Object.values(d.graph.nodes).map((node, i) => ({ id: i ? "b" : "a", payload: { title: "A" },
+            ...(i ? { dependsOn: ["a"], inputRefs: { parent: "a" } } : {}), effect: { kind: "create", nodeId: node.id } })),
+        reconcile: async (step, _key, context) => {
+            calls++; assert.equal(step.id, "b"); assert.equal(step.payload.parent, "remote:a");
+            assert.equal(context.update!.observation.remoteId, "remote:b");
+            return { kind: "applied", remoteRef: "remote:b", confirmed: { projectionDigest: "title-v1", values: { title: { kind: "value", value: "B" } } } };
+        }
+    }, 2);
+    try {
+        const bindings = await f.engine.getBindings(f.draft.id);
+        await f.edit(s => {
+            const id = nodeRef(f.draft, "b");
+            s.draft.graph.nodes[id]!.fields.title = "B";
+            s.draft.fieldIntents[id]!["/title"] = { kind: "set", value: "B" }; s.draft.version++;
+            addUpdate(s, "mixed-update");
+            satisfyNoop(s, "mixed-update", "a", "2026-09-17T00:00:01Z");
+            const r = s.runs["mixed-update"]!, request = updateRequest(s.artifacts[r.artifactId]!, "b", s.bindings);
+            r.attempts.push({ stepId: "b", key: r.steps[1]!.key, number: 1, request, input: request.step.payload, status: "unknown" });
+            r.steps[1]!.status = "unknown"; r.state = "unknown";
+        });
+        await f.lease.release();
+        const result = await f.engine.resume("mixed-update");
+        assert.equal(result.state, "published"); assert.equal(calls, 1);
+        assert.deepEqual(result.steps.map(s => s.status), ["satisfied", "applied"]);
+        assert.equal(result.attempts.length, 1);
+        assert.deepEqual(await f.engine.getBindings(f.draft.id), bindings);
     } finally { await f.cleanup(); }
 });

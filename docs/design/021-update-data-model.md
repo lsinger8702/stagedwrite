@@ -194,3 +194,11 @@ Artifact.update 保存通过检查的 UpdateCompilation，包含基线、槽位�
 存储边界检查编译上下文、注册身份、摘要、计划及请求映射的一致性。历史重编译使用该产物固定的事实视图，允许当前 Draft/最新事实已变化；它只验证历史自洽，不能替代 U3.1 的当前状态与新鲜读取复核。读路径全量校验，写路径只对新增 Artifact 重编译，旧产物由不可变约束保护。
 
 内部 updateRequest 构建原请求信封，不执行 I/O、不保存 Attempt。五项新增测试覆盖 Memory/SQLite 的证据拒绝与固定请求，以及 SQLite 外部损坏后拒绝读取且保留原始 body。核心 149/149；公开 update 仍未开放，实际产物生成与派发属于 U3.3–U3.5。
+
+## 16. U3.3 原条件与 noop 完成槽位
+
+共用 apply/reconcile 上下文增加可选 update 对象，提供原 Artifact ID 与原 RemoteObservation。通过 Attempt 的不可变引用构造并深冻结；包含原规范值、观察身份和 remoteVersion。update 回执须确认同一 remoteId、projectionDigest 和所有受管值，否则保留 unknown，不能以回执不完整为理由认定未生效。
+
+ExecutionStep.satisfied 表示以观察证据确认无需写入，satisfaction 引用 Artifact/observation/RemoteFact。它与 applied 一样满足依赖并保护完整节点，但不产生 Attempt。存储拒绝缺失、错配或被改写的满意证据。内部 satisfyNoop 在事务中追加观察事实、推进 revision 并完成槽位；幂等重入不重复追加。
+
+当前共用恢复已能消费满意槽位以及原 update 请求条件。公开派发尚未调用 satisfyNoop，update 新请求仍未开放；持锁读取、原子认领及新派发的完整接线继续由 U3 账本跟踪。测试使用预置 update Run/证据，不能视为真实远端更新验收。

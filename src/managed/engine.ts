@@ -1,4 +1,4 @@
-import { updateOutcome } from "./update-evidence.js";
+import { updateOutcome, updateContext } from "./update-evidence.js";
 import { registeredTopology } from "../edit/registered-topology.js";
 import { validateIntentSnapshot } from "../edit/fields.js";
 import { protectIntentRepair } from "./edit-guards.js";
@@ -121,7 +121,7 @@ export function createStagedWrite(options: ManagedOptions) {
             return;
         const old = s.artifacts[r.artifactId]!.draft;
         protectIntentRepair(d, { state: r.state, adopted: old,
-            successfulNodes: r.steps.filter(step => step.status === "applied").map(step => step.effect!.nodeId) });
+            successfulNodes: r.steps.filter(step => ["applied", "satisfied"].includes(step.status)).map(step => step.effect!.nodeId) });
         if (nextPlan) {
             if (nextPlan.length !== r.steps.length)
                 throw new Error("REPAIR_TOPOLOGY_CHANGED");
@@ -129,7 +129,7 @@ export function createStagedWrite(options: ManagedOptions) {
                 const prev = r.steps[i]!, next = nextPlan[i]!;
                 if (!same({ ...declaration(prev), payload: {} }, { ...declaration(next), payload: {} }))
                     throw new Error("REPAIR_TOPOLOGY_CHANGED");
-                if (["applied"].includes(prev.status) && !same(declaration(prev), declaration(next)))
+                if (["applied", "satisfied"].includes(prev.status) && !same(declaration(prev), declaration(next)))
                     throw new Error("APPLIED_STEP_IMMUTABLE");
             }
         }
@@ -321,7 +321,7 @@ export function createStagedWrite(options: ManagedOptions) {
                 throw new Error("LEASE_LOST");
             s = await need(id);
             const r = s.runs[runId]!;
-            const step = r.steps.find(x => !["applied"].includes(x.status));
+            const step = r.steps.find(x => !["applied", "satisfied"].includes(x.status));
             if (!step) {
                 if (!reconcileOnly)
                     s = await tx(id, l, current => { const run = current.runs[runId]!; if (current.draft.version !== run.version)
@@ -343,7 +343,7 @@ export function createStagedWrite(options: ManagedOptions) {
                         throw new Error("UNRESOLVED_EXECUTION");
                     const input = copy(st.payload);
                     for (const dep of st.dependsOn ?? [])
-                        if (!["applied"].includes(run.steps.find(x => x.id === dep)?.status ?? ""))
+                        if (!["applied", "satisfied"].includes(run.steps.find(x => x.id === dep)?.status ?? ""))
                             throw new Error("DEPENDENCY_NOT_APPLIED");
                     for (const [field, dep] of Object.entries(st.inputRefs ?? {}))
                         input[field] = run.steps.find(x => x.id === dep)!.remoteRef!;
@@ -371,7 +371,9 @@ export function createStagedWrite(options: ManagedOptions) {
                     if (!attempt.request || attempt.request.target !== e.target || attempt.request.executorId !== e.id || attempt.request.executorVersion !== e.version)
                         throw new Error("REQUEST_BINDING_MISMATCH");
                     const input = copy(attempt.request.step);
-                    const raw = pending ? typeof e.reconcile === "function" ? await e.reconcile(input, attempt.key, { signal }) : { kind: "unknown", reason: e.reconcile.unsupported } : await e.apply(input, attempt.key, { signal });
+                    const update = updateContext(s, attempt);
+                    const context = { signal, ...(update ? { update } : {}) };
+                    const raw = pending ? typeof e.reconcile === "function" ? await e.reconcile(input, attempt.key, context) : { kind: "unknown", reason: e.reconcile.unsupported } : await e.apply(input, attempt.key, context);
                     observed = outcome(raw, pending ? "reconcile" : "apply");
                 }
                 catch {
@@ -561,7 +563,7 @@ export function createStagedWrite(options: ManagedOptions) {
                         run.revision++;
                         run.steps = a.plan.map((st, i) => {
                             const old = run.steps[i]!;
-                            if (["applied"].includes(old.status))
+                            if (["applied", "satisfied"].includes(old.status))
                                 return old;
                             const changed = !same(declaration(old), declaration(st));
                             const attempted = run.attempts.some(a => a.stepId === st.id);

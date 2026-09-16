@@ -1,4 +1,4 @@
-import { canonicalJson, definitionDigest, type Json } from "../registry/json.js";
+import { canonicalJson, definitionDigest, deepFreeze, type Json } from "../registry/json.js";
 import { compileUpdate, validateUpdatePlan } from "./update-plan.js";
 import type { Artifact, Attempt, ManagedRun, ManagedState, ResourceBinding } from "./types.js";
 const same = (a: unknown, b: unknown) => canonicalJson(a as Json) === canonicalJson(b as Json);
@@ -79,4 +79,59 @@ export function updateOutcome(state: ManagedState, attempt: Attempt,
         message: "The remote write may have taken effect, but its receipt cannot confirm this update.",
         diagnostics: [{ code: "UPDATE_RECEIPT_MISMATCH", path: "", message: "The update receipt is missing or contradicts its checked resource or normalized values.",
             hint: "Reconcile the original request and key with authoritative evidence. Do not resend or replace the resource based on this receipt." }] };
+}
+
+/** Pass a detached frozen copy of the original conditions to either adapter callback. */
+export function updateContext(state: ManagedState, attempt: Attempt): NonNullable<import("./types.js").ManagedExecutionContext["update"]> | undefined {
+    if (attempt.request.step.effect.kind === "create") return undefined;
+    const ref = attempt.request.update, artifact = ref && state.artifacts[ref.artifactId];
+    const observation = artifact?.update?.context.observations.find(o => o.id === ref?.observationId && o.nodeId === attempt.request.step.effect.nodeId);
+    requireEvidence(attempt.request.step.effect.kind === "update" && ref && observation &&
+        same(updateRequest(artifact!, attempt.stepId, state.bindings), attempt.request), "UPDATE_REQUEST_EVIDENCE_MISMATCH");
+    return deepFreeze(structuredClone({ artifactId: ref!.artifactId, observation: observation! }));
+}
+
+export function validateSatisfiedSlot(state: ManagedState, run: ManagedRun, step: import("../types.js").ExecutionStep): void {
+    if (step.status !== "satisfied") {
+        requireEvidence(!step.satisfaction && !(step.effect.kind === "noop" && step.status === "applied"), "NOOP_COMPLETION_INVALID");
+        return;
+    }
+    const proof = step.satisfaction, artifact = proof && state.artifacts[proof.artifactId];
+    const slot = artifact?.update?.slots.find(s => s.nodeId === step.effect.nodeId);
+    const fact = proof && state.remoteFacts[proof.factId];
+    const planned = artifact?.plan.find(s => s.id === step.id);
+    requireEvidence(run.kind === "update" && step.effect.kind === "noop" && proof && slot?.kind === "noop" && planned &&
+        [run.initialArtifactId, run.artifactId, ...run.revisions.map(r => r.artifactId)].includes(proof.artifactId) &&
+        same(planned, { id: step.id, payload: step.payload, ...(step.dependsOn ? { dependsOn: step.dependsOn } : {}),
+            ...(step.inputRefs ? { inputRefs: step.inputRefs } : {}), effect: step.effect }) &&
+        slot.observationId === proof.observationId && step.remoteRef === slot.remoteId &&
+        fact?.nodeId === step.effect.nodeId && fact.source.kind === "observation" &&
+        fact.source.artifactId === proof.artifactId && fact.source.observationId === proof.observationId &&
+        !run.attempts.some(a => a.stepId === step.id && a.status !== "no_effect"), "NOOP_COMPLETION_INVALID");
+}
+
+/** Transaction mutation only. Caller must separately establish fresh readback and
+ * ownership before entering the transaction. This helper grants no execution rights. */
+export function satisfyNoop(state: ManagedState, runId: string, stepId: string, now: string): void {
+    const run = state.runs[runId], step = run?.steps.find(s => s.id === stepId);
+    requireEvidence(run && step && run.kind === "update" && state.draft.currentRunId === runId &&
+        run.version === state.draft.version, "NOOP_OWNER_MISMATCH");
+    if (step!.status === "satisfied") { validateSatisfiedSlot(state, run!, step!); return; }
+    requireEvidence(step!.status === "ready" && !Object.values(state.runs).some(r => r.attempts.some(a => a.status === "pending" || a.status === "unknown")), "UNRESOLVED_EXECUTION");
+    requireEvidence((step!.dependsOn ?? []).every(id => ["applied", "satisfied"].includes(run!.steps.find(s => s.id === id)?.status ?? "")), "DEPENDENCY_NOT_APPLIED");
+    const artifact = state.artifacts[run!.artifactId], slot = artifact?.update?.slots.find(s => s.nodeId === step!.effect.nodeId);
+    const observation = artifact?.update?.context.observations.find(o => o.id === slot?.observationId);
+    requireEvidence(step!.effect.kind === "noop" && slot?.kind === "noop" && observation, "NOOP_COMPLETION_INVALID");
+    const factId = JSON.stringify(["noop", runId, artifact!.id, stepId]);
+    requireEvidence(!state.remoteFacts[factId], "FACT_IMMUTABLE");
+    state.remoteFacts[factId] = { id: factId, nodeId: observation!.nodeId, targetId: observation!.targetId, remoteId: observation!.remoteId,
+        projectionDigest: observation!.projectionDigest, values: structuredClone(observation!.values),
+        source: { kind: "observation", artifactId: artifact!.id, observationId: observation!.id }, confirmedAt: now };
+    state.latestFactByNode[observation!.nodeId] = factId;
+    state.resourceRevision++;
+    step!.status = "satisfied"; step!.remoteRef = observation!.remoteId;
+    step!.satisfaction = { artifactId: artifact!.id, observationId: observation!.id, factId };
+    delete step!.feedback;
+    validateSatisfiedSlot(state, run!, step!);
+    run!.events.push({ sequence: run!.events.length + 1, stepId, kind: "satisfied", recordedAt: now });
 }

@@ -64,7 +64,9 @@ export interface ExecutionStep extends Step {
     };
     requestRevision?: number;
     key: string;
-    status: "ready" | "dispatching" | "applied" | "unknown";
+    status: "ready" | "dispatching" | "applied" | "unknown" | "satisfied";
+    /** No remote request: immutable observation-backed completion evidence. */
+    satisfaction?: { artifactId: string; observationId: string; factId: string };
     /** Exact dispatch inputs reused for reconciliation. */
     resolvedPayload?: Record<string, Value>;
     remoteRef?: string;
@@ -72,7 +74,7 @@ export interface ExecutionStep extends Step {
 export interface Event {
     sequence: number;
     stepId: string;
-    kind: "dispatching" | "applied" | "unknown" | "not_applied" | "no_effect" | "reconciling" | "plan_repaired";
+    kind: "dispatching" | "applied" | "unknown" | "not_applied" | "no_effect" | "reconciling" | "plan_repaired" | "satisfied";
     recordedAt: string;
     reason?: string;
 }
