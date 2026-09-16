@@ -23,3 +23,17 @@ test("stored snapshot: non-JSON input and malformed declaration shapes fail clos
   assert.throws(() => validateStoredSnapshot({ get graph() { read = true; return {}; } }), /STATE_INTENT_INVALID/);
   assert.equal(read, false);
 });
+
+test("stored snapshot: nodes and edges reject undeclared metadata", () => {
+  const snapshot = { graph: {
+    nodes: { n: { id: "n", nodeType: "task", fields: {} } },
+    edges: { e: { id: "e", relationType: "uses", from: "n", to: "n" } }
+  }, fieldIntents: {} };
+  validateStoredSnapshot(snapshot);
+  for (const key of ["remoteRef", "binding", "extra"]) {
+    const node = structuredClone(snapshot); Object.assign(node.graph.nodes.n, { [key]: "unexpected" });
+    assert.throws(() => validateStoredSnapshot(node), /STATE_INTENT_INVALID/);
+    const edge = structuredClone(snapshot); Object.assign(edge.graph.edges.e, { [key]: "unexpected" });
+    assert.throws(() => validateStoredSnapshot(edge), /STATE_INTENT_INVALID/);
+  }
+});

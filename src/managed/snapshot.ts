@@ -19,7 +19,7 @@ export function validateStoredSnapshot(raw: unknown): void {
     }
   }
   for (const [id, node] of Object.entries(nodes)) {
-    if (!isObject(node) || node.id !== id || typeof node.nodeType !== "string" || !node.nodeType.trim() || !isObject(node.fields)) return invalid();
+    if (!isObject(node) || Object.keys(node).sort().join() !== "fields,id,nodeType" || node.id !== id || typeof node.nodeType !== "string" || !node.nodeType.trim() || !isObject(node.fields)) return invalid();
     const declarations = Object.hasOwn(intents, id) ? intents[id] : {};
     let fields: Record<string, Json>;
     try { fields = projectDeclarations(declarations as Record<string, FieldDeclaration>); }
@@ -27,7 +27,7 @@ export function validateStoredSnapshot(raw: unknown): void {
     if (canonicalJson(fields) !== canonicalJson(node.fields)) return invalid();
   }
   for (const [id, edge] of Object.entries(edges)) {
-    if (!isObject(edge) || edge.id !== id || typeof edge.relationType !== "string" || !edge.relationType.trim() ||
+    if (!isObject(edge) || Object.keys(edge).sort().join() !== "from,id,relationType,to" || edge.id !== id || typeof edge.relationType !== "string" || !edge.relationType.trim() ||
       typeof edge.from !== "string" || typeof edge.to !== "string" || !Object.hasOwn(nodes, edge.from) || !Object.hasOwn(nodes, edge.to)) return invalid();
   }
 }

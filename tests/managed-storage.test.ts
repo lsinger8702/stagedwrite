@@ -101,14 +101,21 @@ for (const sqlite of [false, true]) {
                 s => { s.draft.fieldIntents.ghost = { "/title": { kind: "remove" } }; },
                 s => { s.draft.fieldIntents.a!["/title/child"] = { kind: "remove" }; },
                 s => { s.draft.fieldIntents.a!["/title"] = { kind: "remove" }; },
-                s => { s.draft.initialSnapshot.graph.nodes.a!.fields.title = "corrupt baseline"; },
-                s => { s.artifacts[f.run.artifactId]!.draft.graph.nodes.a!.fields.title = "corrupt artifact"; },
                 s => { s.draft.graph.edges.bad = { id: "bad", relationType: "uses", from: "a", to: "missing" }; }
             ];
             for (const corrupt of corruptions) {
                 await assert.rejects(f.edit(corrupt), /STATE_INTENT_INVALID/);
                 assert.deepEqual(await f.backend.storage.read(f.draft.id), before);
             }
+            await assert.rejects(f.edit(s => { s.draft.initialSnapshot.graph.nodes.a!.fields.title = "corrupt baseline"; }), /INITIAL_SNAPSHOT_IMMUTABLE/);
+            await assert.rejects(f.edit(s => { s.artifacts[f.run.artifactId]!.draft.graph.nodes.a!.fields.title = "corrupt artifact"; }), /ARTIFACT_IMMUTABLE/);
+            await assert.rejects(f.edit(s => { delete s.artifacts[f.run.artifactId]; }), /ARTIFACT_IMMUTABLE/);
+            await assert.rejects(f.edit(s => {
+                const a = structuredClone(s.artifacts[f.run.artifactId]!);
+                a.id = "new-corrupt"; a.draft.graph.nodes.a!.fields.title = "not declared";
+                s.artifacts[a.id] = a;
+            }), /STATE_INTENT_INVALID/);
+            assert.deepEqual(await f.backend.storage.read(f.draft.id), before);
             if (sqlite) {
                 const reopened = createSqliteBackend(f.path);
                 try { assert.deepEqual(await reopened.storage.read(f.draft.id), before); }
@@ -132,5 +139,25 @@ test("sqlite: reopening independently corrupted intent data refuses it without r
         finally { await reopened.storage.close(); }
         assert.equal(db.prepare("SELECT body FROM sw_managed_drafts WHERE id=?").get(f.draft.id)!.body, damaged);
         db.prepare("UPDATE sw_managed_drafts SET body=? WHERE id=?").run(row.body as string, f.draft.id);
+    } finally { db.close(); await f.cleanup(); }
+});
+
+test("sqlite: historical artifact corruption is still checked on read and transaction before the callback", async () => {
+    const f = await fixture(true), db = new DatabaseSync(f.path);
+    try {
+        const row = db.prepare("SELECT body FROM sw_managed_artifacts WHERE id=?").get(f.run.artifactId)!;
+        for (const baseline of [false, true]) {
+            const data = JSON.parse(row.body as string);
+            const snapshot = baseline ? data.draft.initialSnapshot : data.draft;
+            snapshot.graph.nodes.a.fields.title = "external corruption";
+            const damaged = JSON.stringify(data);
+            db.prepare("UPDATE sw_managed_artifacts SET body=? WHERE id=?").run(damaged, f.run.artifactId);
+            let invoked = false;
+            await assert.rejects(f.backend.storage.read(f.draft.id), /STATE_INTENT_INVALID/);
+            await assert.rejects(f.edit(() => { invoked = true; }), /STATE_INTENT_INVALID/);
+            assert.equal(invoked, false);
+            assert.equal(db.prepare("SELECT body FROM sw_managed_artifacts WHERE id=?").get(f.run.artifactId)!.body, damaged);
+        }
+        db.prepare("UPDATE sw_managed_artifacts SET body=? WHERE id=?").run(row.body as string, f.run.artifactId);
     } finally { db.close(); await f.cleanup(); }
 });

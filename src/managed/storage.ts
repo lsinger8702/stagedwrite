@@ -2,12 +2,11 @@ import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import type { DatabaseSync as Database } from "node:sqlite";
 import type { DraftLockProvider, ManagedStore, ManagedState, LateFact } from "./types.js";
-import { validateState, validateTransition } from "./state.js";
+import { validateState, validateWrite } from "./state.js";
 import { existsSync } from "node:fs";
 export const lockResource = (namespace: string, id: string) => JSON.stringify([namespace, "draft", id]);
 function copy<T>(v: T): T { return structuredClone(v); }
 const stateValid = validateState;
-const immutable = validateTransition;
 /** Shared in-process backend. Explicitly not a cross-host lock implementation. */
 export function createMemoryBackend(): {
     storage: ManagedStore;
@@ -46,8 +45,7 @@ export function createMemoryBackend(): {
             if (lease.resource !== lockResource(namespace, id) || !row || row.token !== lease.token || row.fence !== lease.fence || row.until <= Date.now())
                 throw new Error("LEASE_LOST");
             const next = copy(fn(copy(states.get(id))));
-            stateValid(id, next);
-            immutable(states.get(id), next);
+            validateWrite(id, states.get(id), next);
             for (const [other, s] of states)
                 if (other !== id && Object.keys(next.runs).some(r => Object.hasOwn(s.runs, r)))
                     throw new Error("RUN_ID_CONFLICT");
@@ -135,8 +133,8 @@ export function createSqliteBackend(path: string): {
         stateValid(id, s);
         return s;
     }
+    // Both callers validate their transition before entering this persistence-only function.
     function write(id: string, s: ManagedState) {
-        stateValid(id, s);
         for (const [node, b] of Object.entries(s.bindings)) {
             const prior = db.prepare("SELECT draft_id,node_id FROM sw_managed_bindings WHERE json_extract(body,'$.targetId')=? AND json_extract(body,'$.remoteId')=?").all(b.targetId, b.remoteId);
             if (prior.some(p => p.draft_id !== id || p.node_id !== node))
@@ -184,15 +182,18 @@ export function createSqliteBackend(path: string): {
                 if (lease.resource !== resource || !row || row.token !== lease.token || row.fence !== lease.fence || Number(row.expires_at) <= now())
                     throw new Error("LEASE_LOST");
                 const previous = read(id), s = fn(copy(previous));
-                stateValid(id, s);
-                immutable(previous, s);
+                validateWrite(id, previous, s);
                 write(id, s);
                 return copy(s);
             });
         },
-        async appendLateFact(id, fact) { transaction(() => { const s = read(id); if (!s)
-            throw new Error("DRAFT_NOT_FOUND"); validateFact(s, fact); if (!s.lateFacts.some(f => JSON.stringify(f) === JSON.stringify(fact)))
-            s.lateFacts.push(copy(fact)); write(id, s); }); },
+        async appendLateFact(id, fact) { transaction(() => { const previous = read(id); if (!previous)
+            throw new Error("DRAFT_NOT_FOUND"); validateFact(previous, fact);
+            if (previous.lateFacts.some(f => JSON.stringify(f) === JSON.stringify(fact))) return;
+            const next = copy(previous);
+            next.lateFacts.push(copy(fact));
+            validateWrite(id, previous, next);
+            write(id, next); }); },
         async close() { if (!closed) {
             db.close();
             closed = true;

@@ -1,10 +1,23 @@
 import { validateStoredSnapshot } from "./snapshot.js";
-import type { ManagedState } from "./types.js";
+import type { ManagedState, Artifact } from "./types.js";
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 function requireState(ok: unknown, message: string): asserts ok { if (!ok) throw new Error(message); }
 
 /** Shared by every built-in backend; storage validity is not an engine shortcut. */
 export function validateState(id: string, s: ManagedState) {
+    validateStateContent(id, s, Object.values(s.artifacts));
+}
+
+/** Internal write boundary. previous must be a validated disk read or a private,
+ * previously validated memory state. Never use untrusted caller input as previous.
+ * Check immutability first, then re-project only new historical snapshots. */
+export function validateWrite(id: string, previous: ManagedState | undefined, next: ManagedState) {
+    validateHistory(previous, next);
+    validateStateContent(id, next, Object.values(next.artifacts).filter(a => !previous || !Object.hasOwn(previous.artifacts, a.id)));
+    validateTransition(previous, next);
+}
+
+function validateStateContent(id: string, s: ManagedState, artifactsToValidate: readonly Artifact[]) {
     requireState(s.draft.id === id && s.draft.formatVersion === 3, "STATE_IDENTITY_MISMATCH");
     requireState(s.remoteFacts && s.latestFactByNode && s.publications, "STATE_FORMAT_UNSUPPORTED");
     const runs = Object.values(s.runs), active = runs.filter(r => r.state !== "published");
@@ -55,13 +68,13 @@ export function validateState(id: string, s: ManagedState) {
     }
     validateStoredSnapshot({ graph: s.draft.graph, fieldIntents: s.draft.fieldIntents });
     validateStoredSnapshot(s.draft.initialSnapshot);
-    for (const artifact of Object.values(s.artifacts)) {
+    for (const artifact of artifactsToValidate) {
         validateStoredSnapshot({ graph: artifact.draft.graph, fieldIntents: artifact.draft.fieldIntents });
         validateStoredSnapshot(artifact.draft.initialSnapshot);
     }
 }
 
-export function validateTransition(previous: ManagedState | undefined, next: ManagedState) {
+function validateHistory(previous: ManagedState | undefined, next: ManagedState) {
     if (!previous) return;
     requireState(same(previous.draft.initialSnapshot, next.draft.initialSnapshot), "INITIAL_SNAPSHOT_IMMUTABLE");
     for (const [before, after, error] of [
@@ -81,6 +94,10 @@ export function validateTransition(previous: ManagedState | undefined, next: Man
             if (a.status === "applied" || a.status === "no_effect") requireState(same(a, b), "ATTEMPT_IMMUTABLE");
         });
     }
+}
+
+function validateTransition(previous: ManagedState | undefined, next: ManagedState) {
+    if (!previous) return;
     for (const [id, r] of Object.entries(next.runs)) {
         if (!previous.runs[id] && r.kind === "update")
             requireState(previous.draft.publishedArtifactId && previous.draft.currentRunId && previous.runs[previous.draft.currentRunId]?.state === "published", "UPDATE_BASELINE_REQUIRED");

@@ -184,3 +184,16 @@
 - 验证：核心 127/127；walkthrough 5/5（原产物字节一致）；Stripe 离线 13/13；git diff --check 通过。真实 Stripe 源码和历史录制均未修改。
 - **M05 未完成，公开 create/edit 仍是旧输入协议。** 本轮完成实际预检链路的模型依赖拆除，不是新 API 交付。后续必须一起完成：ManagedDraft 的 JSON 类型与嵌套 preview → create roots/createdRefs 与 prepareEdit 接入现有事务 → repairOps 双通道与全部调用方迁移 → 删除旧 GraphOp 求值器并完成证据重录。不能留下两套公开协议或兼容别名。
 - 本段新增改动尚未提交/推送；私有评审目录未纳入。
+
+### M05 review — 存储校验成本、错误优先级与字段边界
+
+- 上一批受管预检接线已推送：1b282ae。
+- 确认三项 review：历史 Artifact 的投影重复计算、不可变性错误被内容错误遮蔽、节点/边未知键未拒绝，均已处理。
+- 内部 validateWrite 要求可信 previous：先查历史不可变，再校验当前 Draft/initialSnapshot 和新 Artifact 的投影、状态关联，最后查状态迁移。旧 Artifact 必须先通过逐项不可变比较才能跳过投影。没有暴露可让调用方关闭校验的公开开关。
+- SQLite read 仍全查磁盘内容；事务写移除 persistence-only write 中的第三次全量校验。appendLateFact 同样经过已验证旧状态和新状态写边界；重复事实直接返回。
+- 这只消除冗余投影，不声称存储开销不再随历史增长：历史比较、磁盘读取与序列化仍存在。
+- 修改/删除已有 Artifact 明确报 ARTIFACT_IMMUTABLE，修改初始快照报 INITIAL_SNAPSHOT_IMMUTABLE；新坏 Artifact 仍报 STATE_INTENT_INVALID。节点和边使用精确字段集，remoteRef 等不得混进作者图。
+- 回归覆盖两种后端的失败原子性/错误优先级/新坏 Artifact，以及 SQLite 历史 Artifact 和其初始快照外部损坏时 read/transact 拒绝、事务回调不运行、原始 body 不变。
+- 核心 npm test 129/129（含 TSC）。M05 公开协议切换仍未完成；未把这次 review 修复记为迁移完成。
+- 物化 Graph 与读取时派生的取舍已记 Roadmap R2，待公开协议/读路径收敛后讨论；当前保持批准模型。本轮新增改动尚未推送。
+- 补充验证：walkthrough 5/5、Stripe 离线 13/13、打包消费测试及 git diff --check 均通过；生成产物和 Stripe 历史证据保持原字节。
