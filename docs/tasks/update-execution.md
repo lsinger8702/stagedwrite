@@ -1,5 +1,7 @@
 # U3：固定图 update 执行账本
 
+**当前总状态（2026-09-17）：A1 已完成；A2 有限修复循环与 A3 官方 DSH 接入均已完成 mock 验收。真实模型、DSH 进程重启/磁盘会话恢复和生产持久授权未验收。详见 [DSH 账本](dsh.md)；下文早期“未实施/待接线”是历史记录，不代表当前状态。**
+
 **2026-09-17：三态 OP 迁移已结项。按已批准的 [020](../design/020-update-contract-proposal.md) / [021](../design/021-update-data-model.md) 恢复 U3；本账本只记录执行阶段。U3 与 U5 文档/离线验收已完成；U4 Product 独立及 Product/Price 组合场景已通过真实沙盒验收。当前已开放显式 update 写能力 executor 的固定图字段更新；真实 Stripe update 单独验收。**
 
 | 任务 | 状态 | 交付与验收 |
