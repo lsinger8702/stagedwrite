@@ -1,6 +1,6 @@
 # U3：固定图 update 执行账本
 
-**2026-09-17：三态 OP 迁移已结项。按已批准的 [020](../design/020-update-contract-proposal.md) / [021](../design/021-update-data-model.md) 恢复 U3；本账本只记录执行阶段。U3 与 U5 文档/离线验收已完成；U4 样例已就绪，真实 Stripe update 待凭据验收。当前已开放显式 update 写能力 executor 的固定图字段更新；真实 Stripe update 单独验收。**
+**2026-09-17：三态 OP 迁移已结项。按已批准的 [020](../design/020-update-contract-proposal.md) / [021](../design/021-update-data-model.md) 恢复 U3；本账本只记录执行阶段。U3 与 U5 文档/离线验收已完成；U4 真实 Stripe Product update 已验收。当前已开放显式 update 写能力 executor 的固定图字段更新；真实 Stripe update 单独验收。**
 
 | 任务 | 状态 | 交付与验收 |
 |---|---|---|
@@ -88,3 +88,12 @@
 - U4 真实 Stripe update：仓库无凭据文件，当前环境无 STRIPE_SECRET_KEY/STRIPE_SANDBOX_ACCOUNT；已请求本机凭据路径。样例及测试可完成，真实联网验收不能冒充完成。未更改旧 Stripe 录制摘要。
 
 - 最终验收：核心 195/195；Stripe 离线 15/15；原 walkthrough 6/6、实录重跑及 HTML/ZIP 字节一致；新增 update 实录重跑及 HTML/ZIP 字节一致；隔离安装、公开类型、SQLite 重开和打包 smoke 全部通过。U5 中英文入口、接入指南、离线下载及 CI 闸门已完成。
+
+## U4 真实沙盒验收 — 2026-09-17
+
+- 找回此前保存在仓库外的测试凭据，运行独立 Product update 样例；前一阶段“未找到凭据”是检查范围不完整，已纠正。凭据与原始 SQLite/回执/trace 均不提交。
+- 实测：initial publish → published；edit A→B / preflight → passed；update publish → unknown（真实成功响应后主动注入回执丢失）；重开 SQLite，同 Run resume → published；再次 preflight / publish → noop。
+- 真实 HTTP 共 7 次：创建 POST 1 次、原 ID 更新 POST 1 次、GET 5 次；全部 200、livemode=false、同一 Product。最后读取名称为 B。没有重复 POST；没有支付请求。产品保留在沙盒供检查。
+- 脱敏证据：docs/examples/stripe-update-sandbox-result.json；scripts/record-stripe-update.mjs 从本地原始 trace 校验后白名单导出。新增离线测试校验录制字节、当前样例源码摘要与场景结构，已由 verify:update 纳入 CI。
+- 恢复证据来自 adapter 落盘的真实原始成功回执，不是凭 GET 值相等猜测成功；本次没有模拟真实网络超时，也不证明多写方下的远端 CAS。
+- 本轮校验：verify:update 4/4、TSC、离线实录/HTML/ZIP 字节对照通过；仅新增证据导出/测试和文档，未改动引擎或录制时的 adapter/driver。

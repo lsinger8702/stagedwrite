@@ -105,6 +105,8 @@ A real Product → two Prices integration demonstrates a remote validation refus
 
 `npm run test:stripe` runs offline regression tests with no credentials. Live requests require an explicit flag and a test key; state and raw traces stay local. [Contributing](CONTRIBUTING.md).
 
+A separate [real Product update recording](docs/examples/stripe-update-sandbox-result.json) verifies editing the same remote resource, injected receipt loss, SQLite reopen and same-Run resume, followed by no-op publication. [Update sample](examples/stripe-update/README.md).
+
 ## Current API
 
 StagedWrite is a graph intent library for agent tools. `createStagedWrite` is its only engine entry point.

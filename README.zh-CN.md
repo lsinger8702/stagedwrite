@@ -111,7 +111,7 @@ const updated = await engine.edit(draft.id, draft.version, {
 
 reset 以最近全量发布成功的意图为固定基线，首次成功前才使用 initialSnapshot。历史凭据返回原采用结果；用 isCurrentIntent 和 previewVersion 区分它与当前意图。
 
-[实际执行的 update HTML](docs/examples/update.html) · [离线 ZIP](docs/examples/stagedwrite-update.zip) · [Product adapter 与沙盒指南](examples/stripe-update/README.md)。新 update 录制使用 Mock 远端，不冒充已完成的真实 Stripe update 测试。
+[实际执行的 update HTML](docs/examples/update.html) · [离线 ZIP](docs/examples/stagedwrite-update.zip) · [Product adapter 与沙盒指南](examples/stripe-update/README.md)。HTML 使用 Mock 远端；另有[真实 Stripe update 验收记录](docs/examples/stripe-update-sandbox-result.json)，覆盖原 ID 更新、回执丢失恢复及 noop。
 
 ## Adapter 回执契约
 

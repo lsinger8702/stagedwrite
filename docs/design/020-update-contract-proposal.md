@@ -1,6 +1,6 @@
 # 020：固定图 update 契约与状态矩阵
 
-**当前实现（2026-09-17）：固定图字段 update 已接公开 edit/preflight/publish/resume，含 noop 提交、drift 阻断与原请求恢复。详见 [更新指南](../guides/update.md) 和 [U3 账本](../tasks/update-execution.md)。下文按阶段记录的“未实现/未开放”保留为历史实施记录，不代表当前状态。真实 Stripe update 尚待凭据联调；原有 Stripe create 录制不作 update 证据。**
+**当前实现（2026-09-17）：固定图字段 update 已接公开 edit/preflight/publish/resume，含 noop 提交、drift 阻断与原请求恢复。详见 [更新指南](../guides/update.md) 和 [U3 账本](../tasks/update-execution.md)。下文按阶段记录的“未实现/未开放”保留为历史实施记录，不代表当前状态。真实 Stripe Product update 已通过沙盒验收，见 [独立记录](../examples/stripe-update-sandbox-result.json)；原有 Stripe create 录制不作 update 证据。**
 
 
 **状态：U0 契约已批准，2026-09-16。项目所有者明确回复“同意”。000 已同步批准边界，018 仍记录当前实现。本文不表示运行时已支持 update；数据模型设计见 [021](021-update-data-model.md)。**

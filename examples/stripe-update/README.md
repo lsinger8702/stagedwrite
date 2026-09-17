@@ -22,7 +22,7 @@ node --env-file=.env.stripe examples/stripe-update/run.mjs \
   --allow-test-writes --state-dir=.stripe-example/product-update
 ```
 
-Creates one test Product and changes its name from A to B. The Product remains available for inspection; this example does not delete it. No real Stripe update recording is currently checked in; credentials were unavailable for this implementation pass.
+Creates one test Product and changes its name from A to B. The Product remains available for inspection; this example does not delete it. A [reviewed real sandbox recording](../../docs/examples/stripe-update-sandbox-result.json) covers this flow: initial publication, update receipt loss, SQLite reopen and same-Run recovery, then no-op publication. All seven HTTP responses were test-mode 200 responses; only one create POST and one update POST were sent.
 
 Continue the same state directory after interruption:
 
@@ -42,3 +42,7 @@ If the network fails after the effect but before the local journal is saved, the
 Stripe Product updates here have no CAS token: **single writer only**. Do not change the same Product in Dashboard/another application during the run. Preflight/readback detects observed drift but cannot close the gap between a GET and the subsequent POST.
 
 Official contracts: [Update a Product](https://docs.stripe.com/api/products/update), [API v1 idempotency](https://docs.stripe.com/api/idempotent_requests). Library behavior is independently covered by [the lifecycle tests](../../tests/update-lifecycle.test.ts).
+
+## Recorded evidence
+
+The raw local trace is intentionally not committed. After a successful live run, export an allowlisted summary with `node scripts/record-stripe-update.mjs <state-directory>`, review it, and update the reviewed-byte assertion in `evidence.test.mjs`. `npm run verify:update` checks both source and recording digests offline. Changing a digest is not a substitute for rerunning and reviewing the experiment. The HTML walkthrough remains a deterministic mock; the linked sandbox recording is separate evidence.

@@ -43,4 +43,4 @@ reset 恢复最近全量成功的声明。部分成功只推进节点事实，�
 - `npm test`：Memory/SQLite 的公开生命周期、并发、提交故障、超时/失锁、迟到回执。
 - `npm run demo:update`：生成 [HTML](../examples/update.html)、[JSON](../examples/update-trace.json)、[ZIP](../examples/stagedwrite-update.zip)。真实执行库及 SQLite，远端为 Mock，固定 ID/时钟仅用于离线演示。
 - `npm run verify:update`：重跑样例并逐字节检查产物，同时执行 Product adapter 离线契约测试。
-- [真实沙盒驱动](../../examples/stripe-update/README.md)：需要测试凭据。离线通过不等于已经完成真实 Stripe update 验证。
+- [真实沙盒驱动](../../examples/stripe-update/README.md)：需要测试凭据。已完成 [真实 Stripe update 验收](../examples/stripe-update-sandbox-result.json)；独立于离线 HTML，包含原 ID 更新和注入回执丢失后的恢复。

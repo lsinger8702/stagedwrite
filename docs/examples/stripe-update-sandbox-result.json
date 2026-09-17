@@ -1,0 +1,88 @@
+{
+  "formatVersion": 1,
+  "recordedAt": "2026-09-17T02:37:27.833Z",
+  "sampleSourceDigest": "b94c728a93966fce1503b24e366ffa91894373b58372db95bd159f55a4c3dcc4",
+  "scenario": "Real Stripe sandbox Product update; injected receipt loss after a real successful write; SQLite reopened before same-Run resume; no LLM or payments",
+  "states": [
+    {
+      "method": "publish",
+      "kind": "initial_create",
+      "state": "published"
+    },
+    {
+      "method": "publish",
+      "kind": "update",
+      "state": "unknown"
+    },
+    {
+      "method": "resume",
+      "kind": "update",
+      "state": "published"
+    },
+    {
+      "method": "publish",
+      "kind": "noop",
+      "state": "published"
+    }
+  ],
+  "http": [
+    {
+      "method": "POST",
+      "path": "/v1/products",
+      "status": 200,
+      "name": "StagedWrite update example A",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/:id",
+      "status": 200,
+      "name": "StagedWrite update example A",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/:id",
+      "status": 200,
+      "name": "StagedWrite update example A",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/:id",
+      "status": 200,
+      "name": "StagedWrite update example A",
+      "livemode": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/products/:id",
+      "status": 200,
+      "name": "StagedWrite update example B",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/:id",
+      "status": 200,
+      "name": "StagedWrite update example B",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/:id",
+      "status": 200,
+      "name": "StagedWrite update example B",
+      "livemode": false
+    }
+  ],
+  "assertions": {
+    "sameRemoteId": true,
+    "sameUpdateRun": true,
+    "oneCreatePost": true,
+    "oneUpdatePost": true,
+    "finalReadIsUpdated": true,
+    "noopWithoutWrite": true,
+    "allTestMode": true
+  }
+}
