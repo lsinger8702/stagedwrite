@@ -1,5 +1,5 @@
 import { adoptUpdate } from "./update-adoption.js";
-import { verifyRunUpdateReadback, verifyUpdateReadback } from "./update-readback.js";
+import { completedUpdateDrift, verifyRunUpdateReadback, verifyUpdateReadback } from "./update-readback.js";
 import { updateOutcome, updateContext, updateRequest, satisfyNoop } from "./update-evidence.js";
 import { registeredTopology } from "../edit/registered-topology.js";
 import { validateIntentSnapshot } from "../edit/fields.js";
@@ -92,7 +92,8 @@ export function createStagedWrite(options: ManagedOptions) {
             timer = setInterval(() => { if (pending || controller.signal.aborted)
                 return; pending = Promise.resolve().then(() => held.renew()).then(ok => { if (!ok)
                 controller.abort(); }, () => controller.abort()).finally(() => { pending = undefined; }); }, Math.max(5, Math.floor(ttl / 3)));
-            timer.unref?.();
+            // Keep the process alive while work owns the lease, even if an adapter
+            // waits only for abort. The finally block clears this renewal timer.
             return await work(lease, controller.signal);
         }
         finally {
@@ -350,6 +351,8 @@ export function createStagedWrite(options: ManagedOptions) {
                     Object.keys(data).some(k => !["status", "projections", "observations", "diagnostics"].includes(k)) ||
                     data.diagnostics !== undefined && !Array.isArray(data.diagnostics)) throw Error("INVALID_UPDATE_OBSERVATION");
                 const projections = data.projections as unknown as UpdateProjection[], observations = data.observations as unknown as RemoteObservation[];
+                const completedDrift = runId ? completedUpdateDrift(s, runId, observations) : null;
+                if (completedDrift) return { status: "complete", diagnostics: [...(data.diagnostics ?? []) as unknown as GraphDiagnostic[], ...completedDrift.diagnostics] };
                 const fresh = compileUpdate(s, projections, observations);
                 let diagnostics = fresh.diagnostics;
                 if (fresh.status === "passed") {

@@ -11,3 +11,5 @@
 - This is an independent public library. Do not add employer-specific implementation, business terminology, source paths or private review material to the repository. Reading external references does not authorize copying them into this project.
 
 - The owner requires a closed editing OP set: set/remove/reset only. Read `docs/design/022-three-state-op-migration.md` and use `docs/tasks/three-state-op-migration.md` as the single task ledger. Implement in dependency order, update status and test evidence as each item is completed, and do not mark planned or disconnected work complete. Pause remote update dispatch development until the OP migration is complete; preserve prior work. Do not reintroduce node/edge-specific public OP names or compatibility aliases.
+
+- Test acceptance requires a zero process exit code, zero failed tests and zero cancelled tests; `fail 0` alone is not success. Validate on the Node major configured by CI (currently 22), and record the runtime alongside results. A pass on another major does not establish CI compatibility.

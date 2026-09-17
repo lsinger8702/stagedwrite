@@ -97,3 +97,12 @@
 - 脱敏证据：docs/examples/stripe-update-sandbox-result.json；scripts/record-stripe-update.mjs 从本地原始 trace 校验后白名单导出。新增离线测试校验录制字节、当前样例源码摘要与场景结构，已由 verify:update 纳入 CI。
 - 恢复证据来自 adapter 落盘的真实原始成功回执，不是凭 GET 值相等猜测成功；本次没有模拟真实网络超时，也不证明多写方下的远端 CAS。
 - 本轮校验：verify:update 4/4、TSC、离线实录/HTML/ZIP 字节对照通过；仅新增证据导出/测试和文档，未改动引擎或录制时的 adapter/driver。
+
+## Review：续租保活与完成节点漂移 — 2026-09-17
+
+- 确认 P0：Node 22.23.2 单独运行原有 lost-lease/apply 测试，exit 1、pass 0、fail 0、cancelled 2；同一旧代码在 Node 24.19.0 可通过。此前 195/195 是 Node 24 的本机结果，不能据此声称 Node 22 CI 已验收，现纠正这一范围遗漏。
+- 移除持锁续租 interval 的 unref；adapter 只等待 AbortSignal 时，续租仍维持事件循环并及时传播失锁，finally 清理 timer/release。没有给测试添加保活定时器来掩盖问题。
+- 补 Memory/SQLite 公开 resume 回归：部分完成 → 外部修改完成节点 → completed_drift、message/hint、零新增派发/Attempt、事实和成功基线不推进；外部恢复后原 Run 继续，成功节点不重发。
+- 新测试先红：原先普通 compileUpdate 提前给 update.drift，遮蔽 completed_drift。将完成节点的事实归属/观察比对抽成内部拒绝检查，在通用编译前调用；纯 readback 与实际派发共用。它不授予执行权，后续编译/计划/事务身份复核保持不变。
+- 验证：Node 22.23.2 `npm test` exit 0、197 pass、0 fail、0 cancelled；Node 24.19.0 同样 197/197，无取消。Node 22 Stripe create 离线 13/13、update 4/4、walkthrough 6/6；两份离线实录/HTML/ZIP 字节检查、TSC 和隔离安装打包检查均 exit 0。
+- 本轮未改 adapter/沙盒录制，未再次发送真实远端请求。测试验收口径加入 AGENTS.md，禁止只看 fail 数或省略 CI 运行时差异。

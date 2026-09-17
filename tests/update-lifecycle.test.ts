@@ -81,6 +81,36 @@ for (const sqlite of [false, true]) {
             assert.equal(f.calls.filter(c => c.id === f.ids[0] && c.kind === "update").length, 1);
         } finally { await f.close(); }
     });
+    test(`${label}: completed update drift blocks resume before any remaining dispatch`, async () => {
+        const f = await setup(sqlite);
+        try {
+            for (const id of f.ids) await f.edit(id, "B");
+            f.reject(f.ids[1]!);
+            const check = await f.e.preflight(f.draft.id);
+            const run = await f.e.publish(f.draft.id, check.certificate!); assert.ok(run.id !== null);
+            assert.equal(run.state, "blocked");
+            assert.equal(run.steps[0]!.status, "applied");
+            const before = structuredClone((await f.backend.storage.read(f.draft.id))!);
+            const calls = f.calls.length;
+            f.remote.set(f.ids[0]!, "external change");
+            f.reject("");
+            const resumed = await f.e.resume(run.id);
+            assert.equal(resumed.state, "blocked"); assert.equal(resumed.id, run.id);
+            const diagnostic = resumed.diagnostics.find(d => d.code === "update.completed_drift");
+            assert.ok(diagnostic, JSON.stringify(resumed.diagnostics));
+            assert.ok(diagnostic.message); assert.ok(diagnostic.hint);
+            assert.equal(f.calls.length, calls);
+            assert.equal(f.remote.get(f.ids[1]!), "A");
+            const after = (await f.backend.storage.read(f.draft.id))!;
+            assert.deepEqual(after.runs[run.id]!.attempts, before.runs[run.id]!.attempts);
+            assert.deepEqual(after.remoteFacts, before.remoteFacts);
+            assert.equal(after.draft.publishedArtifactId, before.draft.publishedArtifactId);
+            // Once the external change is resolved, the original Run remains usable.
+            f.remote.set(f.ids[0]!, "B");
+            assert.equal((await f.e.resume(run.id)).state, "published");
+            assert.equal(f.calls.filter(c => c.id === f.ids[0] && c.kind === "update").length, 1);
+        } finally { await f.close(); }
+    });
     test(`${label}: public unknown update is reconciled before contradictory repair`, async () => {
         const f = await setup(sqlite, 1);
         try {
