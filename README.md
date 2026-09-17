@@ -107,6 +107,8 @@ A real Product → two Prices integration demonstrates a remote validation refus
 
 A separate [real Product update recording](docs/examples/stripe-update-sandbox-result.json) verifies editing the same remote resource, injected receipt loss, SQLite reopen and same-Run resume, followed by no-op publication. [Update sample](examples/stripe-update/README.md).
 
+The [catalog update acceptance](docs/testing/stripe-catalog-update.md) additionally verifies two unchanged Prices, local immutable-amount rejection, and an actual Stripe update refusal repaired within the same Run.
+
 ## Current API
 
 StagedWrite is a graph intent library for agent tools. `createStagedWrite` is its only engine entry point.
@@ -164,7 +166,7 @@ Preflight responses use `formatVersion: 3`. Preview fields are keyed by node-rel
 
 After a successful publication, edit fields, run preflight, then publish its new certificate. Results have `kind: "initial_create" | "update"` with a Run ID, `kind: "noop"` with `id: null` for a durable no-write adoption, or `kind: "not_started"` with diagnostics when readback blocks adoption. Resume unfinished Runs; do not replace them. Completed nodes in the active Run remain protected. Historical completed Runs are read-only.
 
-[Executed update HTML](docs/examples/update.html) · [Offline ZIP](docs/examples/stagedwrite-update.zip) · [Product adapter and sandbox instructions](examples/stripe-update/README.md). The new update recording uses a mock remote; it is not a claim of a completed live Stripe update test.
+[Executed update HTML](docs/examples/update.html) · [Offline ZIP](docs/examples/stagedwrite-update.zip) · [Product adapter and sandbox instructions](examples/stripe-update/README.md). The HTML uses a mock remote; separate live Product and catalog recordings are linked in the sandbox instructions.
 
 ## Adapter receipt contract
 

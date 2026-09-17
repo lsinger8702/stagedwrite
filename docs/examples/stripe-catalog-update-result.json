@@ -1,0 +1,349 @@
+{
+  "formatVersion": 1,
+  "recordedAt": "2026-09-17T03:52:48.912Z",
+  "sampleSourceDigest": "5e9f5b93936d491f59f924dc26d041deb60de05727f24a05b58108abad4cb74f",
+  "scenario": "Real Stripe sandbox: Product plus two Prices; immutable amount blocked locally; real empty-name update refusal; explicit edit and same-Run resume. No injected rejection, no LLM, no payments.",
+  "states": [
+    {
+      "phase": "create",
+      "method": "preflight",
+      "status": "passed"
+    },
+    {
+      "phase": "create",
+      "method": "publish",
+      "kind": "initial_create",
+      "state": "published"
+    },
+    {
+      "phase": "immutable",
+      "method": "preflight",
+      "status": "blocked"
+    },
+    {
+      "phase": "reset",
+      "method": "preflight",
+      "status": "passed"
+    },
+    {
+      "phase": "reset",
+      "method": "publish",
+      "kind": "noop",
+      "state": "published"
+    },
+    {
+      "phase": "reject",
+      "method": "preflight",
+      "status": "passed"
+    },
+    {
+      "phase": "reject",
+      "method": "publish",
+      "kind": "update",
+      "state": "blocked"
+    },
+    {
+      "phase": "repair",
+      "method": "resume",
+      "kind": "update",
+      "state": "published"
+    },
+    {
+      "phase": "verify",
+      "method": "resume",
+      "kind": "update",
+      "state": "published"
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "STRIPE_PRICE_IMMUTABLE",
+      "message": "This Price's amount cannot be changed in place.",
+      "hint": "Restore the published value with reset. Replacing a Price and switching references is outside this sample."
+    },
+    {
+      "code": "STRIPE_NAME_INVALID",
+      "message": "You passed an empty string for 'name'. We assume empty values are an attempt to unset a parameter; however 'name' cannot be unset. You should remove 'name' from your request or supply a non-empty value.",
+      "hint": "Set a nonempty name consistent with the user goal, then resume this same Run."
+    }
+  ],
+  "http": [
+    {
+      "method": "POST",
+      "path": "/v1/products",
+      "status": 200,
+      "object": "product",
+      "livemode": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/prices",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/prices",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/:id",
+      "status": 200,
+      "object": "product",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/:id",
+      "status": 200,
+      "object": "product",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/:id",
+      "status": 200,
+      "object": "product",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/:id",
+      "status": 200,
+      "object": "product",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/:id",
+      "status": 200,
+      "object": "product",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/:id",
+      "status": 200,
+      "object": "product",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/products/:id",
+      "status": 400,
+      "errorType": "invalid_request_error",
+      "errorParam": "name"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/:id",
+      "status": 200,
+      "object": "product",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/:id",
+      "status": 200,
+      "object": "product",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/products/:id",
+      "status": 200,
+      "object": "product",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/:id",
+      "status": 200,
+      "object": "product",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/:id",
+      "status": 200,
+      "object": "product",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/products/:id",
+      "status": 200,
+      "object": "product",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/prices/:id",
+      "status": 200,
+      "object": "price",
+      "livemode": false
+    }
+  ],
+  "assertions": {
+    "priceIdentityAndAmountPreserved": true,
+    "noPricePostsAfterCreate": true,
+    "immutableAmountHasNoCertificate": true,
+    "immutableAndResetNoPost": true,
+    "realUpdateRefusal": true,
+    "repairedWithinSameRun": true,
+    "repairedKeyChanged": true,
+    "finalReadMatchesIntent": true,
+    "completedResumeWithoutHttp": true
+  }
+}

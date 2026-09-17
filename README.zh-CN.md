@@ -54,6 +54,8 @@ npm run demo:html
 
 `npm run test:stripe` 运行无需凭证的离线回归。真实沙盒请求需要显式开关和测试密钥；运行状态与原始日志仅保留在本地。参见[贡献说明](CONTRIBUTING.md)。
 
+组合 update 已完成[真实验收](docs/testing/stripe-catalog-update.md)：Product 更新不重建关联 Price；金额修改被本地预检拒绝；真实 Stripe update 报错后 edit + resume 同 Run 修复。
+
 ## 当前 API
 
 StagedWrite 是面向 Agent 工具的图式意图库，唯一引擎入口是 `createStagedWrite`。
@@ -171,4 +173,4 @@ build 会先清理 dist，避免旧模块残留在打包产物。CI 包含回归
 
 当前 SQLite 使用 schema 3（持久请求信封）。schema 1/2 数据库在 DDL 或 journal-mode 修改前报 `STORAGE_VERSION_UNSUPPORTED`，不迁移或删除。保留旧数据库；旧版本中尚未解决的 Run 不能通过新数据库中的替代 Draft 重试，应使用匹配版本检查或续作。
 
-update 数据模型仍在开发。存储能够保留多个 Run，不代表公开引擎已经允许发布更新。
+update 保留原 Binding 和不可变请求证据。旧凭据只观察原采用结果；通过 isCurrentIntent 和 previewVersion 区分历史成功与当前意图。

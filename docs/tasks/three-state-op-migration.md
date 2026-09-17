@@ -2,7 +2,7 @@
 
 **唯一进度账本。2026-09-16 用户要求：先方案、任务拆分，再逐项完成并及时更新。方案见 [022](../design/022-three-state-op-migration.md)。**
 
-**已确认：所有编辑 OP 只允许 set/remove/reset；移除 node/edge 专用动作；双通道；新建携带内容/复制来源；固定基线 reset 与执行保护保留。公开 create 已切换非空 roots/spec 与 createdRefs；edit/preview 与候选修复已切换双通道。2026-09-17 M00–M09 已按下方证据结项；远端 update 派发仍未实现，下一步恢复原 update 计划。**
+**已确认：所有编辑 OP 只允许 set/remove/reset；移除 node/edge 专用动作；双通道；新建携带内容/复制来源；固定基线 reset 与执行保护保留。公开 create 已切换非空 roots/spec 与 createdRefs；edit/preview 与候选修复已切换双通道。2026-09-17 M00–M09 已按下方证据结项；固定图 update 后续进度见 [执行账本](update-execution.md)，本账本保留迁移期间的历史记录。**
 
 ## 记账规则
 
@@ -42,7 +42,7 @@
 
 - R1：存储式 preflight 规则与规则 Schema——所有者要求先记 TODO；见 [Roadmap](../roadmap.md#todo存储式预检规则与规则-schema)。不属于本次 OP 迁移，也不是检查结果缓存。
 
-- U3：update/noop 实际派发与正式无写入提交——等待本迁移完成；已做代码保留。
+- U3：update/noop 派发及无写入提交后续已完成，见 [执行账本](update-execution.md)。
 - override 实际覆盖空间、自动推导/抑制——不在本阶段偷偷开放；若实现推导，既定五条边界必须一起验收。
 - 远端实体导入复制、资源拓扑 update、多效果补偿——单独规划，不等同本地意图复制。
 

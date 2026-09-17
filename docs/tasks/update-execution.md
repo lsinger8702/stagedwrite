@@ -1,6 +1,6 @@
 # U3：固定图 update 执行账本
 
-**2026-09-17：三态 OP 迁移已结项。按已批准的 [020](../design/020-update-contract-proposal.md) / [021](../design/021-update-data-model.md) 恢复 U3；本账本只记录执行阶段。U3 与 U5 文档/离线验收已完成；U4 真实 Stripe Product update 已验收。当前已开放显式 update 写能力 executor 的固定图字段更新；真实 Stripe update 单独验收。**
+**2026-09-17：三态 OP 迁移已结项。按已批准的 [020](../design/020-update-contract-proposal.md) / [021](../design/021-update-data-model.md) 恢复 U3；本账本只记录执行阶段。U3 与 U5 文档/离线验收已完成；U4 Product 独立及 Product/Price 组合场景已通过真实沙盒验收。当前已开放显式 update 写能力 executor 的固定图字段更新；真实 Stripe update 单独验收。**
 
 | 任务 | 状态 | 交付与验收 |
 |---|---|---|
@@ -10,6 +10,20 @@
 | U3.4 认领与提交 | 完成 | certificate 采用优先、单未决 Run、update Run 原子认领；全图 noop 持久采用；历史响应区分当前意图；事务失败无半提交 |
 | U3.5 edit/resume 接线 | 完成 | 成功后仅字段编辑；固定成功基线 reset；每次 update 续作重新读取；旧 unknown 原信封先查证，本 Run 成功节点保护 |
 | U3.6 故障验收与开启 | 完成（本地后端） | Memory/SQLite、并发/失锁/迟到回执/收尾失败、A→B→A/无差异/历史观察；能力完整后开启公开 update |
+
+## 当前剩余任务（2026-09-17 核账）
+
+**U3 核心、review 修复、U4 全部场景与 U5 说明已完成。下表保留补账项目和具体证据；下一主线 A1 尚未启动。历史记录中的“尚未开放”等语句仅代表记录当时。**
+
+| ID | 状态 | 未完成的验收 |
+|---|---|---|
+| U4.1 Product 更新/恢复/noop | 完成 | 真实同 ID 更新、注入回执丢失、重开 SQLite 后同 Run resume、noop 无写入；4249b06 |
+| U4.2 关联 Price 保持不变 | 完成 | 真实组合场景更新 Product 后，两条 Price ID/金额/关联不变；创建完成后无 Price POST，见 stripe-catalog-update-result.json |
+| U4.3 不可变 Price 金额 | 完成 | 具体 adapter writable=false；公开 preflight 阻断、无凭据、message/hint/可选 reset 建议；预检无 POST，reset 后 noop |
+| U4.4 update 拒绝后的修复 | 完成 | 真实 Stripe 空 name 返回 400 → 原始 message/图坐标 → set → 同 Run resume 200；新修复 key，Price 满意槽位不写 |
+| U5 补充证据说明 | 完成 | 组合样例文档、真实脱敏录制、导出器及 CI 源码/字节校验；旧 HTML/ZIP 不冒充新场景 |
+
+下一主线按 019：A1 通用 TypeScript helpers → A2 Messages API Harness / A3 官方 DSH。A1 只有现成输入 Schema，受控 dispatch、统一错误回执、双宿主验证仍待实现。U6 拓扑更新、R1 存储规则、R2 投影存储评估保持待设计，不自动启动。
 
 ## U3.1 — 2026-09-17
 
@@ -106,3 +120,12 @@
 - 新测试先红：原先普通 compileUpdate 提前给 update.drift，遮蔽 completed_drift。将完成节点的事实归属/观察比对抽成内部拒绝检查，在通用编译前调用；纯 readback 与实际派发共用。它不授予执行权，后续编译/计划/事务身份复核保持不变。
 - 验证：Node 22.23.2 `npm test` exit 0、197 pass、0 fail、0 cancelled；Node 24.19.0 同样 197/197，无取消。Node 22 Stripe create 离线 13/13、update 4/4、walkthrough 6/6；两份离线实录/HTML/ZIP 字节检查、TSC 和隔离安装打包检查均 exit 0。
 - 本轮未改 adapter/沙盒录制，未再次发送真实远端请求。测试验收口径加入 AGENTS.md，禁止只看 fail 数或省略 CI 运行时差异。
+
+## U4.2–U4.4 补齐原定范围 — 2026-09-17
+
+- 独立 catalog adapter/driver 复用现有引擎与三态 OP；固定一 Product / 两 Price，创建回执建立完整规范事实，Price 字段声明不可原地修改。旧创建和 Product 独立样例源码/录制未改。
+- 真实沙盒共 38 HTTP：1 Product create + 2 Price create（200）、1 Product update 拒绝（400）、1 Product update 修复（200）、33 次只读 GET。拒绝来自 Stripe，未注入或伪造；没有支付/Subscription 请求。
+- 金额 1000→2000 在公开 preflight 被阻断，无证书、无 POST；带实际字段诊断、message/hint、可选 reset repair。调用方显式 reset 后 noop。空 Product name 在本地 schema 合法，远端返回不可清空的具体 message；调用方 set 为 B，原 Run resume 成功，两 Price 槽位 satisfied。
+- 最终只读确认 Product 名称 B、两 Price 的 ID/金额/关联均保持，完成 Run 再 resume 不发 HTTP。说明局部预检不能穷尽远端规则，publish 诊断闭环必不可少。
+- 原始状态/凭据不提交；公开白名单证据 docs/examples/stripe-catalog-update-result.json，scripts/record-stripe-catalog-update.mjs 校验调用区间、原身份、请求次数、key 变化和最终值。CI 检查样例源码摘要/录制字节/关键场景，不能只改摘要刷新证据。
+- 最终验收：Node 22.23.2 核心 197/197、旧 Stripe 13/13、update 示例/证据 9/9、walkthrough 6/6，全部 exit 0 / cancelled 0；TSC、离线 HTML/ZIP 字节对照与隔离包消费通过。U4.2–U4.4 / U5 补充说明结项；下一项 A1。

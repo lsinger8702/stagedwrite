@@ -46,3 +46,24 @@ Official contracts: [Update a Product](https://docs.stripe.com/api/products/upda
 ## Recorded evidence
 
 The raw local trace is intentionally not committed. After a successful live run, export an allowlisted summary with `node scripts/record-stripe-update.mjs <state-directory>`, review it, and update the reviewed-byte assertion in `evidence.test.mjs`. `npm run verify:update` checks both source and recording digests offline. Changing a digest is not a substitute for rerunning and reviewing the experiment. The HTML walkthrough remains a deterministic mock; the linked sandbox recording is separate evidence.
+
+## Product + Prices: real refusal, local repair and unchanged resources
+
+[Reviewed catalog recording](../../docs/examples/stripe-catalog-update-result.json) · [Detailed testing scope](../../docs/testing/stripe-catalog-update.md)
+
+```sh
+npm run build
+node examples/stripe-update/catalog-run.mjs --offline
+node --env-file=.env.stripe examples/stripe-update/catalog-run.mjs \
+  --allow-test-writes --state-dir=.stripe-example/catalog-update
+```
+
+This creates one test Product and two recurring Prices (1000/month and 10000/year in HKD minor units), with no Subscription or payment. It rejects a local amount change, explicitly resets it, deliberately sends an empty Product name to Stripe, then repairs the actual rejection with `set` and resumes the same update Run. The resources remain in the sandbox.
+
+The empty name is intentionally allowed by this sample's local schema to demonstrate a remote rule missing from local preflight. The remote message is returned at the Draft field coordinate with a hint. A real application can also register this constraint locally. Suggestions are not automatically selected by the engine.
+
+Use the same directory with `--resume` after interruption; keep the source, credentials and receipt journal unchanged. Unknown requests without an original durable receipt require investigation and may remain unresolved. Do not replace the Draft/directory to retry. This is a bounded acceptance driver, not a general background worker.
+
+`npm run verify:update` includes offline catalog tests and the real recording's byte/source guards. To export a successful new raw trace for review, run `node scripts/record-stripe-catalog-update.mjs <state-directory>`. It emits only allowlisted evidence; review it before changing the test's expected byte digest. The earlier Product recording remains independent.
+
+Only Product names are writable here. Basic Price amount/currency/interval changes are refused; replacement and reference switching need the future topology-update protocol. [Stripe Product update](https://docs.stripe.com/api/products/update) · [Stripe Price update](https://docs.stripe.com/api/prices/update). The single-writer and original-receipt recovery limits described above apply to this adapter too.

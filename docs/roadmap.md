@@ -1,11 +1,8 @@
 # Roadmap
 
-**2026-09-17 最新进度：U3 固定图 update 的公开链路与故障回归完成；U5 更新指南及离线 HTML/ZIP 已交付。U4 独立 Product adapter 已通过真实沙盒 update/回执丢失恢复/noop 验收，脱敏记录带源码摘要与字节校验。A1/A2/A3 仍为后续工作包，本轮没有扩展模型 Harness。**
+**2026-09-17 核账：三态迁移 M00–M09、固定图 update 核心 U3 与 review 修复已完成。U4 独立 Product 及 Product/Price 组合场景均已真实验收，含 Price 保持、金额修改阻断及真实 update 拒绝后同 Run 修复，见 [账本](tasks/update-execution.md#当前剩余任务2026-09-17-核账)。U5 指南、离线 HTML/ZIP、组合证据说明和包验证已交付。**
 
-
-**2026-09-17：[三态 OP 迁移](design/022-three-state-op-migration.md) 已按 [账本](tasks/three-state-op-migration.md) 结项。下一优先级恢复已批准的 update 派发计划，进度见 [U3 执行账本](tasks/update-execution.md)；当前运行时仍未开放 update。包级输入 schema 已交付，不代表 A1 完整 Agent helpers 已完成。**
-
-**当前实现以 [000 原则](design/000-project-principles.md) 和 [018 契约](design/018-draft-lifecycle-proposal.md) 为准。2026-09-16：项目所有者要求将远端 update 与三种 Agent 接入方式纳入下一阶段。本页确定规划方向；具体接口、状态迁移和原则变更见 [019 提案](design/019-update-agent-roadmap.md)，U0 契约已获批准并同步原则，尚未据此开放运行时能力。**
+**下一主线是 A1 → A2 / A3。当前只交付了 initialIntentSchema/editBatchSchema，不代表完整 SDK helpers 已实现。当前实现与边界以 [000 原则](design/000-project-principles.md)、[020 契约](design/020-update-contract-proposal.md) 和最新任务账本为准。**
 
 ## 已实现：首次创建与修复闭环
 
@@ -43,6 +40,8 @@ edit 只修改 Draft 意图；preflight 读取/归一化所需远端事实、诊
 3. **DeepSeek Harness（官方 DSH）**：以 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 为接入目标，提供工具插件，复用 A1 的工具与分派、A2 的诊断案例。会话和模型循环由 DSH 承担，Draft/Run/Binding 仍由 StagedWrite 管理；不另写 DeepSeek API 循环替代这项集成。A3 依赖 A1，可与 A2 分别推进。
 
 后续是否提供 MCP、HTTP 服务或其他语言绑定，根据真实使用者决定，当前不为“任意 Agent”额外引入服务框架。
+
+## 历史实施记录（不代表当前剩余任务）
 
 2026-09-16：U0 已获批准；[U1 数据模型设计](design/021-update-data-model.md)第一批模型/存储基础已实现；完整执行模型和 update 链路尚未接通。
 
