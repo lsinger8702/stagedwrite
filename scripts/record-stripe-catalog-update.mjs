@@ -3,12 +3,22 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { catalogRefs } from '../examples/stripe/schema.mjs';
 export const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 export const sampleDigest = () => digest(['catalog-adapter.mjs','catalog-transport.mjs','catalog-scenario.mjs','catalog-run.mjs','../stripe/schema.mjs'].map(p => readFileSync(new URL('../examples/stripe-update/'+p,import.meta.url))).join('\n'));
+// Validate the exact original coordinate before replacing only its generated ref.
+export function diagnosticAt(diagnostic, ref, role, field) {
+  assert.ok(typeof ref === 'string' && ref.length);
+  assert.ok(['product', 'monthly', 'annual'].includes(role));
+  const pointer = value => value.replaceAll('~', '~0').replaceAll('/', '~1');
+  assert.equal(diagnostic.path, `/nodes/${pointer(ref)}/fields/${pointer(field)}`, 'Diagnostic must identify the expected node and field');
+  return { code: diagnostic.code, path: `/nodes/:${role}/fields/${pointer(field)}`, message: diagnostic.message, hint: diagnostic.hint };
+}
 export function summarizeCatalog(trace) {
   assert.equal(trace.mode, 'Real Stripe sandbox catalog update rejection and repair');
   assert.ok(trace.finishedAt); assert.equal(trace.sourceDigest, sampleDigest(), 'Rerun changed source; never overwrite the historical digest');
   const find = (phase, method) => { const s = trace.steps.find(s => s.phase === phase && s.method === method); assert.ok(s, `${phase}/${method}`); return s; };
+  const refs = catalogRefs(find('create','create').output.draft);
   const create = find('create','publish'), immutable = find('immutable','preflight'), noop = find('reset','publish'), rejected = find('reject','publish'), repair = find('repair','resume');
   assert.equal(create.output.state, 'published');
   assert.equal(immutable.output.status, 'blocked'); assert.equal(immutable.output.certificate, undefined);
@@ -41,11 +51,10 @@ export function summarizeCatalog(trace) {
   for (const h of trace.http.filter(h => h.status === 200)) assert.equal(h.data.livemode,false);
   const observed = find('verify','resume'); assert.equal(observed.httpStart,observed.httpEnd);
   // Only explicitly selected fields leave the local trace. No target/key/receipt bodies.
-  const diagnosticSummary = d => ({ code: d.code, message: d.message, hint: d.hint });
   return { formatVersion: 1, recordedAt: trace.finishedAt, sampleSourceDigest: trace.sourceDigest,
     scenario: 'Real Stripe sandbox: Product plus two Prices; immutable amount blocked locally; real empty-name update refusal; explicit edit and same-Run resume. No injected rejection, no LLM, no payments.',
     states: trace.steps.filter(s => ['preflight','publish','resume'].includes(s.method)).map(s => ({ phase: s.phase, method: s.method, ...(s.output.status ? {status:s.output.status} : {kind:s.output.kind,state:s.output.state}) })),
-    diagnostics: [diagnosticSummary(diagnostic),diagnosticSummary(remoteError)],
+    diagnostics: [diagnosticAt(diagnostic, refs.monthly, 'monthly', 'amount'), diagnosticAt(remoteError, refs.product, 'product', 'name')],
     http: trace.http.map(h => ({ method:h.method,path:h.path.replace(/\/(prod|price)_[A-Za-z0-9]+$/, '/:id'),status:h.status,...(h.data.error ? {errorType:h.data.error.type,errorParam:h.data.error.param} : {object:h.data.object,livemode:h.data.livemode}) })),
     assertions: { priceIdentityAndAmountPreserved:true,noPricePostsAfterCreate:true,immutableAmountHasNoCertificate:true,immutableAndResetNoPost:true,realUpdateRefusal:true,repairedWithinSameRun:true,repairedKeyChanged:true,finalReadMatchesIntent:true,completedResumeWithoutHttp:true } };
 }

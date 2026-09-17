@@ -58,11 +58,13 @@
   "diagnostics": [
     {
       "code": "STRIPE_PRICE_IMMUTABLE",
+      "path": "/nodes/:monthly/fields/amount",
       "message": "This Price's amount cannot be changed in place.",
       "hint": "Restore the published value with reset. Replacing a Price and switching references is outside this sample."
     },
     {
       "code": "STRIPE_NAME_INVALID",
+      "path": "/nodes/:product/fields/name",
       "message": "You passed an empty string for 'name'. We assume empty values are an attempt to unset a parameter; however 'name' cannot be unset. You should remove 'name' from your request or supply a non-empty value.",
       "hint": "Set a nonempty name consistent with the user goal, then resume this same Run."
     }

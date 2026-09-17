@@ -129,3 +129,10 @@
 - 最终只读确认 Product 名称 B、两 Price 的 ID/金额/关联均保持，完成 Run 再 resume 不发 HTTP。说明局部预检不能穷尽远端规则，publish 诊断闭环必不可少。
 - 原始状态/凭据不提交；公开白名单证据 docs/examples/stripe-catalog-update-result.json，scripts/record-stripe-catalog-update.mjs 校验调用区间、原身份、请求次数、key 变化和最终值。CI 检查样例源码摘要/录制字节/关键场景，不能只改摘要刷新证据。
 - 最终验收：Node 22.23.2 核心 197/197、旧 Stripe 13/13、update 示例/证据 9/9、walkthrough 6/6，全部 exit 0 / cancelled 0；TSC、离线 HTML/ZIP 字节对照与隔离包消费通过。U4.2–U4.4 / U5 补充说明结项；下一项 A1。
+
+## Review：公开诊断坐标 — 2026-09-17
+
+- 原真实场景已验证精确 path，但公开摘要漏掉它。导出器现在从原创建图解析角色，先校验原 JSON Pointer，再输出 /nodes/:monthly/fields/amount 与 /nodes/:product/fields/name；不能用宽泛替换掩盖错节点/错字段。
+- 从同一份本地原始 trace 重新导出，仅新增两个 path。recordedAt、sampleSourceDigest、HTTP 记录均未变化；未发送新 Stripe 请求。检查 diff 后更新录制字节闸门。
+- CI 增加精确 code/path 断言及缺失/错节点/错字段/指针转义测试。文档区分历史实测、当前离线回归和导出操作，不把 mode 标签或冻结摘要称为真实性证明。
+- 验证：Node 22.23.2 verify:update 10/10，exit 0、fail 0、cancelled 0；TSC 和原 update HTML/ZIP 字节校验通过。src/ 与样例派发代码零改动。
