@@ -17,3 +17,5 @@ export { createAgentTools } from "./agent/tools.js";
 export type { AgentToolOutputs, AgentToolResult } from "./agent/tools.js";
 export type { AgentToolName } from "./agent/schema.js";
 export type { AgentToolInputs, AgentToolError, AgentAuthorizationRequest, AgentToolsOptions } from "./agent/types.js";
+export { repairDraft, repairDecisionSchema } from "./agent/repair.js";
+export type { RepairOptions, RepairResult, RepairContext, RepairDecision, RepairEvent } from "./agent/repair.js";

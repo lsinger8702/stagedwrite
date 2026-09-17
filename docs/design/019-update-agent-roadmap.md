@@ -1,5 +1,7 @@
 # 019：远端 update 与 Agent 接入规划
 
+**A2 当前进度（2026-09-17）：有限修复循环、Messages 接入样例及 mock 验收已完成，见 [025](025-agent-repair.md) 和 [账本](../tasks/agent-repair.md)。真实模型验收未运行；A3 未实现。**
+
 **A1 当前进度（2026-09-17）：通用 helpers 已完成，见 [023 接入设计](023-agent-helpers.md) 和 [A1 账本](../tasks/agent-helpers.md)。A2/A3 接口与集成仍未实现；下文为原阶段规划记录。**
 
 **当前实现（2026-09-17）：固定图字段 update 已接公开 edit/preflight/publish/resume，含 noop 提交、drift 阻断与原请求恢复。详见 [更新指南](../guides/update.md) 和 [U3 账本](../tasks/update-execution.md)。下文按阶段记录的“未实现/未开放”保留为历史实施记录，不代表当前状态。真实 Stripe Product update 已通过沙盒验收，见 [独立记录](../examples/stripe-update-sandbox-result.json)；原有 Stripe create 录制不作 update 证据。**

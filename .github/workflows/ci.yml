@@ -14,6 +14,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: node dist/examples/agent-demo.js
+      - run: node dist/examples/repair-demo.js
       - run: npm run test:stripe
       - run: npm run verify:update
       - run: npm run verify:walkthrough

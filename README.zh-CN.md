@@ -178,3 +178,5 @@ build 会先清理 dist，避免旧模块残留在打包产物。CI 包含回归
 当前 SQLite 使用 schema 3（持久请求信封）。schema 1/2 数据库在 DDL 或 journal-mode 修改前报 `STORAGE_VERSION_UNSUPPORTED`，不迁移或删除。保留旧数据库；旧版本中尚未解决的 Run 不能通过新数据库中的替代 Draft 重试，应使用匹配版本检查或续作。
 
 update 保留原 Binding 和不可变请求证据。旧凭据只观察原采用结果；通过 isCurrentIntent 和 previewVersion 区分历史成功与当前意图。
+
+- [有限模型修复循环（Messages 样例，已通过 mock 验证）](docs/guides/agent-repair.zh-CN.md)

@@ -231,3 +231,5 @@ The committed trace remains an actual execution record, not a fixed-clock simula
 The current SQLite backend uses storage schema 3 (durable request envelopes). Schema 1/2 experiment databases are rejected with `STORAGE_VERSION_UNSUPPORTED` before schema or journal-mode changes; they are not migrated or deleted. Keep existing databases intact and use a new database for new experiments. An unresolved Run in an old database must not be replaced by creating the same resources in a new Draft; use the matching earlier library version to inspect or resume that database.
 
 Update keeps the original bindings and immutable request evidence. Old certificates observe their original adoption; compare `isCurrentIntent` and `previewVersion` before treating a historical success as current.
+
+- [Bounded model repair (Messages example; mock-verified)](docs/guides/agent-repair.md)

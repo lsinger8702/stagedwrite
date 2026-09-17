@@ -31,3 +31,5 @@
 | A1.R3 | 完成 | Node 22.23.2：核心 204/204、agent demo、update 证据 10/10、包导出及类型消费均 exit 0；测试 fail 0 / cancelled 0 |
 
 A2/A3 尚未实施；本轮不改变引擎生命周期或三态 OP。
+
+A2 当前状态：有限修复循环及 mock Messages 闭环已实现，见 [A2 账本](agent-repair.md)。真实模型未验收，A3 未实施。
