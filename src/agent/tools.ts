@@ -21,8 +21,7 @@ const hints: Record<string, [string, string]> = {
   DRAFT_BUSY: ["Another operation currently holds the Draft lease.", "Wait for it to finish, then inspect the same Draft before deciding the next call."],
   LEASE_LOST: ["The operation lost its Draft lease.", "A remote effect may exist. Inspect the same Draft and resume its Run; do not create a replacement."],
   DRAFT_NOT_FOUND: ["The requested Draft is unavailable.", "Use a Draft ID returned by an authorized create call."],
-  RUN_NOT_FOUND: ["The requested Run is unavailable.", "Read the authorized Draft context and use its Run identity."],
-  RUN_DRAFT_MISMATCH: ["This Run does not belong to the requested Draft.", "Use a Run belonging to the authorized Draft."],
+  RUN_UNAVAILABLE: ["The requested Run is unavailable for this Draft.", "Read the authorized Draft context and use a Run belonging to that Draft; do not substitute another Draft."],
   DEFINITION_MISMATCH: ["This Draft does not match the toolset's definition.", "Ask the host to select the matching toolset; do not change model-side credentials or targets."],
   UPDATE_NOT_SUPPORTED: ["This executor cannot update published resources.", "Ask the host for an update-capable adapter; do not create a replacement to bypass this restriction."],
   APPLIED_STEP_IMMUTABLE: ["The edit conflicts with a completed node in this Run.", "Keep successful nodes unchanged and repair only unfinished work in the same Run."],
@@ -85,7 +84,9 @@ export function createAgentTools(options: AgentToolsOptions) {
     } catch (error) {
       await report(error);
       if (error instanceof EditInputError) return fail(tool, error.toJSON());
-      const code = error instanceof Error ? error.message : "", known = Object.hasOwn(hints, code) ? hints[code] : undefined;
+      const originalCode = error instanceof Error ? error.message : "";
+      const code = originalCode === "RUN_NOT_FOUND" || originalCode === "RUN_DRAFT_MISMATCH" ? "RUN_UNAVAILABLE" : originalCode;
+      const known = Object.hasOwn(hints, code) ? hints[code] : undefined;
       if (known) return fail(tool, { code, message: known[0], hint: known[1] });
       return fail(tool, { code: "TOOL_EXECUTION_FAILED", message: "The tool could not complete; the host has the original error.", hint: "A write may already have taken effect. Inspect the same Draft and Run with the host before continuing; do not recreate resources." });
     }

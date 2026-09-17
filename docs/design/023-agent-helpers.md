@@ -30,3 +30,10 @@
 非法/非 JSON 输入和未知工具零引擎调用；宿主拒绝/异常无越权；resume 归属错误不派发；create 有初始内容；拒绝带 message/hint；完整 preview 与候选不丢失；旧版本 OP 不重放；两个宿主（对象函数工具注册、JSON 文本消息分派）使用同一 helper 完成诊断修复；公开包导出/类型消费通过。
 
 A2 的预算/停止策略/提示词/模型循环、A3 官方 DSH 集成仍独立推进；A1 不提供服务框架、自动重试或额外状态机。
+
+## A1 review 收尾 — 2026-09-17
+
+- Agent 侧将不存在和其他 Draft 的 Run 统一为 `RUN_UNAVAILABLE`，message/hint 相同；宿主 `onError` 仍可收到原始原因。此项消除响应内容的存在性区别，不声称全库查询具备恒定时间。
+- 所有 preview 共用模型投影：保留完整节点字段/三态，节点下 `relations` 以单段 JSON Pointer 为键、目标 ref 数组为值。共享引用保持共享，不展开成树；不输出原始边 ID 表和边墓碑。
+- 非空时保留 `removedNodeRefs` 和解释性 hint：这些是已删除身份，不是“可恢复清单”。基线节点 reset 可能需要先恢复端点，也受生命周期限制；基线外已删除节点不能靠 reset 复活。用 preview 验证，不从删除状态推断授权或可恢复性。
+- create/context/preview/preflight/publish/resume（包括嵌套 check）使用同一投影，不额外读取当前 Draft 替换检查时的 preview。诊断及候选保持原协议、原图坐标；关系槽位显示使用编辑协议的 JSON Pointer。引擎和存储 preview 不变。

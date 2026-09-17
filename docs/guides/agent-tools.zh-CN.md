@@ -37,3 +37,9 @@ const result = await agent.dispatch(toolName, parsedArguments);
 运行 `npm run demo:agent` 可看[两个宿主](../../examples/agent-hosts.ts)共用同一个 helper：对象函数工具注册与 JSON 文本消息分派。示例真实执行库和规则，远端与决策为 mock/脚本，没有大模型或网络调用；示例中的内存归属 Set 不替代生产环境的持久权限存储。
 
 测试覆盖两个宿主的诊断修复、pending、远端拒绝、unknown 查证、update/noop、版本冲突与授权拒绝。A1 不等于 A2 Messages API 自动修复循环或 A3 官方 DSH 插件完成。
+
+### 模型 preview 坐标
+
+所有 helper preview 保留完整节点字段，出边统一显示为 `nodes[ref].relations["/slot"] = [targetRef]`；关系槽位采用 JSON Pointer 转义，共享目标仍是同一个 ref。不暴露内部边表或边墓碑。非空的 `removedNodeRefs` 保留删除身份以支持基线 reset，并附 hint；**它不是可恢复性承诺**，应先 preview，缺失基线端点和生命周期限制仍会拒绝。诊断保留原图坐标及候选建议。
+
+不存在的 Run 和其他 Draft 的 Run 均返回相同的 `RUN_UNAVAILABLE`。原始原因仅交宿主错误回调；这保证响应内容不区分两者，不保证查询耗时相同。

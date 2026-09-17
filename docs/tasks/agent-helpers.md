@@ -21,3 +21,13 @@
 - Node 22.23.2：核心 202/202，旧 Stripe 13/13，update/证据 9/9，walkthrough 6/6，均 exit 0 / fail 0 / cancelled 0。demo、TSC、隔离安装后的 helper 调用和公开类型检查、HTML/ZIP 字节校验通过。
 - 中英文指南已交付。宿主仍需适配模型供应商的 schema 子集、持久保存用户/Draft 权限；本版无动态字段 TS 推断、自动修复循环或 DSH 插件。
 - 下一项：A2 有限 Messages API Harness；A3 官方 DSH 可在同一工具协议上独立接入，均未实施。
+
+## A1 review 收尾 — 2026-09-17
+
+| ID | 状态 | 内容 |
+|---|---|---|
+| A1.R1 | 完成 | Run 不存在/跨 Draft 的模型错误统一，原始错误留宿主；响应相等且不派发回归 |
+| A1.R2 | 完成 | 全工具共用关系槽位 preview，保留完整字段、共享 ref；删除身份最小提示保留 reset 能力 |
+| A1.R3 | 完成 | Node 22.23.2：核心 204/204、agent demo、update 证据 10/10、包导出及类型消费均 exit 0；测试 fail 0 / cancelled 0 |
+
+A2/A3 尚未实施；本轮不改变引擎生命周期或三态 OP。

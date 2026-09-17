@@ -62,3 +62,9 @@ npm run demo:agent
 [Tests](../../tests/agent-tools.test.ts) run both transports through pending, local suggestions, remote refusal, same-Run repair, unknown reconciliation, subsequent update and no-op. They also verify version conflicts, cross-Draft Run rejection, authorization, input accessors, output filtering and public TypeScript types. CI executes the demo and package-consumer checks too.
 
 A2 will add the bounded Messages API repair loop. A3 will register the same tools in official DSH. Neither is part of this helper's completion claim.
+
+### Model preview coordinates
+
+All helper previews retain full node fields and represent outgoing relationships as `nodes[ref].relations["/slot"] = [targetRef]`. Slot paths use JSON Pointer escaping; shared targets remain references. Internal edge tables and edge tombstones are omitted. Nonempty `removedNodeRefs` retain deleted identities for possible baseline reset, with a hint: they are **not** a promise that reset is allowed. Validate with preview; missing baseline endpoints and lifecycle restrictions still apply. Diagnostics retain their original graph coordinates and candidate suggestions.
+
+A missing Run and a Run belonging to another Draft both return the same `RUN_UNAVAILABLE` error. Original causes remain available only to the host's error callback; this is response normalization, not a constant-time lookup guarantee.

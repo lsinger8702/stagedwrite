@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createStagedWrite, createAgentTools, defineDraftType, type ManagedUpdateExecutor, type AgentToolResult, type AgentToolInputs, type AgentToolsOptions, type Step } from "../src/index.js";
+import { previewView, checkView, publicationView } from "../src/agent/views.js";
+import type { GraphDraftPreview } from "../src/preflight/types.js";
 import { functionHost, messageHost } from "../examples/agent-hosts.js";
 const definition = defineDraftType({ id: "agent-test", version: "1", nodeTypes: { task: { valueSchema: { type: "object", properties: { name: { type: "string" } }, additionalProperties: false }, requiredAtPublish: ["name"] } }, relationTypes: {} });
 const selector = { type: definition.id, typeVersion: definition.version };
@@ -75,7 +77,10 @@ test("agent preserves version conflict issues without replay and blocks foreign 
   try {
     const a = data(await f.agent.invoke("stagedwrite_create",{initialIntent:intent("approved")})); f.allowed.add(a.draftId);
     const b = await f.e.create(selector,intent("approved")); const c = await f.e.preflight(b.draft.id); const run = await f.e.publish(b.draft.id,c.certificate!); assert.ok(run.id);
-    const before = f.calls(), forbidden = await f.agent.invoke("stagedwrite_resume",{draftId:a.draftId,runId:run.id}); assert.equal(forbidden.ok,false); if (!forbidden.ok) assert.equal(forbidden.error.code,"RUN_DRAFT_MISMATCH"); assert.equal(f.calls(),before);
+    const before = f.calls(), forbidden = await f.agent.invoke("stagedwrite_resume",{draftId:a.draftId,runId:run.id}); assert.equal(forbidden.ok,false); if (!forbidden.ok) assert.equal(forbidden.error.code,"RUN_UNAVAILABLE"); assert.equal(f.calls(),before);
+    const missing = await f.agent.invoke("stagedwrite_resume", { draftId: a.draftId, runId: "missing-run" });
+    assert.deepEqual(missing, forbidden);
+    assert.equal(f.calls(), before);
     const ref = a.createdRefs[0]!.ref, batch = { patches: [{op:"set" as const,ref,scope:"canonical" as const,path:"/name",value:"changed"}] };
     data(await f.agent.invoke("stagedwrite_edit",{draftId:a.draftId,expectedVersion:0,batch}));
     const stale = await f.agent.invoke("stagedwrite_edit",{draftId:a.draftId,expectedVersion:0,batch}); assert.equal(stale.ok,false);
@@ -102,3 +107,49 @@ function typeChecks(agent: ReturnType<typeof createAgentTools>) {
   agent.invoke("stagedwrite_create",{initialIntent:intent("a"),target:"other"});
 }
 void typeChecks;
+
+test("agent removed node coordinates support baseline reset without exposing edge tombstones", async () => {
+  const f = fixture();
+  try {
+    const created = data(await f.agent.invoke("stagedwrite_create", { initialIntent: { roots: [
+      { nodeType: "task", fields: { name: "first" } }, { nodeType: "task", fields: { name: "second" } }
+    ] } }));
+    const draftId = created.draftId, ref = created.createdRefs[0]!.ref; f.allowed.add(draftId);
+    const edited = data(await f.agent.invoke("stagedwrite_edit", { draftId, expectedVersion: 0, batch: { graphPatches: [{ op: "remove", ref }] } }));
+    const context = data(await f.agent.invoke("stagedwrite_context", { draftId }));
+    assert.deepEqual(context.preview.removedNodeRefs, [ref]);
+    assert.ok(context.preview.removedNodeHint);
+    assert.equal(Object.hasOwn(context.preview.nodes, ref), false);
+    const check = data(await f.agent.invoke("stagedwrite_preflight", { draftId }));
+    assert.deepEqual(check.preview, context.preview);
+    const batch = { graphPatches: [{ op: "reset" as const, ref: context.preview.removedNodeRefs![0]! }] };
+    const preview = data(await f.agent.invoke("stagedwrite_preview", { draftId, expectedVersion: edited.version, batch }));
+    assert.ok(preview.candidate.preview.nodes[ref]);
+    assert.equal(preview.candidate.preview.removedNodeRefs, undefined);
+    data(await f.agent.invoke("stagedwrite_edit", { draftId, expectedVersion: edited.version, batch }));
+    const restored = data(await f.agent.invoke("stagedwrite_context", { draftId }));
+    assert.deepEqual(restored.preview.nodes, created.preview.nodes);
+    for (const value of [created, context, check, preview, restored]) {
+      assert.doesNotMatch(JSON.stringify(value), /"tombstones"|"edges"/);
+    }
+  } finally { await f.e.close(); }
+});
+
+test("agent preview keeps shared targets and escaped relation coordinates across result views", () => {
+  const preview: GraphDraftPreview = { id: "d", version: 3, type: "t", typeVersion: "1", definitionDigest: "digest",
+    nodes: Object.fromEntries(["a", "b", "shared"].map(id => [id, { id, nodeType: "task", fields: { "/name": { kind: "value" as const, value: id } } }])),
+    edges: { hidden1: { id: "hidden1", from: "a", to: "shared", relationType: "items/~" }, hidden2: { id: "hidden2", from: "b", to: "shared", relationType: "items/~" } },
+    tombstones: { nodes: [], edges: ["hidden-deleted"] } };
+  const expected = previewView(preview);
+  assert.deepEqual(expected.nodes.a!.relations, { "/items~1~0": ["shared"] });
+  assert.deepEqual(expected.nodes.b!.relations, expected.nodes.a!.relations);
+  const check = { preview, diagnostics: [] } as unknown as Parameters<typeof checkView>[0];
+  const result = { preview, diagnostics: [], check } as unknown as Parameters<typeof publicationView>[0];
+  assert.deepEqual(checkView(check).preview, expected);
+  const publication = publicationView(result, "d");
+  assert.deepEqual(publication.preview, expected);
+  assert.deepEqual(publication.check!.preview, expected);
+  assert.doesNotMatch(JSON.stringify(publication), /hidden|tombstones|"edges"/);
+  expected.nodes.a!.relations["/items~1~0"]!.push("changed");
+  assert.equal(Object.keys(preview.edges).length, 2);
+});
