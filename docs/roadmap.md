@@ -2,7 +2,7 @@
 
 **2026-09-17 核账：三态迁移 M00–M09、固定图 update 核心 U3 与 review 修复已完成。U4 独立 Product 及 Product/Price 组合场景均已真实验收，含 Price 保持、金额修改阻断及真实 update 拒绝后同 Run 修复，见 [账本](tasks/update-execution.md#当前剩余任务2026-09-17-核账)。U5 指南、离线 HTML/ZIP、组合证据说明和包验证已交付。**
 
-**下一主线是 A1 → A2 / A3。当前只交付了 initialIntentSchema/editBatchSchema，不代表完整 SDK helpers 已实现。当前实现与边界以 [000 原则](design/000-project-principles.md)、[020 契约](design/020-update-contract-proposal.md) 和最新任务账本为准。**
+**A1 已完成：createAgentTools、受控分派、模型视图、双宿主演示及包消费测试，见 [账本](tasks/agent-helpers.md) 和 [指南](guides/agent-tools.zh-CN.md)。下一主线是 A2 / A3。当前实现与边界以 [000 原则](design/000-project-principles.md)、[020 契约](design/020-update-contract-proposal.md) 和最新任务账本为准。**
 
 ## 已实现：首次创建与修复闭环
 

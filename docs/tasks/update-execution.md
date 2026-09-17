@@ -13,7 +13,7 @@
 
 ## 当前剩余任务（2026-09-17 核账）
 
-**U3 核心、review 修复、U4 全部场景与 U5 说明已完成。下表保留补账项目和具体证据；下一主线 A1 尚未启动。历史记录中的“尚未开放”等语句仅代表记录当时。**
+**U3 核心、review 修复、U4 全部场景与 U5 说明已完成。下表保留补账项目和具体证据；A1 后续已按 [独立账本](agent-helpers.md) 完成。历史记录中的“尚未开放”等语句仅代表记录当时。**
 
 | ID | 状态 | 未完成的验收 |
 |---|---|---|
@@ -23,7 +23,7 @@
 | U4.4 update 拒绝后的修复 | 完成 | 真实 Stripe 空 name 返回 400 → 原始 message/图坐标 → set → 同 Run resume 200；新修复 key，Price 满意槽位不写 |
 | U5 补充证据说明 | 完成 | 组合样例文档、真实脱敏录制、导出器及 CI 源码/字节校验；旧 HTML/ZIP 不冒充新场景 |
 
-下一主线按 019：A1 通用 TypeScript helpers → A2 Messages API Harness / A3 官方 DSH。A1 只有现成输入 Schema，受控 dispatch、统一错误回执、双宿主验证仍待实现。U6 拓扑更新、R1 存储规则、R2 投影存储评估保持待设计，不自动启动。
+下一主线按 019：A1 通用 TypeScript helpers → A2 Messages API Harness / A3 官方 DSH。A1 后续已交付受控 dispatch、错误回执、模型视图和双宿主验证，详见 [A1 账本](agent-helpers.md)。U6 拓扑更新、R1 存储规则、R2 投影存储评估保持待设计，不自动启动。
 
 ## U3.1 — 2026-09-17
 

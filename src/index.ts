@@ -13,3 +13,7 @@ export type { EditBatch, FieldPatch, TopologyPatch, NodeSpec, NodeInput, Created
 export { EditInputError } from "./edit/protocol.js";
 export type { EditReceipt, EditPreview, EditChange, CreateReceipt } from "./edit/results.js";
 export { editBatchSchema, initialIntentSchema } from "./edit/tool-schema.js";
+export { createAgentTools } from "./agent/tools.js";
+export type { AgentToolOutputs, AgentToolResult } from "./agent/tools.js";
+export type { AgentToolName } from "./agent/schema.js";
+export type { AgentToolInputs, AgentToolError, AgentAuthorizationRequest, AgentToolsOptions } from "./agent/types.js";

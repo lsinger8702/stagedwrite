@@ -30,7 +30,8 @@
     "demo:stripe": "npm run build && node examples/stripe/run.mjs",
     "test:stripe-update": "npm run build && node --test examples/stripe-update/*.test.mjs",
     "demo:update": "npm run build && node examples/stripe-update/run.mjs --offline --write-report",
-    "verify:update": "npm run build && node --test examples/stripe-update/*.test.mjs && node examples/stripe-update/run.mjs --offline --check"
+    "verify:update": "npm run build && node --test examples/stripe-update/*.test.mjs && node examples/stripe-update/run.mjs --offline --check",
+    "demo:agent": "npm run build && node dist/examples/agent-demo.js"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

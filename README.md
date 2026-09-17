@@ -109,6 +109,10 @@ A separate [real Product update recording](docs/examples/stripe-update-sandbox-r
 
 The [catalog update acceptance](docs/testing/stripe-catalog-update.md) additionally verifies two unchanged Prices, local immutable-amount rejection, and an actual Stripe update refusal repaired within the same Run.
 
+## Agent integration
+
+`createAgentTools({ engine, definition, authorize })` provides seven provider-neutral tools with runtime input checks, host authorization, full previews and targeted diagnostics. Run `npm run demo:agent` for two host transports using one engine. No LLM loop or automatic repair is included. [Guide](docs/guides/agent-tools.md).
+
 ## Current API
 
 StagedWrite is a graph intent library for agent tools. `createStagedWrite` is its only engine entry point.

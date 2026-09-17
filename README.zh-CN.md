@@ -56,6 +56,10 @@ npm run demo:html
 
 组合 update 已完成[真实验收](docs/testing/stripe-catalog-update.md)：Product 更新不重建关联 Price；金额修改被本地预检拒绝；真实 Stripe update 报错后 edit + resume 同 Run 修复。
 
+## Agent 接入
+
+`createAgentTools({ engine, definition, authorize })` 提供七个通用工具，含运行时校验、宿主授权、完整 preview 和具体诊断。运行 `npm run demo:agent` 查看两个宿主共用同一引擎；不包含大模型循环或自动修复。[接入指南](docs/guides/agent-tools.zh-CN.md)。
+
 ## 当前 API
 
 StagedWrite 是面向 Agent 工具的图式意图库，唯一引擎入口是 `createStagedWrite`。
