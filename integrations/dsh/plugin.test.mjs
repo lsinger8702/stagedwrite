@@ -40,7 +40,7 @@ test('registration rollback and host identity failure do not dispatch or leak ra
   let calls=0;
   const toolset=createAgentTools({engine,definition,authorize:()=>{calls++;return true;}});
   const registry=new Map(); let registered=0;
-  const ctx={tools:{register(tool){if (++registered===3) throw Error('collision');registry.set(tool.name,tool);return ()=>registry.delete(tool.name);}}};
+  const ctx={systemPrompt:{section(){return ()=>{};}},tools:{register(tool){if (++registered===3) throw Error('collision');registry.set(tool.name,tool);return ()=>registry.delete(tool.name);}}};
   try {
     assert.throws(()=>plugin.apply(ctx,{toolset,forExecution:()=>toolset}),/collision/);
     assert.equal(registry.size,0);

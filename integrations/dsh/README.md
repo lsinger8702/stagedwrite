@@ -1,4 +1,4 @@
-# Official DSH registration adapter (A3.1)
+# Official DSH integration example
 
 This is an isolated integration example, not part of the core npm package. Tested with official npm packages `@deepseek-ai/dsh-tools@0.1.0-rc.7`, `@deepseek-ai/cordis@4.0.1`, and `@deepseek-ai/dsh-system-prompt@0.1.0-rc.8`; transitive versions are pinned in package-lock.json. Reference source revision: `99f6f02fecdb7dff40c3fbc9470f5907c29f74ca` of https://github.com/deepseek-ai/deepseek-harness. Do not infer support for other preview releases.
 
@@ -33,4 +33,16 @@ Cancellation before dispatch prevents work. Started engine operations are awaite
 
 What is verified: real Cordis mount/unmount; seven real DSH registrations; DSH execute → A1 → actual engine create/context; A1 rejects constraints relaxed by the outer schema. A separate unit test checks registration rollback and private authorization-error handling.
 
-**Not yet verified:** an actual DSH agent/session, session fork/restart authorization, model-directed repair, or a DSH execution lifecycle spanning publish/unknown/resume. See ../../docs/tasks/dsh.md. Do not embed the A2 repair loop in these tools: DSH owns its model loop.
+## Session enrollment and recovery
+
+`session-bindings.mjs` provides `createSessionBindings({ registry: ctx.agents, toolsForPrincipal })`. After host authentication, call `bindings.bind(handle.agent, principalId)`; retain its returned revoker. Configure the plugin's `forExecution` as `execution => bindings.forExecution(execution)`. Only enroll live Agents returned by the official registry. A new/forked session needs its own authenticated enrollment; a copied session ID never grants access.
+
+`toolsForPrincipal` must supply an A1 helper whose `authorize` checks durable Draft ownership and permitted actions for that principal. After create, record the returned Draft ownership before exposing it to the caller. Production hosts own this storage and recovery if ownership persistence fails; never recreate a Draft as a workaround. The test uses a Map solely as a fixture. Do not equate model transcript possession with ownership.
+
+The plugin contributes registered vocabulary and basic repair/recovery guidance to DSH's system prompt. It does not take over the model loop or embed A2 repairDraft. Current preview and diagnostics arrive via tool responses. Cancellation or unmount does not abandon execution Runs.
+
+The real DSH loop/session integration test uses a scripted LlmAdapter and mock remote. It proves pending → local OP repair → publish refusal → OP repair → same-Run unknown → dispose old Agent → explicitly authorize a new session → reconcile original Run → published. Repeated resume makes no new write. Unauthorized users, unenrolled sessions, forged objects with copied IDs, disposed Agents and revocation during async authorization are rejected.
+
+**Not yet verified:** actual model API behavior, process restart/on-disk DSH session restoration, production authorization persistence, or real remote writes through DSH. Switching sessions in the test retains the same in-process StagedWrite engine. The host must supply model/loop budgets and stopping behavior; the scripted model stops at pending/unknown. See ../../docs/tasks/dsh.md.
+
+Test additions pin agent-loop 0.1.0-rc.7 and agent/session/llm 0.1.0-rc.8. Use the exact lockfile rather than assuming preview-version compatibility.
