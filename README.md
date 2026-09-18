@@ -2,92 +2,59 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
-**Help an LLM get complex writes right, repair precisely, and resume safely.**
+**Preflight complex LLM-generated writes. Diagnose specific errors. Repair with precise OPs. Resume safely.**
 
-Your agent sends a large JSON body to a billing API. The request times out.
-Did the resource get created? Is it safe to retry? Regenerating and resending
-may create it twice. And if the API rejects one field, should the model
-have to generate the whole body again?
+Generating valid JSON is only the beginning. When an agent prepares a large API request with hundreds of fields, nested objects and related resources, it can choose an invalid combination, omit a required value, or contradict the user's intent. If the API rejects one field, regenerating the entire body risks changing fields that were already correct.
 
-Tool calling connects an agent to an API. Complex writes also need a way
-to check interdependent fields, interpret remote failures, repair specific
-mistakes, and track partial effects. StagedWrite provides that lifecycle
-beneath your tools, including tools exposed through MCP.
+For writes that affect money or other consequential resources, discovering a mistake **after sending the request** can also be too late. The request needs business checks before execution, not just a JSON Schema that accepts its shape.
 
-## Check the intent. Track the effects.
+StagedWrite is a TypeScript library between an agent's proposed intent and external writes. It keeps the work in a long-lived **Draft**, runs **preflight** checks, returns the full preview with **targeted diagnostics**, and lets the model repair the work through **set / remove / reset** operations. The backend applies those edits; the model does not need to regenerate the entire request. Publication and recovery then track what actually happened remotely.
 
-**Find problems before dispatch.** `preflight` checks the current Draft
-against registered structure and business rules. Local checks and async
-remote checks produce concrete diagnostics; unfinished checks return
-`pending`. A version-bound certificate gates publication. What can be
-verified depends on the rules and remote evidence supplied by the integration.
+## Why preflight exists
 
-**Continue from recorded outcomes.** An adapter reports `applied`,
-`not_applied`, or `unknown`. Confirmed successful steps are preserved.
-An unknown request must be reconciled before it can be resent or replaced
-with changed input. Safe retries of the same request reuse its key;
-changed requests receive a new identity only after the previous outcome
-is resolved. Remote idempotency and conclusive reconciliation remain
-adapter responsibilities.
+**1. Help the model correct complex request parameters.** A large request can be structurally valid and still be wrong: incompatible field combinations, missing dependencies, unsupported values or inconsistent settings across resources. Registered rules inspect the current Draft and report the problems that actually apply, at specific coordinates. The model receives the current preview, the error message and optional hints, candidate values or repair OPs, so it can propose a focused correction.
 
-## Targeted diagnostics. Surgical repairs.
+**2. Check consequential writes before they take effect.** In a billing or financial integration, an application might register checks for amount limits, currency compatibility, account eligibility or required approval evidence. Static rules check local conditions; asynchronous rules consult external services and return `pending` while unfinished. A passing execution check produces a version-bound certificate required for publication. Host authorization remains separate, and conditions that must hold at the instant of a remote write still need enforcement by that service or adapter.
 
-When preflight finds a problem, or an adapter maps a real API rejection,
-the model receives the current Draft preview and a **targeted diagnostic**:
-a location, a code, and a message explaining what went wrong. Hints,
-candidate values, and candidate `repairOps` are optional. The model uses
-the diagnosis and the user's intent to choose a repair; a fixed solution
-is not required for a rule to be useful.
+The library provides the checking and diagnostic protocol; **the integration supplies its business rules**. It does not ship a financial policy engine, and a passing check is not a promise that every possible remote rejection has been predicted.
 
-**The rules run against the current work; the model receives the problems
-that actually apply.** It does not have to rediscover every violation by
-searching a large rulebook in prompts or memory.
+## The model gets a diagnosis, not a rulebook
 
-The model emits a short list of operations at explicit coordinates:
-`set` declares a value, `remove` explicitly clears it, and `reset` restores
-the fixed baseline declaration. The backend validates and applies the
-edits atomically. The integration maps the graph intent into the real
-request body.
+The repair loop is:
 
-**Repair the affected fields without regenerating the whole graph.**
-The model can still inspect the full preview, but it need not reproduce
-all the fields that were already correct. Smaller repair outputs reduce
-token overhead and avoid unrelated changes caused by full regeneration;
-we do not claim a measured cost reduction here.
+```text
+User intent → Draft → preflight → current preview + specific diagnostics
+                          ↑                       ↓
+                          └── backend applies ← model proposes OP list
+```
 
-After repair, `resume` continues the same unfinished Run: successes are
-preserved, unknowns are checked using their original request identities,
-and the repaired version must pass preflight before new work is dispatched.
+A diagnostic identifies **where the problem is, what failed, and why**. Suggestions are optional: the model uses the user's intent to choose a correction or ask for missing information. It does not have to search a prompt or memory containing every platform rule and discover all violations itself.
 
-## A Draft outlives its first request
+Only three editing operations are needed:
 
-A Draft starts with meaningful work intent and retains its identity after
-publication. As graph nodes succeed, they acquire bindings to the remote
-resources they created. One Draft can manage several resource bindings.
+- `set`: declare a value, including an explicit `null` where allowed.
+- `remove`: explicitly clear a field.
+- `reset`: restore the fixed baseline—initial intent before first publication, latest fully published intent afterward.
 
-Update-capable adapters can change fixed-node scalar fields by editing the same Draft,
-with diff and drift checks against published intent and remote facts. Full success
-advances the reset baseline; partial or unknown work continues in the same Run.
+The backend validates and applies an OP batch atomically, then the repaired Draft is checked again. **The model can inspect the full preview without having to output the whole graph again.** Small, coordinate-based edits avoid unrelated changes introduced by full regeneration. The adapter maps graph intent to the real request body.
 
-## A real integration and an executable walkthrough
+## Remote rejection joins the same repair loop
 
-The **Stripe sandbox example** (Product → two Prices) exercises a remote
-validation refusal, explicit repair, and same-Run resume. Receipt loss is
-injected after a real creation. [Integration guide](examples/stripe/README.md)
-· [Recorded evidence and limits](docs/testing/stripe-sandbox.md).
+Preflight cannot predict every response. An adapter can map a real API rejection into the same diagnostic structure, with a current preview, message and optional repair suggestions. The model proposes OPs, the backend edits the Draft, and `resume` continues the unfinished Run after the necessary checks.
 
-The offline walkthrough executes the library against a simulated remote.
-CI checks its recorded semantics and generated HTML/ZIP against the
-example and rendering sources. It is a reproducible scenario, not proof
-of correctness for every integration.
+Delivery safety supports this loop: adapters report `applied`, `not_applied` or `unknown`; confirmed successes are preserved. Unknown requests must be reconciled using their original identities before new work can proceed. A timeout is not proof of failure, and a model's retry suggestion is not proof that a resource was never created. Remote idempotency and conclusive reconciliation require adapter support; there is no general exactly-once claim.
 
----
+## A Draft remains useful after publication
 
-Early prototype, v0.0.1 · Node.js 22.13+ (`node:sqlite`) · no npm package yet.
-Public edit/preview and suggested repairs use the three-state, dual-channel protocol.
-Create accepts nonempty roots/spec initial work and returns the Draft plus server-assigned node refs.
-[Migration ledger](docs/tasks/three-state-op-migration.md) ·
-[Project principles](docs/design/000-project-principles.md).
+A Draft starts with real user intent and remains bound, node by node, to the resources successfully created. Update-capable adapters can edit supported fields on the same fixed graph and remote IDs, using diff and drift checks. Full success advances the reset baseline; unfinished work continues through the same Run. Resource creation, deletion and replacement during update are outside the current scope.
+
+## What you can run today
+
+- **Real Stripe sandbox evidence:** Product → two Prices, actual remote refusals, repair and same-Run recovery; separate update scenarios verify existing resource IDs. Receipt loss is explicitly injected. [Stripe guide](examples/stripe/README.md) · [Update evidence](docs/testing/stripe-catalog-update.md).
+- **Executable walkthrough:** actual library and SQLite calls against a mock remote, with generated HTML/ZIP checked in CI. [Input/output walkthrough](docs/examples/publish-resume.html).
+- **Three integration paths:** provider-neutral TypeScript tools, a bounded Messages API repair loop, and an isolated official DSH adapter. Agent-loop tests use mock models; they do not establish real-model quality.
+
+Early prototype, v0.0.1 · Node.js 22.13+ (`node:sqlite`) · not yet published to npm. Start with the examples and integration guides; design histories are supplementary references.
 
 ## Quickstart
 
@@ -111,7 +78,13 @@ The [catalog update acceptance](docs/testing/stripe-catalog-update.md) additiona
 
 ## Agent integration
 
-`createAgentTools({ engine, definition, authorize })` provides seven provider-neutral tools with runtime input checks, host authorization, full previews and targeted diagnostics. Run `npm run demo:agent` for two host transports using one engine. No LLM loop or automatic repair is included. [Guide](docs/guides/agent-tools.md).
+| Integration | Entry point | Validation scope |
+|---|---|---|
+| Any agent/tool host | `createAgentTools` — [guide](docs/guides/agent-tools.md) | Seven authorized tools, input validation, previews and diagnostics |
+| Direct Messages API | `repairDraft` — [guide](docs/guides/agent-repair.md) | Bounded repair loop; mock-model end-to-end tests |
+| Official DeepSeek Harness | [DSH adapter and setup](integrations/dsh/README.md) | Real DSH loop/session/tools with mock model and remote; host identity binding |
+
+Run `npm run demo:agent` for the tools or `npm run demo:repair` for the repair loop. These examples use simulated model decisions and remote effects. They are not a bundled MCP server.
 
 ## Current API
 

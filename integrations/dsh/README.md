@@ -46,3 +46,5 @@ The real DSH loop/session integration test uses a scripted LlmAdapter and mock r
 **Not yet verified:** actual model API behavior, process restart/on-disk DSH session restoration, production authorization persistence, or real remote writes through DSH. Switching sessions in the test retains the same in-process StagedWrite engine. The host must supply model/loop budgets and stopping behavior; the scripted model stops at pending/unknown. See ../../docs/tasks/dsh.md.
 
 Test additions pin agent-loop 0.1.0-rc.7 and agent/session/llm 0.1.0-rc.8. Use the exact lockfile rather than assuming preview-version compatibility.
+
+Schema expansion rejects reachable recursive references with `RECURSIVE_TOOL_SCHEMA`, and paths deeper than 128 with `TOOL_SCHEMA_DEPTH_EXCEEDED`. Repeated references in sibling branches remain valid. Open relation-map values are a deliberate subset boundary, not recursion handling; A1 validates their original schema.

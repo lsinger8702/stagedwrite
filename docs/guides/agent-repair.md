@@ -50,3 +50,5 @@ Run `npm run demo:repair`. The engine is real; model decisions and remote servic
 Optional actual model (remote writes remain mock): set `ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL` in the host, build, then run `node dist/examples/repair-demo.js --live`. This mode is **not part of CI and has not been validated against a real model**. Never put keys in the trace or repository. Only use a model that supports the chosen forced-tool protocol. No automatic HTTP retry is performed.
 
 Deferred: DSH plugin, persistent conversation coordinator, topology update, domain intent audit, automatic approval, and production model quality/latency evaluation.
+
+Unexpected model/host exceptions can be observed through `onError(error)`. The host receives the original exception; result/history remain generic. Throwing or rejecting from the logger does not replace or expose the failure. Expected budget/cancellation stops do not invoke this callback.

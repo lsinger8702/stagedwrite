@@ -28,6 +28,8 @@ export type RepairEvent = { kind: "tool"; tool: string; input: unknown; output: 
 export interface RepairOptions {
   tools: Tools; draftId: string; goal: string; runId?: string;
   decide(context: RepairContext, signal: AbortSignal): Promise<unknown>;
+  /** Original unexpected exceptions go only to the host; logging failures are isolated. */
+  onError?(error: unknown): void | Promise<void>;
   signal?: AbortSignal;
   maxRounds?: number; maxToolCalls?: number; timeoutMs?: number;
 }
@@ -130,6 +132,7 @@ export async function repairDraft(options: RepairOptions): Promise<RepairResult>
     }
   } catch (error) {
     if (error instanceof Halt) return result("stopped", error.message);
+    try { await options.onError?.(error); } catch { /* Logging cannot replace the original failure or leak into history. */ }
     // No raw provider/host exception is returned to a model-facing caller.
     return result("stopped", "host_or_model_error");
   } finally { clearTimeout(timer); options.signal?.removeEventListener("abort", abort); }

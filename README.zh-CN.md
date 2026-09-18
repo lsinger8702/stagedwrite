@@ -2,45 +2,57 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
-**让大模型写对复杂请求，精确修复错误，安全续作。**
+**为大模型生成的复杂写入请求做预检，给出针对性诊断，用精确 OP 修复，再安全发布和续作。**
 
-你的 Agent 向一个计费 API 发出了大体量 JSON 请求，然后超时了。资源到底创建成功了吗？现在能重试吗？重新生成、再发一次，可能会创建两份资源。而如果远端只拒绝了其中一个字段，模型真的需要重写整个请求体吗？
+大模型能生成合法 JSON，不代表它能写对一个复杂请求。当请求包含几百个字段、嵌套对象和互相关联的资源时，模型可能选错字段组合、漏掉必填项，或者偏离用户意图。API 只拒绝其中一个字段，却让模型重新生成整个 body，又会给原本正确的字段带来新的不确定性。
 
-工具调用连接了 Agent 和 API。复杂写入还需要检查字段之间的约束、理解远端错误、局部修复，以及记录已经产生的部分效果。StagedWrite 在工具接口之下提供这套生命周期，也适用于通过 MCP 暴露的工具。
+对于计费、金融等涉及资金或其他重要资源的写入，**发出去之后才发现错误，也可能已经太晚**。请求不仅需要结构合法，还需要在产生真实副作用前检查业务条件。
 
-## 检查意图，记录执行结果
+StagedWrite 是放在 Agent 意图与外部写入之间的 TypeScript 库：用长期 **Draft** 承接工作，通过 **preflight** 预检，返回完整 preview 和**针对性诊断**，让模型只输出 **set / remove / reset** 操作列表，由后端精确修改图，不必重新生成整份请求。之后再由发布和恢复机制记录远端实际发生了什么。
 
-**发送前，先找出问题。** `preflight` 根据注册的结构与业务规则检查当前 Draft。静态检查和异步远端检查返回具体诊断；尚未完成的检查返回 `pending`。发布需要绑定当前版本的预检凭据。能够检查什么，取决于接入方提供的规则和远端证据。
+## preflight 解决两类问题
 
-**从已经确认的结果继续。** 适配器报告 `applied`、`not_applied` 或 `unknown`，已确认成功的步骤会被保留。结果未知的请求必须先查证，才能重发或改用新输入。同一请求的安全重试复用原来的 key；修改后的请求只有在旧结果已经明确后才能采用新身份。远端幂等和可靠查证仍需要适配器支持。
+**第一，让大模型能修对复杂、大体量的请求参数。** JSON 的结构通过校验，仍可能存在字段组合冲突、缺少依赖、取值不可用或多个资源配置不一致。注册的规则检查当前 Draft，把真正命中的问题定位到具体坐标。模型拿到当前 preview、错误 message，以及可选的 hint、候选值或修复 OP，就能针对问题提出局部修改。
 
-## 针对性诊断，精确到坐标的修复
+**第二，让重要写入在执行前经过业务预检。** 例如计费或金融接入可以注册金额限额、币种匹配、账户资格、必要审批依据等检查。静态规则检查本地条件，异步规则查询外部服务，尚未完成时返回 `pending`。执行预检通过后才签发绑定当前版本的发布凭据。宿主权限授权仍单独执行；必须在远端写入瞬间成立的条件，仍需由远端服务或适配器保证。
 
-预检发现问题，或适配器将真实 API 的拒绝映射回图之后，模型得到的是当前 Draft preview，以及包含**具体位置、错误码和 message 的针对性诊断**。hint、候选值和候选 `repairOps` 都是可选项。模型结合诊断与用户意图决定如何修复；一条规则不需要附带固定解法，才有价值。
+库提供检查与诊断协议，**具体业务规则由接入方注册**。它没有内置一套金融政策引擎；预检通过也不意味着能提前预测所有远端拒绝。
 
-**规则检查当前工作，模型收到真正命中的问题。** 模型不必每次从 prompt 或 memory 中检索、理解整套规则，再自行排查哪里违反了约束。
+## 给模型具体诊断，而不是让它自己翻规则书
 
-模型只需要输出一份定位明确的操作列表：`set` 声明值，`remove` 显式清空，`reset` 恢复固定基线中的声明。后端校验并原子应用这些编辑，接入方负责把图意图映射成真实请求体。
+```text
+用户意图 → Draft → preflight → 当前完整 preview + 实际命中的诊断
+                     ↑                         ↓
+                     └──── 后端应用 ← 模型输出 OP 列表
+```
 
-**修复出错的字段，不必重新生成整份图。** 模型仍可查看完整 preview，但无需重新输出已经正确的全部字段。更短的修复输出可以减少 token 开销，也能避免完整重生成带来的无关变化；这里不声称已经测得具体成本降幅。
+诊断要告诉模型：**哪里有问题、违反了什么、为什么错。** 修复建议可以有，也可以没有；模型结合用户意图选择修改方案，缺信息时向用户提问。它不必从塞满平台规则的 prompt 或 memory 中自行检索，再猜当前请求到底违反了哪一条。
 
-修复后，`resume` 继续同一个未完成 Run：保留成功部分，使用原请求身份查证未知结果，修复版本通过预检后再发送后续工作。
+编辑只需要三种操作：
 
-## Draft 的生命周期长于一次请求
+- `set`：声明一个值，包括 Schema 允许的显式 `null`。
+- `remove`：显式清空字段。
+- `reset`：恢复固定基线；首次发布前是初始意图，之后是最近一次全量成功发布的意图。
 
-Draft 从创建时就带有实际工作意图，发布后仍保留自身身份。图中节点成功创建资源后，逐个建立对应的远端 Binding。一个 Draft 可以管理多个资源绑定。
+后端校验并原子应用整个 OP 批次，再对修复后的 Draft 重新预检。**模型可以看完整 preview，但只需输出精确到坐标的改动，不用重吐整份图。** 这样可以避免完整重生成给无关字段带来的变化。图意图到真实请求体的映射由适配器负责。
 
-声明更新能力的 adapter 可以在同一个 Draft 上继续编辑固定节点的标量字段，通过已发布意图、当前意图和远端事实之间的 diff/drift 检查更新原资源。全量成功推进 reset 基线；部分成功或未知请求仍在同一个 Run 续作。
+## 真实 API 报错，也进入同一个修复闭环
 
-## 真实接入与可执行示例
+预检无法穷尽所有远端条件。适配器可以把真实 API 的拒绝映射成相同结构的诊断，附上当前 preview、message 和可选修复建议。模型给出 OP，后端编辑 Draft，再通过 `resume` 完成必要检查，从同一个未完成 Run 继续。
 
-**Stripe 沙盒样例**（Product → 两条 Price）覆盖了远端校验拒绝、显式修复和同 Run 续作。回执丢失是在真实创建之后注入的故障。[接入指南](examples/stripe/README.md) · [录制证据与边界](docs/testing/stripe-sandbox.md)。
+执行安全为这个闭环提供基础：适配器报告 `applied`、`not_applied` 或 `unknown`；成功部分保留，未知请求先使用原请求身份查证，再决定后续动作。超时不能被当作“没成功”，模型说可以重试也不能证明资源没有创建。远端幂等与可靠查证需要适配器支持，库不承诺通用 exactly-once。
 
-离线 walkthrough 实际运行库与模拟远端。CI 校验执行记录的语义，并检查生成的 HTML/ZIP 与示例及渲染源码一致。这证明了一个可复现的场景，不代表所有接入都已被验证。
+## Draft 在发布后仍然存在
 
----
+Draft 创建时就有用户工作意图，节点成功后逐个绑定远端资源。支持 update 的适配器可以在同一个 Draft、固定图和原远端 ID 上修改受支持字段，并做 diff/drift 检查。全量成功推进 reset 基线，未完成工作仍通过同 Run 续作。更新时新增、删除或替换远端资源尚不在当前范围内。
 
-早期原型 v0.0.1 · Node.js 22.13+（`node:sqlite`）· 尚未发布 npm 包。公开 edit/preview 与候选修复已接入三态双通道协议及嵌套字段；create 通过非空 roots/spec 初始化，返回 Draft 和服务端分配的节点 ref。[迁移账本](docs/tasks/three-state-op-migration.md) · [项目原则](docs/design/000-project-principles.md)。
+## 现在可以运行什么
+
+- **真实 Stripe 沙盒证据**：Product → 两条 Price，真实远端拒绝、修复和同 Run 恢复；独立 update 场景验证更新原资源 ID。回执丢失明确标注为故障注入。[Stripe 指南](examples/stripe/README.md) · [Update 验收](docs/testing/stripe-catalog-update.md)。
+- **可执行 walkthrough**：真实库和 SQLite 调用、模拟远端，HTML/ZIP 生成物由 CI 校验。[输入输出实录](docs/examples/publish-resume.html)。
+- **三种接入方式**：通用 TypeScript 工具、有限 Messages API 修复循环、独立的官方 DSH 适配。Agent 循环使用 mock 模型验收，不代表真实模型质量已经验证。
+
+早期原型 v0.0.1 · Node.js 22.13+（`node:sqlite`）· 尚未发布 npm 包。从示例和接入指南开始即可，设计决策历史作为补充参考。
 
 ## 快速开始
 
@@ -58,7 +70,13 @@ npm run demo:html
 
 ## Agent 接入
 
-`createAgentTools({ engine, definition, authorize })` 提供七个通用工具，含运行时校验、宿主授权、完整 preview 和具体诊断。运行 `npm run demo:agent` 查看两个宿主共用同一引擎；不包含大模型循环或自动修复。[接入指南](docs/guides/agent-tools.zh-CN.md)。
+| 接入方式 | 入口 | 已验证范围 |
+|---|---|---|
+| 任意 Agent/工具宿主 | `createAgentTools` — [指南](docs/guides/agent-tools.zh-CN.md) | 七个授权工具、输入校验、preview 和诊断 |
+| 直接 Messages API | `repairDraft` — [指南](docs/guides/agent-repair.zh-CN.md) | 有限修复循环，mock 模型端到端测试 |
+| 官方 DeepSeek Harness | [DSH 适配与安装](integrations/dsh/README.md) | 真实 DSH loop/session/tools，模拟模型与远端，宿主身份绑定 |
+
+运行 `npm run demo:agent` 查看工具调用，或 `npm run demo:repair` 查看修复循环。示例中的模型决定和远端效果均为模拟；目前不附带 MCP server。
 
 ## 当前 API
 
@@ -109,7 +127,7 @@ const updated = await engine.edit(draft.id, draft.version, {
 
 拓扑放在 `graphPatches`，OP 同样只有 set/remove/reset。候选 `repairOps` 和 `repairs[].ops` 使用同一 EditBatch 结构。关系注册必填 ownership/cardinality；重复字段坐标整批拒绝并返回 message/hint。拓扑新增节点由服务端分配 ID，通过 createdRefs 返回；preview 的临时 ID 不能提交编辑。
 
-包内提供 `initialIntentSchema` 与 `editBatchSchema`，供宿主校验输入结构。参见 [Agent 输入接入指南](docs/guides/agent-inputs.md)：包级导入、诊断修复批次，以及工具 schema 与引擎校验的边界。这不代表通用 dispatch helper 或模型 Harness 已完成。
+包内提供 `initialIntentSchema` 与 `editBatchSchema`，供宿主校验输入结构。参见 [Agent 输入接入指南](docs/guides/agent-inputs.md)：包级导入、诊断修复批次，以及工具 schema 与引擎校验的边界。通用 helper、Messages 修复循环和 DSH 适配见上方 Agent 接入。
 
 ## 更新已有资源
 

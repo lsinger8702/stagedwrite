@@ -24,3 +24,5 @@ const result = await repairDraft({
 `npm run demo:repair` 打印真实库执行的输入输出：预检拒绝 → 模拟模型 OP → edit → publish 被模拟远端拒绝 → 修复 → 同 Run resume 成功。**模型和远端都是 mock，不是实测模型能力。** Messages 样例另提供 `--live`，需宿主配置 `ANTHROPIC_API_KEY` 和 `ANTHROPIC_MODEL`，本轮未运行。
 
 [英文完整契约](agent-repair.md) · [任务账本](../tasks/agent-repair.md)
+
+可传 `onError(error)` 接收模型或宿主的原始异常，仅供宿主日志使用，不进入模型结果或 history。日志回调抛错/拒绝不会覆盖原始失败；正常预算或取消停止不调用该回调。

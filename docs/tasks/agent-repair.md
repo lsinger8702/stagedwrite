@@ -22,3 +22,7 @@ A3 官方 DSH 未实施。会话记录不是执行恢复凭据，继续远端效
 - 包根新增 repairDraft/repairDecisionSchema，不新增引擎。CI 跑核心行为及 repair demo；真实 Messages HTTP transport 提供样例，尚未联网验证。
 - 拒绝/无进展分别计数；版本冲突重新模型决策；pending/unknown 不忙轮询；模型超时的迟到结果不执行；在途写入返回后取消仍保留 Run 身份。
 - 用户明确无模型凭据、本轮使用模拟。真实模型质量/供应商兼容性、DSH 和持久会话协调均未验收，不能标完成。
+
+## Review 收尾 — 2026-09-18
+
+新增宿主 onError 回调，原始异常不进模型结果/history；同步和异步日志失败均隔离。Node 22.23.2 核心 215/215，exit 0 / fail 0 / cancelled 0。

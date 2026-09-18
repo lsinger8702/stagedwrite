@@ -24,3 +24,7 @@ Node 22.23.2，独立官方 npm 运行时测试 2/2，exit 0 / fail 0 / cancelle
 - 不同用户/未登记会话/同 ID 伪造对象/已销毁 Agent 拒绝；注册词汇和恢复规则真实进入模型请求，未导入整个规则库。
 - Node 22.23.2 独立套件 4/4，exit 0 / fail 0 / cancelled 0，CI 已覆盖。
 - 此处“换会话”是同进程共享引擎，新 Agent 显式绑定相同宿主主体；不是进程重启、磁盘会话反序列化或生产持久授权证明。实际模型 API、真实远端与 DSH 合跑仍未验收；用户已指定本轮 mock。
+
+## Review 收尾 — 2026-09-18
+
+Schema 展开增加当前递归路径检测及 128 层上限；明确 additionalProperties 不展开为有意的 DSH 子集边界。自环、互环、对象环、深度、同定义重复引用及开放 map 回归通过。Node 22.23.2 DSH 6/6，exit 0 / fail 0 / cancelled 0。

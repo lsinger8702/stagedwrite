@@ -122,3 +122,24 @@ test("cancellation after an in-flight publication retains the returned Run ident
     assert.equal((await f.e.getRun(r.runId)).state, "published"); assert.equal(f.writes(), 1);
   } finally { await f.e.close(); }
 });
+
+
+test("repair reports original provider errors only to the host, even when logging fails", async () => {
+  for (const logging of ["success", "throw", "reject"] as const) {
+    const f = await fixture(); const original = new Error("PRIVATE_PROVIDER_DETAIL");
+    let received: unknown, calls = 0;
+    try {
+      const result = await repairDraft({ ...f, goal: "final", decide: async () => { throw original; },
+        onError: error => { received = error; calls++;
+          if (logging === "throw") throw Error("PRIVATE_LOGGER_DETAIL");
+          if (logging === "reject") return Promise.reject(Error("PRIVATE_LOGGER_DETAIL"));
+        }
+      });
+      assert.equal(received, original); assert.equal(calls, 1);
+      assert.equal(result.reason, "host_or_model_error"); assert.equal(result.status, "stopped");
+      assert.ok(result.message && result.hint);
+      assert.doesNotMatch(JSON.stringify(result), /PRIVATE_PROVIDER_DETAIL|PRIVATE_LOGGER_DETAIL/);
+      assert.equal(f.writes(), 0); assert.equal((await f.e.getDraft(f.draftId)).version, 0);
+    } finally { await f.e.close(); }
+  }
+});

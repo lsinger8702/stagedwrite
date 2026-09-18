@@ -1,24 +1,33 @@
 /** DSH's schema subset is only an outer envelope. A1 validates the original schema. */
 export function dshSchema(document) {
-  function visit(s) {
+  const active = new Set();
+  function visit(s, depth = 0) {
+    if (depth > 128) throw Error('TOOL_SCHEMA_DEPTH_EXCEEDED');
+    if (active.has(s)) throw Error('RECURSIVE_TOOL_SCHEMA');
+    active.add(s);
+    try {
     if (s.$ref) {
-      const name = s.$ref.replace('#/$defs/', '');
-      if (name === 'json') return {};
+      if (!s.$ref.startsWith('#/$defs/')) throw Error('UNRESOLVED_TOOL_SCHEMA');
+      const name = s.$ref.slice('#/$defs/'.length);
       if (!Object.hasOwn(document.$defs ?? {}, name)) throw Error('UNRESOLVED_TOOL_SCHEMA');
-      return visit(document.$defs[name]);
+      if (name === 'json') return {};
+      return visit(document.$defs[name], depth + 1);
     }
-    if (s.oneOf) return { oneOf: s.oneOf.map(visit) };
+    if (s.oneOf) return { oneOf: s.oneOf.map(branch => visit(branch, depth + 1)) };
     // Arbitrary JSON values are validated by A1; never substitute oneOf for overlapping anyOf.
     if (!s.type && s.anyOf) return {};
     const out = {};
     const type = s.type ?? (Object.hasOwn(s, 'const') ? typeof s.const : s.enum ? typeof s.enum[0] : undefined);
     if (type) out.type = type;
     for (const key of ['const', 'enum', 'description']) if (Object.hasOwn(s, key)) out[key] = s[key];
-    if (s.properties) out.properties = Object.fromEntries(Object.entries(s.properties).map(([k,v]) => [k, visit(v)]));
+    if (s.properties) out.properties = Object.fromEntries(Object.entries(s.properties).map(([k,v]) => [k, visit(v, depth + 1)]));
     if (s.required) out.required = [...s.required];
-    if (s.items) out.items = visit(s.items);
+    if (s.items) out.items = visit(s.items, depth + 1);
+    // Deliberate DSH subset boundary: map value schemas cannot be represented here.
+    // A1 enforces them; do not descend and silently invent unsupported DSH keywords.
     if (Object.hasOwn(s, 'additionalProperties')) out.additionalProperties = s.additionalProperties !== false;
     return out;
+    } finally { active.delete(s); }
   }
   return visit(document);
 }
