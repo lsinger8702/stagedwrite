@@ -10,6 +10,20 @@ For writes that affect money or other consequential resources, discovering a mis
 
 StagedWrite is a TypeScript library between an agent's proposed intent and external writes. It keeps the work in a long-lived **Draft**, runs **preflight** checks, returns the full preview with **targeted diagnostics**, and lets the model repair the work through **set / remove / reset** operations. The backend applies those edits; the model does not need to regenerate the entire request. Publication and recovery then track what actually happened remotely.
 
+## The complete write lifecycle
+
+| Capability | What it addresses |
+|---|---|
+| **Preflight before execution** | Check complex JSON and business constraints before causing remote effects |
+| **Targeted diagnostics** | Give the model a full preview, exact locations and messages, with optional candidates and repair OPs |
+| **Three-state local repair** | Apply set/remove/reset batches atomically, reducing full-body generation and unrelated changes |
+| **Idempotency and duplicate-publication protection** | Reuse keys for safe retries of the same request; keep unfinished work in its original Run |
+| **Concurrency control** | Reject stale edits with version CAS; protect state transitions with Draft leases and storage fencing |
+| **Unknown-outcome reconciliation** | Preserve original request evidence after timeouts or lost receipts instead of assuming no effect |
+| **Partial success and recovery** | Preserve successful steps, repair unfinished work, and resume from facts retained by a persistent backend |
+| **Long-lived Drafts and updates** | Keep resource bindings, check diff/drift, update existing resources and adopt no-op changes without writes |
+| **Agent integration** | Use provider-neutral tools, a Messages repair loop or the official DSH adapter, with explicit integration boundaries |
+
 ## Why preflight exists
 
 **1. Help the model correct complex request parameters.** A large request can be structurally valid and still be wrong: incompatible field combinations, missing dependencies, unsupported values or inconsistent settings across resources. Registered rules inspect the current Draft and report the problems that actually apply, at specific coordinates. The model receives the current preview, the error message and optional hints, candidate values or repair OPs, so it can propose a focused correction.
@@ -42,7 +56,17 @@ The backend validates and applies an OP batch atomically, then the repaired Draf
 
 Preflight cannot predict every response. An adapter can map a real API rejection into the same diagnostic structure, with a current preview, message and optional repair suggestions. The model proposes OPs, the backend edits the Draft, and `resume` continues the unfinished Run after the necessary checks.
 
-Delivery safety supports this loop: adapters report `applied`, `not_applied` or `unknown`; confirmed successes are preserved. Unknown requests must be reconciled using their original identities before new work can proceed. A timeout is not proof of failure, and a model's retry suggestion is not proof that a resource was never created. Remote idempotency and conclusive reconciliation require adapter support; there is no general exactly-once claim.
+## Idempotency, concurrency control and recovery are core features too
+
+**Prevent duplicate creation.** First publication atomically claims a Run. While a Draft has unfinished work, another publish observes that Run rather than starting a second creation. Safe retries of the same request reuse its idempotency key. A repaired request receives a new identity only after the previous outcome is resolved, avoiding both duplicate effects and reuse of an old rejection as the new response.
+
+**Protect concurrent work.** Edits use expectedVersion/CAS to reject stale changes. Draft leases protect publication, recovery and edit critical sections; storage atomically validates lease tokens and fencing values before accepting transitions. A worker that lost ownership cannot continue committing state. These locks coordinate local execution ownership; they neither retract dispatched requests nor replace remote conditional writes.
+
+**Preserve uncertainty.** The original request and key are recorded before dispatch. Adapters report applied, not_applied or unknown. A timeout or lost receipt does not prove failure. Resume reconciles the original request; a no_effect conclusion requires evidence that the request did not take effect and cannot take effect later. An empty lookup is insufficient.
+
+**Treat partial success as normal.** Receipts and bindings are saved as nodes succeed. Those nodes remain protected within the unfinished Run while other nodes are repaired and resumed, without resending confirmed successes. With a persistent backend, saved execution facts support recovery after process exit or reopening; callers need not restart the whole batch.
+
+These mechanisms reduce duplicate side effects, but remote idempotency and conclusive reconciliation require adapter support; there is no general exactly-once claim. Automatic rollback, background retry scheduling and a bundled production cross-host backend are outside the current scope. See the recovery and lock/storage boundaries below.
 
 ## A Draft remains useful after publication
 
